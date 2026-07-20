@@ -1,0 +1,96 @@
+# ============================================================
+# OmniFace 配置文件 — 所有可调参数集中于此
+# 命令行覆盖: --reference / --input / --output / --backend
+# ============================================================
+
+# ---- 模型 ----
+model:
+  detector: "models/buffalo_sc/det_500m.onnx"
+  recognizer: "models/buffalo_sc/w600k_mbf.onnx"
+  detection_threads: 2          # 检测模型 ONNX 算子内线程数
+  recognition_threads: 1        # 识别模型 ONNX 算子内线程数
+  detection_input_width: 640    # 检测输入分辨率 (降低可提速, 需验证小脸精度)
+  detection_input_height: 640
+
+# ---- 面部分析后端 ----
+analysis:
+  backend: "openface"           # "openface" | "onnx"
+
+  # OpenFace 后端 (FeatureExtraction: CLNF 一次完成姿态+AU+视线, 实时推荐)
+  openface:
+    model_dir: "third_party/OpenFace/build/bin/"
+    output_dir: "data/output/openface/"
+    output_name: "target_analysis"
+    focal_scale: 500.0          # 相机焦距估算基准: fx = focal_scale * max(w,h) / 640
+    vis_track: false            # OpenFace 关键点/姿态/视线叠加 (false = 使用本项目窗口)
+    vis_aus: true               # AU 强度条窗口
+    vis_hog: false              # HOG 特征窗口
+    vis_align: false            # 对齐人脸窗口
+
+  # ONNX 后端 — 三个分析器独立开关, 可任意组合
+  onnx:
+    enable_pose: true           # 头部姿态估计 (MediaPipe FaceMesh 468 点 + PnP)
+    enable_gaze: true           # 视线估计 (L2CS-Net)
+    enable_au: true             # AU 动作单元识别 (MEFARG ResNet-18)
+    analysis_threads: 1         # 各分析器 ONNX 算子内线程数
+    align_faces: true           # 启用 FaceMesh 关键点引导的人脸对齐 (提升视线/AU准确度)
+    au_temporal_window: 5       # AU 时间窗口平滑帧数 (0 = 逐帧独立)
+    pose:
+      model: "models/mediapipe/face_mesh_Nx3x192x192_post.onnx"
+      canonical: "models/mediapipe/canonical_face_model.obj"
+      margin: 0.25              # bbox 四边扩展比例
+      score_threshold: 0.95     # landmark 最低置信度
+    gaze:
+      model: "models/l2cs-net/resnet50_gaze.onnx"
+      margin: 0.0               # bbox 扩展比例 (对齐模式下忽略)
+      smooth_alpha: 0.6         # EMA 平滑系数 (1.0=不平滑; 中值滤波后做轻量EMA)
+    au:
+      model: "models/OpenGprahAU/mefarg_resnet18_au.onnx"
+      margin: 0.0               # bbox 扩展比例 (对齐模式下忽略)
+      threshold: 0.5            # 余弦相似度默认激活阈值
+      # thresholds:             # Per-AU 阈值覆盖 (可选, 未设置的使用 threshold)
+      #   AU6: 0.6
+      #   AU12: 0.55
+
+# ---- 输入 ----
+input:
+  reference_image: "data/img/JamesJoseph.jpg"
+  video: "data/video/test_video_3.avi"
+
+# ---- 输出 ----
+output:
+  video: "data/output/annotated.mp4"        # 空 = 不保存
+  codec: "avc1"                             # 视频编码 fourcc (打开失败自动回退 MJPG)
+  tracking_csv: "data/output/tracking.csv"  # 空 = 不保存
+
+# ---- 阈值 ----
+thresholds:
+  detection_confidence: 0.5     # 检测置信度过滤阈值
+  detection_nms: 0.4            # NMS IoU 阈值
+  match_threshold: 0.3          # 目标匹配余弦相似度阈值 (经验范围 0.3-0.6, 已用测试数据验证)
+  recognition_iou: 0.3          # 轨迹框↔检测框 IoU 匹配阈值 (识别时取回关键点)
+  target_recheck_interval: 30   # 目标身份复检间隔 (帧), 防跟踪身份切换; 0 = 关闭
+
+# ---- 跟踪参数 (ByteTrack) ----
+tracking:
+  track_buffer: 30              # 丢失轨迹保留帧数
+  high_threshold: 0.5           # 高分检测阈值
+  match_threshold: 0.5          # 首次匹配 IoU 阈值
+  match_threshold_second: 0.3   # 二次匹配 IoU 阈值 (低分检测)
+  new_track_threshold: 0.6      # 新建轨迹置信度阈值
+
+# ---- 可视化 ----
+visualization:
+  show_window: true
+  window_name: "OmniFace"
+
+# ---- 日志 ----
+log:
+  progress_interval: 30         # 每 N 帧打印一次进度 (0 = 不打印)
+
+# ---- Web 服务 (--serve 模式) ----
+server:
+  host: "127.0.0.1"             # 0.0.0.0 = 允许局域网访问
+  port: 8080
+  auth_token: ""               # API 认证令牌 (空 = 不启用; 设置后所有 API 需要 ?token=xxx)
+  max_upload_mb: 500            # 上传文件大小上限 (MB), 视频建议 >=500

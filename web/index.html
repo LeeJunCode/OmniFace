@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>OmniFace — 目标人物面部分析</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <h1>OmniFace<span>目标人物实时面部分析</span></h1>
+  <nav>
+    <button data-view="config" class="active">新建任务</button>
+    <button data-view="monitor">运行监控</button>
+    <button data-view="history">任务历史</button>
+  </nav>
+</header>
+
+<main>
+
+<section id="view-config" class="view active">
+  <div class="config-layout">
+    <div class="panel col-media">
+      <h2>素材</h2>
+      <h3>目标人物图片</h3>
+      <div class="upload-row">
+        <select id="sel-ref"></select>
+        <button class="small" id="btn-upload-img">上传</button>
+        <button class="small danger" id="btn-del-img">删除</button>
+      </div>
+      <div class="ref-wrap"><canvas id="ref-canvas"></canvas></div>
+      <div class="hint" id="face-hint">选择图片后自动检测人脸</div>
+
+      <h3>输入视频</h3>
+      <div class="upload-row">
+        <select id="sel-video"></select>
+        <button class="small" id="btn-upload-video">上传</button>
+        <button class="small danger" id="btn-del-video">删除</button>
+      </div>
+      <div class="video-player preview-player" id="video-preview-wrap" style="display:none">
+        <video id="video-preview" controls muted preload="metadata"></video>
+      </div>
+      <div class="hint" id="video-hint"></div>
+      <input type="file" id="file-input" style="display:none">
+    </div>
+
+    <div class="panel col-opts">
+      <h2>分析配置</h2>
+      <h3>面部分析方式</h3>
+      <div class="row"><label><input type="radio" name="backend" value="openface" checked> OpenFace（实时推荐，一次完成姿态+AU+视线）</label></div>
+      <div class="row"><label><input type="radio" name="backend" value="onnx"> ONNX 分析器（可任意组合）</label></div>
+      <div id="onnx-opts" style="display:none; padding-left:18px;">
+        <div class="row"><label><input type="checkbox" id="enable_pose" checked> 头部姿态估计</label></div>
+        <div class="row"><label><input type="checkbox" id="enable_gaze" checked> 视线估计</label></div>
+        <div class="row"><label><input type="checkbox" id="enable_au" checked> AU 表情动作单元</label></div>
+      </div>
+
+      <h3>匹配阈值 <span id="thr-val">0.3</span></h3>
+      <input type="range" id="match_threshold" min="0.2" max="0.7" step="0.05" value="0.3">
+
+      <h3>参数预设</h3>
+      <div class="upload-row">
+        <select id="sel-preset"><option value="">— 不使用预设 —</option></select>
+        <button class="small" id="btn-save-preset">保存当前</button>
+        <button class="small danger" id="btn-del-preset">删除</button>
+      </div>
+
+      <details id="advanced">
+        <summary>高级参数（点击展开）</summary>
+        <div class="grid2">
+          <div><label>检测置信度</label><input type="number" id="detection_confidence" step="0.05" min="0" max="1"></div>
+          <div><label>检测 NMS IoU</label><input type="number" id="detection_nms" step="0.05" min="0" max="1"></div>
+          <div><label>识别 IoU 匹配</label><input type="number" id="recognition_iou" step="0.05" min="0" max="1"></div>
+          <div><label>轨迹保留帧数</label><input type="number" id="track_buffer" step="1" min="1"></div>
+          <div><label>跟踪高分阈值</label><input type="number" id="tracking_high" step="0.05" min="0" max="1"></div>
+          <div><label>首次匹配 IoU</label><input type="number" id="tracking_match" step="0.05" min="0" max="1"></div>
+          <div><label>二次匹配 IoU</label><input type="number" id="tracking_match_second" step="0.05" min="0" max="1"></div>
+          <div><label>新轨迹阈值</label><input type="number" id="tracking_new" step="0.05" min="0" max="1"></div>
+          <div><label>姿态 bbox 扩展</label><input type="number" id="pose_margin" step="0.05" min="0" max="1"></div>
+          <div><label>姿态置信度阈值</label><input type="number" id="pose_score_threshold" step="0.01" min="0" max="1"></div>
+          <div><label>视线 bbox 扩展</label><input type="number" id="gaze_margin" step="0.05" min="0" max="1"></div>
+          <div><label>视线平滑系数</label><input type="number" id="gaze_smooth_alpha" step="0.05" min="0.05" max="1"></div>
+          <div><label>AU bbox 扩展</label><input type="number" id="au_margin" step="0.05" min="0" max="1"></div>
+          <div><label>AU 激活阈值</label><input type="number" id="au_threshold" step="0.05" min="0" max="1"></div>
+        </div>
+        <div class="row" style="margin-top:8px">
+          <label><input type="checkbox" id="save_video" checked> 保存标注视频</label>
+          <label style="margin-left:16px"><input type="checkbox" id="save_csv" checked> 保存跟踪 CSV</label>
+        </div>
+      </details>
+
+      <div style="margin-top:16px"><button class="primary" id="btn-start">开始分析</button></div>
+    </div>
+  </div>
+</section>
+
+<section id="view-monitor" class="view">
+  
+  <div class="video-row">
+    <div class="video-col">
+      <div class="video-player">
+        <span class="video-label">原始视频</span>
+        <img id="stream-raw" alt="">
+      </div>
+    </div>
+    <div class="video-col">
+      <div class="video-player">
+        <span class="video-label">分析画面</span>
+        <img id="stream" alt="">
+      </div>
+      <canvas id="timeline"></canvas>
+    </div>
+  </div>
+
+  
+  <div class="monitor-bar">
+    <div class="statusbar">
+      <span>状态 <span id="st-state" class="tag idle">空闲</span></span>
+      <span>进度 <b id="st-frame">0 / 0</b></span>
+      <span>FPS <b id="st-fps">-</b></span>
+      <span>目标 <b id="st-target">未发现</b></span>
+      <span>注意力 <b id="st-attention">-</b></span>
+    </div>
+    <div class="controls-row">
+      <button class="ctrl" id="btn-pause" disabled>暂停</button>
+      <button class="ctrl" id="btn-step" disabled>单帧</button>
+      <button class="ctrl" id="btn-stop" disabled>停止</button>
+    </div>
+  </div>
+
+  
+  <div id="run-result" style="display:none; margin-top:8px;">
+    <span class="result-links" id="run-result-links"></span>
+    <button class="small" id="btn-view-report">查看完整报告 →</button>
+  </div>
+
+  
+  <div class="analysis-row">
+    <div class="panel analysis-panel-compact">
+      <h2>🎯 注意力分析</h2>
+      <div class="attn-score-row">
+        <div class="attn-big" id="m-attn-score">--</div>
+        <div class="attn-stats">
+          <div class="attn-item"><span>视线</span><b id="m-gaze-dir">--</b></div>
+          <div class="attn-item"><span>头部</span><b id="m-head-dir">--</b></div>
+          <div class="attn-item"><span>相似度</span><b id="m-sim">--</b></div>
+        </div>
+      </div>
+      <div class="chart-wrap" style="height:200px">
+        <canvas id="chart-gaze-scatter"></canvas>
+      </div>
+    </div>
+
+    <div class="panel analysis-panel-compact">
+      <h2>😶 面部动作单元 (AU)</h2>
+      <div id="m-au-active" class="au-active-list">
+        <span class="hint">等待数据...</span>
+      </div>
+      <div class="chart-wrap" style="height:185px">
+        <canvas id="chart-au-heatmap"></canvas>
+      </div>
+    </div>
+  </div>
+
+  
+  <details class="raw-data-section">
+    <summary>📋 原始数据图表</summary>
+    <div class="raw-charts-row">
+      <div class="chart-wrap chart-raw"><canvas id="chart-raw-pose"></canvas></div>
+      <div class="chart-wrap chart-raw"><canvas id="chart-raw-gaze"></canvas></div>
+      <div class="chart-wrap chart-raw"><canvas id="chart-raw-au"></canvas></div>
+    </div>
+    <div class="raw-grid">
+      <div class="raw-group">
+        <h4>当前帧轨迹</h4>
+        <table class="tracks"><thead><tr><th>ID</th><th>相似度</th><th>目标</th></tr></thead>
+          <tbody id="m-tracks"></tbody></table>
+      </div>
+    </div>
+  </details>
+</section>
+
+<section id="view-history" class="view">
+  <div id="task-list-wrap">
+    <h2 style="margin-bottom:12px">任务历史</h2>
+    <div class="task-list" id="task-list"></div>
+    <div class="hint" id="task-empty" style="display:none">暂无任务记录，去「新建任务」运行一次分析吧</div>
+  </div>
+
+  <div id="task-detail" style="display:none">
+    <button class="small" id="btn-back-list">← 返回列表</button>
+    <div class="panel" style="margin-top:12px">
+      <h2 id="detail-title">任务详情</h2>
+
+      
+      <div class="analysis-summary" id="detail-summary"></div>
+
+      <div class="stats-grid" id="detail-stats"></div>
+      <div class="result-links" id="detail-links"></div>
+      <div id="detail-video-wrap" class="detail-video-duo"></div>
+
+      <h3 style="margin-top:16px">目标出现区间</h3>
+      <div class="hint" id="detail-intervals"></div>
+
+      <h3 style="margin-top:16px">注意力 &amp; AU 时间线</h3>
+      <div id="report-charts">
+        <div class="chart-wrap chart-report"><canvas id="rchart-attention"></canvas></div>
+        <div class="chart-wrap chart-report"><canvas id="rchart-au-timeline"></canvas></div>
+      </div>
+
+      <details style="margin-top:16px">
+        <summary>📋 原始数据图表</summary>
+        <div id="report-raw-charts">
+          <div class="chart-wrap chart-report"><canvas id="rchart-pose"></canvas></div>
+          <div class="chart-wrap chart-report"><canvas id="rchart-gaze"></canvas></div>
+          <div class="chart-wrap chart-report"><canvas id="rchart-sim"></canvas></div>
+        </div>
+      </details>
+    </div>
+  </div>
+</section>
+</main>
+
+<div class="toast" id="toast"></div>
+<script src="vendor/chart.umd.js"></script>
+<script type="module" src="js/app.js"></script>
+</body>
+</html>

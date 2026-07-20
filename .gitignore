@@ -1,0 +1,19 @@
+build/
+.vscode/
+.idea/
+*.pyc
+__pycache__/
+.venv/
+
+# 数据
+data/
+
+# 模型
+models/
+
+# OpenFace 编译产物
+third_party/OpenFace/build
+
+# OpenFace 大文件 (>50MB: 模型 .dat + Windows .lib)
+third_party/OpenFace/lib/local/LandmarkDetector/model/patch_experts/*.dat
+third_party/OpenFace/lib/3rdParty/dlib/lib/

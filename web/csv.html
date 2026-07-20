@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>CSV 查看 — OmniFace</title>
+<style>
+  :root { --bg:#f4f6f8; --card:#fff; --line:#e2e6ea; --accent:#2563eb; --text:#1f2937; --muted:#6b7280; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:"Segoe UI","Microsoft YaHei",sans-serif; background:var(--bg); color:var(--text); font-size:13px; }
+  header { background:var(--card); border-bottom:1px solid var(--line); padding:12px 20px; display:flex; align-items:center; justify-content:space-between; }
+  header h1 { font-size:16px; }
+  header .ops { display:flex; gap:10px; align-items:center; }
+  button { border:none; border-radius:6px; padding:7px 14px; cursor:pointer; font-size:13px; }
+  .btn-close { background:#eef1f5; color:var(--muted); }
+  .btn-dl { background:var(--accent); color:#fff; }
+  .toolbar { display:flex; align-items:center; gap:12px; padding:10px 20px; background:var(--card); border-bottom:1px solid var(--line); flex-wrap:wrap; }
+  .toolbar input { padding:5px 8px; border:1px solid var(--line); border-radius:6px; font-size:13px; width:200px; }
+  .toolbar select { padding:5px 8px; border:1px solid var(--line); border-radius:6px; font-size:13px; }
+  .pager { display:flex; gap:6px; align-items:center; }
+  .pager button { background:#eef1f5; border:1px solid var(--line); border-radius:6px; padding:5px 10px; font-size:12px; cursor:pointer; }
+  .pager button:disabled { opacity:.4; cursor:not-allowed; }
+  .pager span { font-size:12px; color:var(--muted); }
+  .table-wrap { overflow:auto; flex:1; margin:0 20px; border:1px solid var(--line); border-radius:8px; background:var(--card); }
+  table { border-collapse:collapse; font-size:12px; min-width:100%; }
+  thead th { position:sticky; top:0; background:#f8fafc; padding:6px 10px; text-align:left; border-bottom:2px solid var(--line); white-space:nowrap; z-index:1; }
+  thead th.col-num { text-align:right; color:var(--muted); }
+  tbody td { padding:5px 10px; border-bottom:1px solid var(--line); white-space:nowrap; }
+  tbody td.col-num { text-align:right; color:var(--muted); }
+  tbody tr:hover { background:#f0f6ff; }
+  .hint { color:var(--muted); padding:30px; text-align:center; }
+  .loading { color:var(--accent); padding:30px; text-align:center; }
+  main { display:flex; flex-direction:column; height:calc(100vh - 106px); }
+</style>
+</head>
+<body>
+<header>
+  <h1 id="csv-title">CSV 查看</h1>
+  <div class="ops">
+    <span id="csv-info" style="color:var(--muted);font-size:12px"></span>
+    <button class="btn-dl" id="btn-dl">⬇ 下载</button>
+    <button class="btn-close" onclick="window.close()">关闭</button>
+  </div>
+</header>
+<div class="toolbar">
+  <input type="text" id="filter" placeholder="筛选 (任意列包含...)">
+  <select id="sel-col"><option value="">全部列</option></select>
+  <div class="pager">
+    <button id="btn-first" title="首页">&lt;&lt;</button>
+    <button id="btn-prev" title="上一页">&lt;</button>
+    <span id="page-info">—</span>
+    <button id="btn-next" title="下一页">&gt;</button>
+    <button id="btn-last" title="末页">&gt;&gt;</button>
+  </div>
+  <span id="row-info" style="font-size:12px;color:var(--muted)"></span>
+</div>
+<main>
+  <div class="hint" id="status">加载中...</div>
+  <div class="table-wrap" id="table-wrap" style="display:none">
+    <table id="table"><thead id="thead"></thead><tbody id="tbody"></tbody></table>
+  </div>
+</main>
+<script>
+'use strict';
+const $ = id => document.getElementById(id);
+const PAGE_ROWS = 200;
+
+const params = new URLSearchParams(location.search);
+const csvUrl = params.get('file') || '';
+const csvName = params.get('name') || csvUrl.split('/').pop();
+
+$('csv-title').textContent = csvName || 'CSV 查看';
+$('btn-dl').onclick = () => { const a = document.createElement('a'); a.href = '/' + csvUrl; a.download = csvName; a.click(); };
+
+let allRows = [], headers = [], filtered = [];
+let page = 1, activeCol = '';
+
+async function load() {
+  if (!csvUrl) { $('status').textContent = '缺少 file 参数'; return; }
+  $('status').textContent = '加载中...';
+  try {
+    const text = await (await fetch('/' + csvUrl)).text();
+    const lines = text.trim().split('\n').filter(Boolean);
+    if (lines.length < 2) { $('status').textContent = '文件为空或只有表头'; return; }
+    headers = lines[0].split(',');
+    $('csv-info').textContent = `${lines.length - 1} 行 × ${headers.length} 列`;
+
+    
+    const sel = $('sel-col');
+    headers.forEach((h, i) => { const o = document.createElement('option'); o.value = `${i}`; o.textContent = h; sel.appendChild(o); });
+
+    allRows = [];
+    for (let i = 1; i < lines.length; i++) allRows.push(lines[i].split(','));
+    filtered = allRows;
+    applyFilter();
+  } catch (e) { $('status').textContent = '解析失败: ' + e.message; }
+}
+
+function applyFilter() {
+  const text = $('filter').value.toLowerCase();
+  filtered = allRows;
+  const col = $('sel-col').value;
+  if (col !== '' || text) {
+    filtered = allRows.filter((cols, rowIdx) => {
+      if (col !== '') {
+        return (cols[+col] || '').toLowerCase().includes(text);
+      }
+      if (!text) return true;
+      return cols.some(c => (c || '').toLowerCase().includes(text));
+    });
+  }
+  $('row-info').textContent = text || col !== '' ? `匹配 ${filtered.length} 行` : '';
+  page = 1;
+  render();
+}
+
+$('filter').oninput = applyFilter;
+$('sel-col').onchange = applyFilter;
+
+function render() {
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_ROWS));
+  if (page > totalPages) page = totalPages;
+  const start = (page - 1) * PAGE_ROWS;
+  const slice = filtered.slice(start, start + PAGE_ROWS);
+
+  $('page-info').textContent = `${page} / ${totalPages}`;
+  $('btn-first').disabled = $('btn-prev').disabled = page <= 1;
+  $('btn-next').disabled = $('btn-last').disabled = page >= totalPages;
+
+  
+  $('thead').innerHTML = '<tr><th class="col-num">#</th>' +
+    headers.map((h, i) => `<th>${h || `col${i + 1}`}</th>`).join('') + '</tr>';
+
+  
+  $('tbody').innerHTML = slice.map((cols, _j) => {
+    const rowNum = start + _j + 2;  
+    return `<tr><td class="col-num">${rowNum}</td>` +
+      cols.map((c, ci) => `<td>${(c || '').length > 200 ? (c || '').slice(0, 200) + '…' : (c || '')}</td>`).join('') + '</tr>';
+  }).join('');
+
+  $('table-wrap').style.display = '';
+  $('status').style.display = 'none';
+}
+
+$('btn-first').onclick = () => { page = 1; render(); };
+$('btn-prev').onclick = () => { page--; render(); };
+$('btn-next').onclick = () => { page++; render(); };
+$('btn-last').onclick = () => { page = Math.ceil(filtered.length / PAGE_ROWS); render(); };
+
+document.onkeydown = e => {
+  if (e.key === 'ArrowLeft') { page = page > 1 ? page - 1 : page; render(); }
+  if (e.key === 'ArrowRight') { const total = Math.ceil(filtered.length / PAGE_ROWS); page = page < total ? page + 1 : page; render(); }
+};
+
+load();
+</script>
+</body>
+</html>
