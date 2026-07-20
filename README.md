@@ -78,6 +78,19 @@ cmake --build build
 
 ## 模型文件
 
+### 模型文件下载
+检测（buffalo_sc/det_500m.onnx）与跟踪模型（buffalo_sc/w600k_mbf.onnx）均来自于 insightface 项目，可以通过官方项目进行下载：https://github.com/deepinsight/insightface
+
+或者也能够通过 python 的 pip 管理包直接下载 insightface 项目，使用 “pip install insightface” 命令下载 insightface 项目，然后会在 .insightface/ 目录下下载 insightface 系列模型
+
+视线估计模型（l2cs-net）下载：https://github.com/yakhyo/gaze-estimation
+
+OpenGprahAU 模型下载：https://github.com/lingjivoo/OpenGraphAU
+
+mediapipe 模型下载：https://github.com/PINTO0309/facemesh_onnx_tensorrt/releases/download/1.0.0/face_mesh_Nx3x192x192_post.onnx
+
+canonical_face_model.obj 下载：https://github.com/google-ai-edge/mediapipe/blob/master/mediapipe/modules/face_geometry/data/canonical_face_model.obj
+
 将 ONNX 模型放置到 `models/` 目录下：
 
 ```
