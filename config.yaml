@@ -54,8 +54,8 @@ analysis:
 
 # ---- 输入 ----
 input:
-  reference_image: "data/img/JamesJoseph.jpg"
-  video: "data/video/test_video_3.avi"
+  reference_image: ""
+  video: ""
 
 # ---- 输出 ----
 output:

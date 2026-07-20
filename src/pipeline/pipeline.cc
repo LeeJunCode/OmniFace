@@ -36,7 +36,7 @@ bool Pipeline::Initialize() {
     }
     matcher_ = std::make_unique<recognition::FaceMatcher>();
 
-    {
+    if (!cfg_.reference_image.empty()) {
         cv::Mat ref_img = cv::imread(cfg_.reference_image, cv::IMREAD_COLOR);
         if (ref_img.empty()) {
             init_error_ = "REF_LOAD_FAIL|无法加载参考图片: " + cfg_.reference_image;
@@ -121,10 +121,12 @@ bool Pipeline::Initialize() {
         }
     }
 
-    capture_.open(cfg_.input_video);
-    if (!capture_.isOpened()) {
-        init_error_ = "VIDEO_OPEN_FAIL|无法打开视频: " + cfg_.input_video;
-        return false;
+    if (!cfg_.input_video.empty()) {
+        capture_.open(cfg_.input_video);
+        if (!capture_.isOpened()) {
+            init_error_ = "VIDEO_OPEN_FAIL|无法打开视频: " + cfg_.input_video;
+            return false;
+        }
     }
 
     video_fps_ = capture_.get(cv::CAP_PROP_FPS);
@@ -191,6 +193,7 @@ bool Pipeline::Initialize() {
 }
 
 void Pipeline::Run() {
+    if (!capture_.isOpened()) return;
     while (true) {
         cv::Mat result = ProcessNextFrame();
         if (result.empty()) break;

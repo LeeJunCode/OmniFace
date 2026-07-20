@@ -8,13 +8,20 @@ let refImageObj = null;
 
 function fillSelect(sel, items, current) {
     sel.innerHTML = '';
+    const placeholder = document.createElement('option');
+    placeholder.value = '';
+    placeholder.textContent = '— 请选择 —';
+    placeholder.disabled = true;
+    sel.appendChild(placeholder);
+    let matched = false;
     for (const f of items || []) {
         const opt = document.createElement('option');
         opt.value = f;
         opt.textContent = f.split('/').pop();
-        if (f === current) opt.selected = true;
+        if (f === current) { opt.selected = true; matched = true; }
         sel.appendChild(opt);
     }
+    if (!matched) placeholder.selected = true;
 }
 
 function updateBackendUI() {
