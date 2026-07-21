@@ -26,6 +26,9 @@ public:
         return Run(input_blob.data(), input_blob.size(), channels, height, width);
     }
 
+    std::vector<Ort::Value> RunBatch(const float* data, size_t count, int64_t batch,
+                                     int64_t channels, int64_t height, int64_t width);
+
     Ort::Session& Session() {
         return session_;
     }

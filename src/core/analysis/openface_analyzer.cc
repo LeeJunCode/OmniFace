@@ -36,9 +36,19 @@ private:
     void CreateRecorder(const std::string& output_name, const std::string& output_dir);
     void ProcessFrameCommon(const cv::Mat& rgb, double timestamp);
     void WriteFeatureRecord(LandmarkDetector::CLNF& model, FaceAnalysis::FaceAnalyser& analyser,
-                            double timestamp, int frame_number);
+                            double timestamp, int frame_number, const cv::Vec6d& pose,
+                            const cv::Point3f& gaze0, const cv::Point3f& gaze1,
+                            const cv::Vec2f& gaze_angle, const cv::Mat& aligned,
+                            const cv::Mat_<double>& hog_desc, int hog_rows, int hog_cols,
+                            const std::vector<cv::Point2f>& eye_lm2d,
+                            const std::vector<cv::Point3f>& eye_lm3d);
     void SetVisualizerObservations(LandmarkDetector::CLNF& model,
-                                   FaceAnalysis::FaceAnalyser* analyser);
+                                   FaceAnalysis::FaceAnalyser* analyser, const cv::Vec6d& pose,
+                                   const cv::Point3f& gaze0, const cv::Point3f& gaze1,
+                                   const cv::Mat& aligned, const cv::Mat_<double>& hog_desc,
+                                   int hog_rows, int hog_cols,
+                                   const std::vector<cv::Point2f>& eye_lm2d,
+                                   const std::vector<cv::Point3f>& eye_lm3d);
     void EnsureRecorder(double fx, double fy, double cx, double cy);
 
     LandmarkDetector::FaceModelParameters det_params_;
@@ -115,15 +125,42 @@ void OpenFaceAnalyzer::Impl::ProcessFrameCommon(const cv::Mat& rgb, double times
         EnsureRecorder(f, f, rgb.cols / 2.0, rgb.rows / 2.0);
     }
     visualizer_->SetImage(rgb, fx_, fy_, cx_, cy_);
-    cv::Mat gray;
-    cv::cvtColor(rgb, gray, cv::COLOR_BGR2GRAY);
+
     face_analyser_->AddNextFrame(rgb, face_model_.detected_landmarks, face_model_.detection_success,
                                  timestamp, false);
+
+    bool success = face_model_.detection_success;
+
+    cv::Point3f gaze0(0, 0, -1), gaze1(0, 0, -1);
+    cv::Vec2f gaze_angle(0, 0);
+    if (success && face_model_.eye_model) {
+        GazeAnalysis::EstimateGaze(face_model_, gaze0, fx_, fy_, cx_, cy_, true);
+        GazeAnalysis::EstimateGaze(face_model_, gaze1, fx_, fy_, cx_, cy_, false);
+        gaze_angle = GazeAnalysis::GetGazeAngle(gaze0, gaze1);
+    }
+
+    cv::Mat aligned;
+    cv::Mat_<double> hog_desc;
+    int hog_rows = 0, hog_cols = 0;
+    face_analyser_->GetLatestAlignedFace(aligned);
+    face_analyser_->GetLatestHOG(hog_desc, hog_rows, hog_cols);
+
+    cv::Vec6d pose = LandmarkDetector::GetPose(face_model_, fx_, fy_, cx_, cy_);
+
+    std::vector<cv::Point2f> eye_lm2d =
+        LandmarkDetector::CalculateAllEyeLandmarks(face_model_);
+    std::vector<cv::Point3f> eye_lm3d =
+        LandmarkDetector::Calculate3DEyeLandmarks(face_model_, fx_, fy_, cx_, cy_);
+
     fps_tracker_->AddFrame();
-    SetVisualizerObservations(face_model_, face_analyser_.get());
+
+    SetVisualizerObservations(face_model_, face_analyser_.get(), pose, gaze0, gaze1, aligned, hog_desc,
+                              hog_rows, hog_cols, eye_lm2d, eye_lm3d);
     visualizer_->SetFps(fps_tracker_->GetFPS());
     if (visualizer_->ShowObservation() == 'q') quit_requested = true;
-    WriteFeatureRecord(face_model_, *face_analyser_, timestamp, frame_num_);
+
+    WriteFeatureRecord(face_model_, *face_analyser_, timestamp, frame_num_, pose, gaze0, gaze1,
+                       gaze_angle, aligned, hog_desc, hog_rows, hog_cols, eye_lm2d, eye_lm3d);
     recorder_->SetObservationVisualization(visualizer_->GetVisImage());
     recorder_->WriteObservationTracked();
     frame_num_++;
@@ -193,23 +230,17 @@ void OpenFaceAnalyzer::Impl::CreateRecorder(const std::string& output_name,
 
 void OpenFaceAnalyzer::Impl::WriteFeatureRecord(LandmarkDetector::CLNF& model,
                                                 FaceAnalysis::FaceAnalyser& analyser,
-                                                double timestamp, int frame_number) {
+                                                double timestamp, int frame_number,
+                                                const cv::Vec6d& pose,
+                                                const cv::Point3f& gaze0,
+                                                const cv::Point3f& gaze1,
+                                                const cv::Vec2f& gaze_angle,
+                                                const cv::Mat& aligned,
+                                                const cv::Mat_<double>& hog_desc,
+                                                int hog_rows, int hog_cols,
+                                                const std::vector<cv::Point2f>& eye_lm2d,
+                                                const std::vector<cv::Point3f>& eye_lm3d) {
     bool success = model.detection_success;
-    cv::Vec6d pose = LandmarkDetector::GetPose(model, fx_, fy_, cx_, cy_);
-
-    cv::Point3f gaze0(0, 0, -1), gaze1(0, 0, -1);
-    cv::Vec2f gaze_angle(0, 0);
-    if (success && model.eye_model) {
-        GazeAnalysis::EstimateGaze(model, gaze0, fx_, fy_, cx_, cy_, true);
-        GazeAnalysis::EstimateGaze(model, gaze1, fx_, fy_, cx_, cy_, false);
-        gaze_angle = GazeAnalysis::GetGazeAngle(gaze0, gaze1);
-    }
-
-    cv::Mat aligned;
-    cv::Mat_<double> hog_desc;
-    int hog_rows = 0, hog_cols = 0;
-    analyser.GetLatestAlignedFace(aligned);
-    analyser.GetLatestHOG(hog_desc, hog_rows, hog_cols);
 
     last_result_ = OpenFaceAnalyzer::FrameResult{};
     last_result_.valid = success;
@@ -232,9 +263,7 @@ void OpenFaceAnalyzer::Impl::WriteFeatureRecord(LandmarkDetector::CLNF& model,
                                        model.params_global, model.params_local,
                                        model.detection_certainty, success);
     recorder_->SetObservationPose(pose);
-    recorder_->SetObservationGaze(
-        gaze0, gaze1, gaze_angle, LandmarkDetector::CalculateAllEyeLandmarks(model),
-        LandmarkDetector::Calculate3DEyeLandmarks(model, fx_, fy_, cx_, cy_));
+    recorder_->SetObservationGaze(gaze0, gaze1, gaze_angle, eye_lm2d, eye_lm3d);
     recorder_->SetObservationTimestamp(timestamp);
     recorder_->SetObservationFaceID(0);
     recorder_->SetObservationFrameNumber(frame_number);
@@ -243,31 +272,21 @@ void OpenFaceAnalyzer::Impl::WriteFeatureRecord(LandmarkDetector::CLNF& model,
 }
 
 void OpenFaceAnalyzer::Impl::SetVisualizerObservations(LandmarkDetector::CLNF& model,
-                                                       FaceAnalysis::FaceAnalyser* analyser) {
-    cv::Mat aligned;
-    cv::Mat_<double> hog_desc;
-    int hog_rows = 0, hog_cols = 0;
-    if (analyser) {
-        analyser->GetLatestAlignedFace(aligned);
-        analyser->GetLatestHOG(hog_desc, hog_rows, hog_cols);
-    }
-
-    cv::Vec6d pose = LandmarkDetector::GetPose(model, fx_, fy_, cx_, cy_);
-    cv::Point3f gaze0(0, 0, -1), gaze1(0, 0, -1);
-    if (model.detection_success && model.eye_model) {
-        GazeAnalysis::EstimateGaze(model, gaze0, fx_, fy_, cx_, cy_, true);
-        GazeAnalysis::EstimateGaze(model, gaze1, fx_, fy_, cx_, cy_, false);
-    }
-
+                                                       FaceAnalysis::FaceAnalyser* analyser,
+                                                       const cv::Vec6d& pose,
+                                                       const cv::Point3f& gaze0,
+                                                       const cv::Point3f& gaze1,
+                                                       const cv::Mat& aligned,
+                                                       const cv::Mat_<double>& hog_desc,
+                                                       int hog_rows, int hog_cols,
+                                                       const std::vector<cv::Point2f>& eye_lm2d,
+                                                       const std::vector<cv::Point3f>& eye_lm3d) {
     visualizer_->SetObservationFaceAlign(aligned);
     visualizer_->SetObservationHOG(hog_desc, hog_rows, hog_cols);
     visualizer_->SetObservationLandmarks(model.detected_landmarks, model.detection_certainty,
                                          model.GetVisibilities());
     visualizer_->SetObservationPose(pose, model.detection_certainty);
-    visualizer_->SetObservationGaze(
-        gaze0, gaze1, LandmarkDetector::CalculateAllEyeLandmarks(model),
-        LandmarkDetector::Calculate3DEyeLandmarks(model, fx_, fy_, cx_, cy_),
-        model.detection_certainty);
+    visualizer_->SetObservationGaze(gaze0, gaze1, eye_lm2d, eye_lm3d, model.detection_certainty);
     if (analyser)
         visualizer_->SetObservationActionUnits(analyser->GetCurrentAUsReg(),
                                                analyser->GetCurrentAUsClass());

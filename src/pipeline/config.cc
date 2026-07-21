@@ -103,6 +103,10 @@ AppConfig ConfigLoader::Load(const std::string& yaml_path) {
         LOAD_SAME(t, match_threshold);
         LOAD_SAME(t, recognition_iou);
         LOAD_SAME(t, target_recheck_interval);
+        LOAD_SAME(t, min_face_area);
+        LOAD_SAME(t, detection_interval);
+        LOAD_SAME(t, max_frame_width);
+        LOAD_SAME(t, async_recognition);
     }
 
     if (auto tr = root["tracking"]) {

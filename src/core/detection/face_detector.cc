@@ -75,6 +75,7 @@ FaceDetector::~FaceDetector() = default;
 
 namespace {
 
+// SCRFD 预处理：letterbox 缩放 + (pixel-127.5)/128 归一化 + BGR→RGB
 std::pair<std::vector<float>, float> PreprocessLetterbox(const cv::Mat& bgr_image,
                                                          const FaceDetector::Config& cfg) {
     float scale = std::min(static_cast<float>(cfg.input_width) / bgr_image.cols,
@@ -117,6 +118,7 @@ inline void Distance2Kps(const float* anchor, const float* kps_dist, int stride,
 
 }  // namespace
 
+// SCRFD 检测：三尺度 anchor (stride 8/16/32) 解码 + NMS
 std::vector<BoundingBox> FaceDetector::Detect(const cv::Mat& bgr_image) {
     if (bgr_image.empty()) return {};
 
@@ -124,6 +126,7 @@ std::vector<BoundingBox> FaceDetector::Detect(const cv::Mat& bgr_image) {
     auto [blob, det_scale] = PreprocessLetterbox(bgr_image, cfg);
     std::vector<Ort::Value> outputs;
     try {
+        // ONNX 输出: scores_8, scores_16, scores_32, bboxes_8, bboxes_16, bboxes_32, kps_8, kps_16, kps_32
         outputs = impl_->session_.Run(blob, 3, cfg.input_height, cfg.input_width);
     } catch (const std::exception& e) {
         return {};
@@ -144,6 +147,7 @@ std::vector<BoundingBox> FaceDetector::Detect(const cv::Mat& bgr_image) {
     std::vector<float> confidences;
     std::vector<cv::Rect2d> boxes_rect;
 
+    // 遍历三个 stride 尺度，解码 anchor → bbox + 5点关键点
     for (int i = 0; i < 3; ++i) {
         const auto& s = strides[i];
         const float* scores = outputs[i].GetTensorData<float>();
@@ -160,6 +164,7 @@ std::vector<BoundingBox> FaceDetector::Detect(const cv::Mat& bgr_image) {
             float x1, y1, x2, y2;
             Distance2Bbox(anchor, bbox, s.stride, x1, y1, x2, y2);
 
+            // 映射回原始图像坐标
             x1 /= det_scale;
             y1 /= det_scale;
             x2 /= det_scale;

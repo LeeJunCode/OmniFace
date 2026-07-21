@@ -208,7 +208,57 @@ cv::Mat Pipeline::ProcessNextFrame() {
 
     double timestamp = static_cast<double>(frame_idx_) / video_fps_;
 
-    auto detections = detector_->Detect(frame);
+    // 异步识别：收集上帧结果，更新 track_cache_
+    if (cfg_.async_recognition && pending_recognition_.valid()) {
+        auto items = pending_recognition_.get();
+        for (auto& item : items) {
+            if (!item.embedding.valid) continue;
+            MatchResult result = matcher_->Match(item.embedding, item.box, cfg_.match_threshold);
+            result.tracked_id = item.track_id;
+
+            if (item.recheck_due) {
+                last_target_verify_frame_ = frame_idx_;
+                if (result.is_match) {
+                    target_verify_fails_ = 0;
+                    track_cache_[item.track_id] = {true, result.similarity};
+                } else {
+                    target_verify_fails_++;
+                    if (target_verify_fails_ >= 2) {
+                        target_demote_ = true;
+                        track_cache_.erase(item.track_id);
+                    } else if (item.has_cache) {
+                        track_cache_[item.track_id] = item.cached_info;
+                    }
+                }
+            } else {
+                track_cache_[item.track_id] = {result.is_match, result.similarity};
+            }
+        }
+    }
+
+    // 超宽视频降采样后检测，结果坐标映射回原始分辨率
+    cv::Mat detect_frame = frame;
+    float ds_scale = 1.0f;
+    if (cfg_.max_frame_width > 0 && frame.cols > cfg_.max_frame_width) {
+        ds_scale = static_cast<float>(cfg_.max_frame_width) / frame.cols;
+        cv::resize(frame, detect_frame, cv::Size(), ds_scale, ds_scale, cv::INTER_LINEAR);
+    }
+
+    // 检测帧跳跃：每 N 帧检测一次，间隔帧仅靠跟踪器预测
+    std::vector<BoundingBox> detections;
+    if (cfg_.detection_interval <= 1 || frame_idx_ % cfg_.detection_interval == 0) {
+        detections = detector_->Detect(detect_frame);
+    }
+
+    // 检测结果坐标映射回原始分辨率
+    if (ds_scale < 1.0f) {
+        float inv_scale = 1.0f / ds_scale;
+        for (auto& d : detections) {
+            d.x1 *= inv_scale; d.y1 *= inv_scale;
+            d.x2 *= inv_scale; d.y2 *= inv_scale;
+            for (auto& k : d.keypoints) k *= inv_scale;
+        }
+    }
 
     std::vector<tracking::ByteTrackEngine::Detection> engine_dets;
     engine_dets.reserve(detections.size());

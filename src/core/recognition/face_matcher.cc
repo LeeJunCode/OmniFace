@@ -6,6 +6,7 @@ namespace omniface::recognition {
 
 namespace {
 
+// 余弦相似度：ref 已预归一化，probe 运行时归一化
 inline float CosineSimilarity(const std::array<float, 512>& normed_ref,
                               const std::array<float, 512>& probe) {
     float dot = 0.0f, probe_norm_sq = 0.0f;

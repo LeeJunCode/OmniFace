@@ -57,6 +57,8 @@ struct AppConfig {
     int recognition_threads = 1;
     int detection_input_width = 640;
     int detection_input_height = 640;
+    int detection_interval = 1;                      // 检测帧间隔: 1=每帧, 2=隔帧
+    int max_frame_width = 1280;                      // 检测前降采样最大宽度 (0=禁用)
 
     AnalysisBackend backend = AnalysisBackend::kOpenFace;
     OpenFaceConfig openface;
@@ -75,8 +77,11 @@ struct AppConfig {
     float detection_nms = 0.4f;
     float match_threshold = 0.4f;
     float recognition_iou = 0.3f;
+    float min_face_area = 0.0f;                    // 最小人脸面积比 (0.001=画面0.1%, 0=禁用)
+    float recognition_confidence_threshold = 0.0f;  // 识别最低置信度 (0=使用detection_confidence)
 
     int target_recheck_interval = 30;
+    bool async_recognition = false;  // 异步识别：后台线程提取特征，延迟1帧应用
 
     TrackerConfig tracker;
 

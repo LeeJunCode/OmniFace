@@ -74,4 +74,55 @@ FaceEmbedding FaceRecognizer::Extract(const cv::Mat& aligned_face_bgr) {
     return embedding;
 }
 
+std::vector<FaceEmbedding> FaceRecognizer::ExtractBatch(
+    const std::vector<cv::Mat>& aligned_faces) {
+    if (aligned_faces.empty()) return {};
+
+    // 单张走原路径，避免批量分配开销
+    if (aligned_faces.size() == 1) {
+        return {Extract(aligned_faces[0])};
+    }
+
+    auto& cfg = impl_->config_;
+    int channels = 3;
+    int height = cfg.input_height;
+    int width = cfg.input_width;
+    size_t single_face_size = static_cast<size_t>(channels * height * width);
+
+    // 预分配 batch blob: [N, 3, 112, 112]
+    std::vector<float> batch_blob(aligned_faces.size() * single_face_size);
+
+    for (size_t i = 0; i < aligned_faces.size(); ++i) {
+        if (aligned_faces[i].empty()) {
+            // 空图填零，生成无效 embedding
+            std::fill_n(batch_blob.begin() + static_cast<long>(i * single_face_size),
+                        single_face_size, 0.0f);
+            continue;
+        }
+        auto blob = Preprocess(aligned_faces[i], cfg);
+        std::copy(blob.begin(), blob.end(),
+                  batch_blob.begin() + static_cast<long>(i * single_face_size));
+    }
+
+    std::vector<FaceEmbedding> results(aligned_faces.size());
+    try {
+        auto outputs = impl_->session_.RunBatch(
+            batch_blob.data(), batch_blob.size(),
+            static_cast<int64_t>(aligned_faces.size()), channels, height, width);
+
+        const float* output_data = outputs[0].GetTensorData<float>();
+        auto output_shape = outputs[0].GetTensorTypeAndShapeInfo().GetShape();
+        if (output_shape.size() < 2) return results;
+        int dim = static_cast<int>(output_shape[1]);
+        if (dim > 512) dim = 512;
+
+        for (size_t i = 0; i < aligned_faces.size(); ++i) {
+            std::copy_n(output_data + i * dim, dim, results[i].features.begin());
+            results[i].valid = true;
+        }
+    } catch (const std::exception& e) {
+    }
+    return results;
+}
+
 }  // namespace omniface::recognition

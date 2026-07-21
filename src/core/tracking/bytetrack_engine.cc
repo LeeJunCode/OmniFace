@@ -101,9 +101,11 @@ public:
         max_time_lost_ = config_.track_buffer;
     }
 
+    // ByteTrack 核心：高分检测先匹配，剩余低分检测二次匹配，激活/丢失/移除三级轨迹管理
     std::vector<Track> Update(const std::vector<Detection>& detections) {
         frame_id_++;
 
+        // 按置信度分为高/低分两组
         STrack::List det_high, det_low;
         det_high.reserve(detections.size());
         det_low.reserve(detections.size());

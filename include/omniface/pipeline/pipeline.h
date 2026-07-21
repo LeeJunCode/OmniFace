@@ -2,6 +2,7 @@
 
 #include <deque>
 #include <fstream>
+#include <future>
 #include <memory>
 #include <opencv2/core/mat.hpp>
 #include <opencv2/videoio.hpp>
@@ -127,6 +128,17 @@ private:
     };
     std::unordered_map<int, TrackInfo> track_cache_;
     int target_track_id_ = -1;
+
+    // 异步识别：后台线程提取embedding，下帧应用结果
+    struct AsyncRecogItem {
+        int track_id;
+        FaceEmbedding embedding;
+        BoundingBox box;
+        bool recheck_due;
+        bool has_cache;
+        TrackInfo cached_info;
+    };
+    std::future<std::vector<AsyncRecogItem>> pending_recognition_;
     cv::Rect_<float> last_target_bbox_;
     bool openface_needs_reinit_ = true;
     int last_openface_track_id_ = -1;

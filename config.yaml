@@ -67,9 +67,15 @@ output:
 thresholds:
   detection_confidence: 0.5     # 检测置信度过滤阈值
   detection_nms: 0.4            # NMS IoU 阈值
-  match_threshold: 0.3          # 目标匹配余弦相似度阈值 (经验范围 0.3-0.6, 已用测试数据验证)
+  match_threshold: 0.3          # 目标匹配余弦相似度阈值 (经验范围 0.3-0.6)
   recognition_iou: 0.3          # 轨迹框↔检测框 IoU 匹配阈值 (识别时取回关键点)
   target_recheck_interval: 30   # 目标身份复检间隔 (帧), 防跟踪身份切换; 0 = 关闭
+
+  # ---- 速度优化 ----
+  min_face_area: 0.001            # 最小人脸面积比, 低于此值跳过识别 (0.001 = 0.1%画面, 0 = 关闭)
+  detection_interval: 1         # 检测帧间隔 (1 = 每帧检测, 2 = 隔帧检测, 可降低检测开销)
+  max_frame_width: 1280         # 检测前降采样最大宽度, 超宽视频可大幅提速 (0 = 关闭)
+  async_recognition: true      # 异步识别: 后台线程提取特征, 延迟1帧应用 (适合人脸极多场景)
 
 # ---- 跟踪参数 (ByteTrack) ----
 tracking:

@@ -19,7 +19,11 @@ public:
     explicit FaceRecognizer(const std::string& model_path, Config config);
     ~FaceRecognizer();
 
+    // 单张特征提取
     FaceEmbedding Extract(const cv::Mat& aligned_face_bgr);
+
+    // 批量特征提取：N 张对齐人脸拼成 [N,3,112,112] 一次推理
+    std::vector<FaceEmbedding> ExtractBatch(const std::vector<cv::Mat>& aligned_faces);
 
 private:
     FaceRecognizer(const FaceRecognizer&) = delete;
