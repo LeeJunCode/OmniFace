@@ -17,3 +17,10 @@ third_party/OpenFace/build
 # OpenFace 大文件 (>50MB: 模型 .dat + Windows .lib)
 third_party/OpenFace/lib/local/LandmarkDetector/model/patch_experts/*.dat
 third_party/OpenFace/lib/3rdParty/dlib/lib/
+
+# docker 镜像
+omniface-vlatest-docker.tar.gz
+
+# 第三方库
+third_party/cpp-httplib
+third_party/yaml-cpp

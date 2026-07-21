@@ -1,0 +1,27 @@
+# ============================================================
+# OmniFace Docker Compose 配置
+#
+# 启动:  docker compose up -d
+# 停止:  docker compose down
+# 查看日志: docker compose logs -f
+# ============================================================
+
+services:
+  omniface:
+    image: omniface:latest
+    container_name: omniface
+    ports:
+      - "8080:8080"
+    volumes:
+      # 上传目录：把视频和图片放这里，Web 界面中即可选择
+      - ./uploads/img:/app/data/img
+      - ./uploads/video:/app/data/video
+      # 输出目录：分析结果（视频、CSV、JSON）保存在这里
+      - ./output:/app/data/output
+      # 预设方案：保存你的参数预设（可选）
+      - ./presets:/app/data/presets
+      # 自定义配置文件（可选，取消注释后生效）
+      # - ./config.yaml:/app/config.yaml:ro
+    environment:
+      - TZ=Asia/Shanghai
+    restart: unless-stopped

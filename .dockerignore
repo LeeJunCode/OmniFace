@@ -1,0 +1,29 @@
+# Git
+.git/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+
+# Claude AI
+.claude/
+
+# 本地编译产物
+build/
+
+# 用户数据（Docker 镜像中创建空目录即可）
+
+# OpenFace 本地编译产物（Docker 中重新编译）
+third_party/OpenFace/build/
+
+# 文档
+*.md
+LICENSE
+
+# 杂项
+.clang-format
+Dockerfile
+docker-compose.yml
+.dockerignore
+docker/

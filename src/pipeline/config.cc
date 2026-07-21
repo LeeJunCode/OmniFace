@@ -125,7 +125,7 @@ AppConfig ConfigLoader::Load(const std::string& yaml_path) {
         LOAD_SAME(l, progress_interval);
     }
     if (auto s = root["server"]) {
-        LOAD_SAME(s, server_host);
+        LOAD_FIELD(s, "host", cfg.server_host);
         LOAD_FIELD(s, "port", cfg.server_port);
         LOAD_FIELD(s, "auth_token", cfg.auth_token);
         LOAD_FIELD(s, "max_upload_mb", cfg.max_upload_mb);

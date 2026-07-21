@@ -13,13 +13,11 @@ endif()
 include(FetchContent)
 
 FetchContent_Declare(yaml-cpp
-    GIT_REPOSITORY https://github.com/jbeder/yaml-cpp.git
-    GIT_TAG        0.8.0)
+    SOURCE_DIR ${CMAKE_SOURCE_DIR}/third_party/yaml-cpp)
 FetchContent_MakeAvailable(yaml-cpp)
 
 FetchContent_Declare(httplib
-    GIT_REPOSITORY https://github.com/yhirose/cpp-httplib.git
-    GIT_TAG        v0.18.3)
+    SOURCE_DIR ${CMAKE_SOURCE_DIR}/third_party/cpp-httplib)
 FetchContent_MakeAvailable(httplib)
 
 find_package(onnxruntime REQUIRED)
