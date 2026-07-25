@@ -33,9 +33,10 @@ public:
     static std::array<float, 4> TlwhToXyah(const std::array<float, 4>& tlwh);
     std::array<float, 4> ToXyah() const;
 
-    void Activate(const KalmanFilter& kalman_filter, int frame_id);
+    void Activate(const KalmanFilter& kalman_filter, int frame_id, int& id_counter);
     void ReActivate(const STrack& new_track, int frame_id,
-                    const KalmanFilter& kalman_filter, bool new_id = false);
+                    const KalmanFilter& kalman_filter, int& id_counter,
+                    bool new_id = false);
     void UpdateTrack(const STrack& new_track, int frame_id,
                      const KalmanFilter& kalman_filter);
     void MarkLost();
@@ -57,7 +58,6 @@ public:
 
 private:
     void UpdateTlwhFromState();
-    static int NextId();
 
     std::array<float, 4> tlwh_{};
     float score_ = 0.0f;

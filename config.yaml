@@ -17,16 +17,13 @@ thresholds:
   detection_confidence: 0.5
   detection_nms: 0.4
   tracking_high: 0.5
-  tracking_match: 0.8
+  tracking_match: 0.4
   tracking_match_second: 0.5
   tracking_new: 0.7
 
 behavior:
-  skip_frames: 0
   ema_alpha: 0.7
-  detection_interval: 3
   max_frame_width: 0
-  async_recognition: true
   target_recheck_interval: 0
 
 video:

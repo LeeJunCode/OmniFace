@@ -23,17 +23,14 @@ struct ThresholdConfig {
     float detection_confidence = 0.8f;
     float detection_nms = 0.4f;
     float tracking_high = 0.5f;
-    float tracking_match = 0.8f;
+    float tracking_match = 0.4f;
     float tracking_match_second = 0.5f;
     float tracking_new = 0.7f;
 };
 
 struct PipelineBehavior {
-    int skip_frames = 0;
     float ema_alpha = 0.7f;
-    int detection_interval = 1;
     int max_frame_width = 0;
-    bool async_recognition = false;
     int target_recheck_interval = 30;
 };
 

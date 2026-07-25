@@ -14,10 +14,6 @@ FaceTracker::FaceTracker(Config config)
       }) {}
 
 std::vector<TrackedFace> FaceTracker::Update(const std::vector<BoundingBox>& detections) {
-    if (detections.empty()) {
-        return last_tracks_;
-    }
-
     std::vector<ByteTrackEngine::Detection> engine_dets;
     engine_dets.reserve(detections.size());
     for (const auto& d : detections) {
@@ -46,13 +42,14 @@ std::vector<TrackedFace> FaceTracker::Update(const std::vector<BoundingBox>& det
         tf.consecutive_miss_count = t.miss_streak;
         result.push_back(tf);
     }
-    last_tracks_ = result;
+    if (result.empty()) return last_output_;
+    last_output_ = result;
     return result;
 }
 
 void FaceTracker::Reset() {
     engine_.Reset();
-    last_tracks_.clear();
+    last_output_.clear();
 }
 
 }  // namespace omniface::tracking

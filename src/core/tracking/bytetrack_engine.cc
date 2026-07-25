@@ -153,7 +153,7 @@ public:
                 track->UpdateTrack(*det, frame_id_, kalman_filter_);
                 activated.push_back(*track);
             } else {
-                track->ReActivate(*det, frame_id_, kalman_filter_);
+                track->ReActivate(*det, frame_id_, kalman_filter_, next_track_id_);
                 refind.push_back(*track);
             }
         }
@@ -186,7 +186,7 @@ public:
                     track->UpdateTrack(*det, frame_id_, kalman_filter_);
                     activated.push_back(*track);
                 } else {
-                    track->ReActivate(*det, frame_id_, kalman_filter_);
+                    track->ReActivate(*det, frame_id_, kalman_filter_, next_track_id_);
                     refind.push_back(*track);
                 }
             }
@@ -243,7 +243,7 @@ public:
 
         for (auto& det : unmatched_high_after) {
             if (det.Score() >= config_.high_thresh) {
-                det.Activate(kalman_filter_, frame_id_);
+                det.Activate(kalman_filter_, frame_id_, next_track_id_);
                 activated.push_back(std::move(det));
             }
         }
@@ -300,12 +300,14 @@ public:
         tracked_stracks_.clear();
         lost_stracks_.clear();
         frame_id_ = 0;
+        next_track_id_ = 0;
     }
 
 private:
     Config config_;
     int frame_id_ = 0;
     int max_time_lost_;
+    int next_track_id_ = 0;
     KalmanFilter kalman_filter_;
     STrack::List tracked_stracks_;
     STrack::List lost_stracks_;

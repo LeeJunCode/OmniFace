@@ -1,7 +1,6 @@
 #include "omniface/core/tracking/detail/strack.h"
 
 #include <algorithm>
-#include <atomic>
 
 namespace omniface::tracking {
 
@@ -37,13 +36,8 @@ void STrack::UpdateTlwhFromState() {
     tlwh_[3] = h;
 }
 
-int STrack::NextId() {
-    static std::atomic<int> count{0};
-    return ++count;
-}
-
-void STrack::Activate(const KalmanFilter& kalman_filter, int frame_id) {
-    track_id_ = NextId();
+void STrack::Activate(const KalmanFilter& kalman_filter, int frame_id, int& id_counter) {
+    track_id_ = ++id_counter;
 
     auto xyah = ToXyah();
     DetectBox xyah_box;
@@ -63,7 +57,8 @@ void STrack::Activate(const KalmanFilter& kalman_filter, int frame_id) {
 }
 
 void STrack::ReActivate(const STrack& new_track, int frame_id,
-                         const KalmanFilter& kalman_filter, bool new_id) {
+                         const KalmanFilter& kalman_filter, int& id_counter,
+                         bool new_id) {
     auto xyah = new_track.ToXyah();
     DetectBox xyah_box;
     xyah_box << xyah[0], xyah[1], xyah[2], xyah[3];
@@ -81,7 +76,7 @@ void STrack::ReActivate(const STrack& new_track, int frame_id,
     score_ = new_track.score_;
 
     if (new_id) {
-        track_id_ = NextId();
+        track_id_ = ++id_counter;
     }
 }
 

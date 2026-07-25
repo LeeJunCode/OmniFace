@@ -25,7 +25,7 @@ public:
 
 private:
     ByteTrackEngine engine_;
-    std::vector<TrackedFace> last_tracks_;
+    std::vector<TrackedFace> last_output_;
 };
 
 }  // namespace omniface::tracking

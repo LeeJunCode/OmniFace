@@ -79,14 +79,9 @@ PipelineConfig LoadPipelineConfig(const std::string& yaml_path) {
     }
 
     if (auto b = SafeSub(root, "behavior")) {
-        cfg.behavior.skip_frames = SafeGet<int>(b, "skip_frames", cfg.behavior.skip_frames);
         cfg.behavior.ema_alpha = SafeGet<float>(b, "ema_alpha", cfg.behavior.ema_alpha);
-        cfg.behavior.detection_interval =
-            SafeGet<int>(b, "detection_interval", cfg.behavior.detection_interval);
         cfg.behavior.max_frame_width =
             SafeGet<int>(b, "max_frame_width", cfg.behavior.max_frame_width);
-        cfg.behavior.async_recognition =
-            SafeGet<bool>(b, "async_recognition", cfg.behavior.async_recognition);
         cfg.behavior.target_recheck_interval =
             SafeGet<int>(b, "target_recheck_interval", cfg.behavior.target_recheck_interval);
     }
@@ -125,11 +120,8 @@ void SavePipelineConfig(const std::string& yaml_path, const PipelineConfig& cfg)
     root["thresholds"]["tracking_match_second"] = cfg.thresholds.tracking_match_second;
     root["thresholds"]["tracking_new"] = cfg.thresholds.tracking_new;
 
-    root["behavior"]["skip_frames"] = cfg.behavior.skip_frames;
     root["behavior"]["ema_alpha"] = cfg.behavior.ema_alpha;
-    root["behavior"]["detection_interval"] = cfg.behavior.detection_interval;
     root["behavior"]["max_frame_width"] = cfg.behavior.max_frame_width;
-    root["behavior"]["async_recognition"] = cfg.behavior.async_recognition;
     root["behavior"]["target_recheck_interval"] = cfg.behavior.target_recheck_interval;
 
     root["video"]["input_path"] = cfg.video.input_path;

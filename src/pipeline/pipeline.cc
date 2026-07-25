@@ -5,7 +5,6 @@
 #include <chrono>
 #include <cmath>
 #include <filesystem>
-#include <future>
 #include <thread>
 #include <unordered_map>
 #include <unordered_set>
@@ -119,17 +118,6 @@ public:
     };
     std::unordered_map<int, TrackInfo> track_cache_;
 
-    // 异步识别：后台线程提取embedding，下帧应用结果
-    struct AsyncRecogItem {
-        int track_id;
-        FaceEmbedding embedding;
-        BoundingBox box;
-        bool recheck_due;
-        bool has_cache;
-        TrackInfo cached_info;
-    };
-    std::future<std::vector<AsyncRecogItem>> pending_recognition_;
-
     int target_track_id_ = -1;
     int target_verify_fails_ = 0;
     bool target_demote_ = false;
@@ -163,6 +151,7 @@ public:
         track_cfg.match_threshold_second = config_.thresholds.tracking_match_second;
         track_cfg.new_track_threshold = config_.thresholds.tracking_new;
         tracker_ = std::make_unique<tracking::FaceTracker>(track_cfg);
+        tracker_->Reset();  // 重置跟踪ID计数器等内部状态
 
         if (std::filesystem::is_regular_file(config_.model.recognizer_model)) {
             spdlog::info("Loading recognition model: {}", config_.model.recognizer_model);
@@ -193,36 +182,6 @@ public:
 
         auto t_start = std::chrono::steady_clock::now();
 
-        // 异步识别：收集上帧结果，更新 track_cache_
-        if (config_.behavior.async_recognition && pending_recognition_.valid()) {
-            auto items = pending_recognition_.get();
-            for (auto& item : items) {
-                if (!item.embedding.valid) continue;
-                MatchResult match_result =
-                    matcher_->Match(item.embedding, item.box, config_.thresholds.match_threshold);
-                match_result.tracked_id = item.track_id;
-
-                if (item.recheck_due) {
-                    last_target_verify_frame_ = frame_index_;
-                    if (match_result.is_match) {
-                        target_verify_fails_ = 0;
-                        track_cache_[item.track_id] = {true, match_result.similarity};
-                    } else {
-                        target_verify_fails_++;
-                        if (target_verify_fails_ >= 2) {
-                            target_demote_ = true;
-                            track_cache_.erase(item.track_id);
-                        } else if (item.has_cache) {
-                            track_cache_[item.track_id] = item.cached_info;
-                        }
-                    }
-                } else {
-                    track_cache_[item.track_id] = {match_result.is_match,
-                                                   match_result.similarity};
-                }
-            }
-        }
-
         // 超宽视频降采样后检测，结果坐标映射回原始分辨率
         float ds_scale = 1.0f;
         cv::Mat detect_frame;
@@ -234,12 +193,7 @@ public:
             detect_frame = frame;
         }
 
-        // 检测帧跳跃：每 N 帧检测一次，间隔帧仅靠跟踪器预测
-        std::vector<BoundingBox> detections;
-        if (config_.behavior.detection_interval <= 1 ||
-            frame_index_ % config_.behavior.detection_interval == 0) {
-            detections = detector_->Detect(detect_frame);
-        }
+        auto detections = detector_->Detect(detect_frame);
 
         // 检测结果坐标映射回原始分辨率
         if (ds_scale < 1.0f) {
@@ -534,127 +488,81 @@ public:
                 }
             }
 
-            // 缓存track：异步复检或同步
+            // 缓存track：同步识别
             if (!pending_recheck.empty()) {
-                if (config_.behavior.async_recognition) {
-                    // 当前帧用缓存出结果
-                    for (auto& p : pending_recheck) {
-                        MatchResult result;
-                        result.tracked_id = p.track_id;
-                        result.box = tracked_faces[p.tracked_idx].box;
+                std::vector<cv::Mat> recheck_batch;
+                recheck_batch.reserve(pending_recheck.size());
+                for (auto& p : pending_recheck)
+                    recheck_batch.push_back(p.aligned);
+
+                auto embeddings = recognizer_->ExtractBatch(recheck_batch);
+
+                for (size_t j = 0; j < pending_recheck.size(); ++j) {
+                    auto& p = pending_recheck[j];
+                    auto& emb = embeddings[j];
+                    size_t i = p.tracked_idx;
+                    int tid = p.track_id;
+
+                    MatchResult result;
+                    result.tracked_id = tid;
+                    result.box = tracked_faces[i].box;
+
+                    bool recheck_with_cache = p.recheck_due && p.has_cache;
+
+                    auto keep_cached = [&]() {
                         result.similarity = p.cached_info.similarity;
                         result.is_match = p.cached_info.is_target;
                         result.valid = true;
                         match_results.push_back(result);
                         if (result.is_match && result.similarity > best_match_sim) {
                             best_match_sim = result.similarity;
-                            best_match_idx = static_cast<int>(p.tracked_idx);
+                            best_match_idx = static_cast<int>(i);
                         }
-                    }
+                    };
 
-                    std::vector<cv::Mat> recheck_batch;
-                    recheck_batch.reserve(pending_recheck.size());
-                    for (auto& p : pending_recheck)
-                        recheck_batch.push_back(std::move(p.aligned));
-
-                    std::vector<AsyncRecogItem> async_items;
-                    async_items.reserve(pending_recheck.size());
-                    for (auto& p : pending_recheck) {
-                        AsyncRecogItem item;
-                        item.track_id = p.track_id;
-                        item.box = p.box;
-                        item.recheck_due = p.recheck_due;
-                        item.has_cache = p.has_cache;
-                        if (p.has_cache) item.cached_info = p.cached_info;
-                        async_items.push_back(std::move(item));
-                    }
-
-                    pending_recognition_ = std::async(
-                        std::launch::async,
-                        [this, recheck_batch = std::move(recheck_batch),
-                         async_items = std::move(async_items)]() mutable {
-                            auto embeddings = recognizer_->ExtractBatch(recheck_batch);
-                            for (size_t j = 0; j < async_items.size() && j < embeddings.size(); ++j) {
-                                async_items[j].embedding = std::move(embeddings[j]);
-                            }
-                            return async_items;
-                        });
-                } else {
-                    // 同步模式：批量提取 + 立即匹配
-                    std::vector<cv::Mat> recheck_batch;
-                    recheck_batch.reserve(pending_recheck.size());
-                    for (auto& p : pending_recheck)
-                        recheck_batch.push_back(p.aligned);
-
-                    auto embeddings = recognizer_->ExtractBatch(recheck_batch);
-
-                    for (size_t j = 0; j < pending_recheck.size(); ++j) {
-                        auto& p = pending_recheck[j];
-                        auto& emb = embeddings[j];
-                        size_t i = p.tracked_idx;
-                        int tid = p.track_id;
-
-                        MatchResult result;
-                        result.tracked_id = tid;
-                        result.box = tracked_faces[i].box;
-
-                        bool recheck_with_cache = p.recheck_due && p.has_cache;
-
-                        auto keep_cached = [&]() {
-                            result.similarity = p.cached_info.similarity;
-                            result.is_match = p.cached_info.is_target;
-                            result.valid = true;
-                            match_results.push_back(result);
-                            if (result.is_match && result.similarity > best_match_sim) {
-                                best_match_sim = result.similarity;
-                                best_match_idx = static_cast<int>(i);
-                            }
-                        };
-
-                        if (!emb.valid) {
-                            if (recheck_with_cache) {
-                                keep_cached();
-                                continue;
-                            }
-                            result.valid = false;
-                            match_results.push_back(result);
-                            track_cache_[tid] = {false, 0.0f};
+                    if (!emb.valid) {
+                        if (recheck_with_cache) {
+                            keep_cached();
                             continue;
                         }
-
-                        result = matcher_->Match(emb, tracked_faces[i].box,
-                                                  config_.thresholds.match_threshold);
-                        result.tracked_id = tid;
-
-                        if (p.recheck_due) {
-                            last_target_verify_frame_ = frame_index_;
-                            if (result.is_match) {
-                                target_verify_fails_ = 0;
-                                track_cache_[tid] = {true, result.similarity};
-                            } else {
-                                target_verify_fails_++;
-                                if (target_verify_fails_ >= 2) {
-                                    target_demote_ = true;
-                                    track_cache_.erase(tid);
-                                } else if (p.has_cache) {
-                                    result.is_match = true;
-                                    result.similarity = p.cached_info.similarity;
-                                }
-                            }
-                            match_results.push_back(result);
-                            if (result.is_match && result.similarity > best_match_sim) {
-                                best_match_sim = result.similarity;
-                                best_match_idx = static_cast<int>(i);
-                            }
-                            continue;
-                        }
-
+                        result.valid = false;
                         match_results.push_back(result);
-                        track_cache_[tid] = {result.is_match, result.similarity};
-                        if (result.valid && result.similarity > best_match_sim) {
+                        track_cache_[tid] = {false, 0.0f};
+                        continue;
+                    }
+
+                    result = matcher_->Match(emb, tracked_faces[i].box,
+                                              config_.thresholds.match_threshold);
+                    result.tracked_id = tid;
+
+                    if (p.recheck_due) {
+                        last_target_verify_frame_ = frame_index_;
+                        if (result.is_match) {
+                            target_verify_fails_ = 0;
+                            track_cache_[tid] = {true, result.similarity};
+                        } else {
+                            target_verify_fails_++;
+                            if (target_verify_fails_ >= 2) {
+                                target_demote_ = true;
+                                track_cache_.erase(tid);
+                            } else if (p.has_cache) {
+                                result.is_match = true;
+                                result.similarity = p.cached_info.similarity;
+                            }
+                        }
+                        match_results.push_back(result);
+                        if (result.is_match && result.similarity > best_match_sim) {
                             best_match_sim = result.similarity;
                             best_match_idx = static_cast<int>(i);
                         }
+                        continue;
+                    }
+
+                    match_results.push_back(result);
+                    track_cache_[tid] = {result.is_match, result.similarity};
+                    if (result.valid && result.similarity > best_match_sim) {
+                        best_match_sim = result.similarity;
+                        best_match_idx = static_cast<int>(i);
                     }
                 }
             }
@@ -786,7 +694,6 @@ public:
         cv::namedWindow(kWindowName, cv::WINDOW_NORMAL);
 
         int frame_count = 0;
-        int skip_counter = 0;
 
         auto last_fps_time = std::chrono::steady_clock::now();
         double fps = 0.0;
@@ -801,11 +708,6 @@ public:
             }
 
             frame_count++;
-
-            if (config_.behavior.skip_frames > 0 && skip_counter > 0) {
-                skip_counter--;
-                continue;
-            }
 
             fps_frame_count++;
 
@@ -822,8 +724,6 @@ public:
 
             cv::imshow(kWindowName, result.annotated_frame);
             if (writer.isOpened()) writer.write(result.annotated_frame);
-
-            skip_counter = config_.behavior.skip_frames;
 
             if (cv::waitKey(1) == 27) break;
         }
