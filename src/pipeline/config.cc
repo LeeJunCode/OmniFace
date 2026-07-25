@@ -1,0 +1,147 @@
+#include "omniface/pipeline/config.h"
+
+#include <yaml-cpp/yaml.h>
+#include <fstream>
+#include <stdexcept>
+
+namespace omniface {
+
+namespace {
+
+template <typename T>
+T SafeGet(const YAML::Node& node, const std::string& key, T default_val) {
+    if (node && node[key] && node[key].IsScalar()) {
+        return node[key].as<T>();
+    }
+    return default_val;
+}
+
+YAML::Node SafeSub(const YAML::Node& node, const std::string& key) {
+    if (node && node[key]) return node[key];
+    return YAML::Node{};
+}
+
+}  // namespace
+
+PipelineConfig LoadPipelineConfig(const std::string& yaml_path) {
+    YAML::Node root;
+    try {
+        root = YAML::LoadFile(yaml_path);
+    } catch (const YAML::Exception& e) {
+        throw std::runtime_error("Failed to parse config file " + yaml_path + ": " + e.what());
+    }
+
+    if (!root.IsMap()) {
+        throw std::runtime_error("Config root must be a map: " + yaml_path);
+    }
+
+    PipelineConfig cfg;
+
+    if (auto m = SafeSub(root, "model")) {
+        cfg.model.detector_model =
+            SafeGet<std::string>(m, "detector_model", cfg.model.detector_model);
+        cfg.model.recognizer_model =
+            SafeGet<std::string>(m, "recognizer_model", cfg.model.recognizer_model);
+        cfg.model.reference_image =
+            SafeGet<std::string>(m, "reference_image", cfg.model.reference_image);
+        cfg.model.detection_threads =
+            SafeGet<int>(m, "detection_threads", cfg.model.detection_threads);
+        cfg.model.recognition_threads =
+            SafeGet<int>(m, "recognition_threads", cfg.model.recognition_threads);
+        cfg.model.detection_input_width =
+            SafeGet<int>(m, "detection_input_width", cfg.model.detection_input_width);
+        cfg.model.detection_input_height =
+            SafeGet<int>(m, "detection_input_height", cfg.model.detection_input_height);
+        cfg.model.min_face_area =
+            SafeGet<float>(m, "min_face_area", cfg.model.min_face_area);
+        cfg.model.recognition_confidence_threshold =
+            SafeGet<float>(m, "recognition_confidence_threshold",
+                           cfg.model.recognition_confidence_threshold);
+        cfg.model.recognition_iou =
+            SafeGet<float>(m, "recognition_iou", cfg.model.recognition_iou);
+    }
+
+    if (auto t = SafeSub(root, "thresholds")) {
+        cfg.thresholds.match_threshold =
+            SafeGet<float>(t, "match_threshold", cfg.thresholds.match_threshold);
+        cfg.thresholds.detection_confidence =
+            SafeGet<float>(t, "detection_confidence", cfg.thresholds.detection_confidence);
+        cfg.thresholds.detection_nms =
+            SafeGet<float>(t, "detection_nms", cfg.thresholds.detection_nms);
+        cfg.thresholds.tracking_high =
+            SafeGet<float>(t, "tracking_high", cfg.thresholds.tracking_high);
+        cfg.thresholds.tracking_match =
+            SafeGet<float>(t, "tracking_match", cfg.thresholds.tracking_match);
+        cfg.thresholds.tracking_match_second =
+            SafeGet<float>(t, "tracking_match_second", cfg.thresholds.tracking_match_second);
+        cfg.thresholds.tracking_new =
+            SafeGet<float>(t, "tracking_new", cfg.thresholds.tracking_new);
+    }
+
+    if (auto b = SafeSub(root, "behavior")) {
+        cfg.behavior.skip_frames = SafeGet<int>(b, "skip_frames", cfg.behavior.skip_frames);
+        cfg.behavior.ema_alpha = SafeGet<float>(b, "ema_alpha", cfg.behavior.ema_alpha);
+        cfg.behavior.detection_interval =
+            SafeGet<int>(b, "detection_interval", cfg.behavior.detection_interval);
+        cfg.behavior.max_frame_width =
+            SafeGet<int>(b, "max_frame_width", cfg.behavior.max_frame_width);
+        cfg.behavior.async_recognition =
+            SafeGet<bool>(b, "async_recognition", cfg.behavior.async_recognition);
+        cfg.behavior.target_recheck_interval =
+            SafeGet<int>(b, "target_recheck_interval", cfg.behavior.target_recheck_interval);
+    }
+
+    if (auto v = SafeSub(root, "video")) {
+        cfg.video.input_path = SafeGet<std::string>(v, "input_path", cfg.video.input_path);
+        cfg.video.output_path = SafeGet<std::string>(v, "output_path", cfg.video.output_path);
+    }
+
+    if (auto l = SafeSub(root, "log")) {
+        cfg.log.level = SafeGet<std::string>(l, "level", cfg.log.level);
+    }
+
+    return cfg;
+}
+
+void SavePipelineConfig(const std::string& yaml_path, const PipelineConfig& cfg) {
+    YAML::Node root;
+
+    root["model"]["detector_model"] = cfg.model.detector_model;
+    root["model"]["recognizer_model"] = cfg.model.recognizer_model;
+    root["model"]["reference_image"] = cfg.model.reference_image;
+    root["model"]["detection_threads"] = cfg.model.detection_threads;
+    root["model"]["recognition_threads"] = cfg.model.recognition_threads;
+    root["model"]["detection_input_width"] = cfg.model.detection_input_width;
+    root["model"]["detection_input_height"] = cfg.model.detection_input_height;
+    root["model"]["min_face_area"] = cfg.model.min_face_area;
+    root["model"]["recognition_confidence_threshold"] = cfg.model.recognition_confidence_threshold;
+    root["model"]["recognition_iou"] = cfg.model.recognition_iou;
+
+    root["thresholds"]["match_threshold"] = cfg.thresholds.match_threshold;
+    root["thresholds"]["detection_confidence"] = cfg.thresholds.detection_confidence;
+    root["thresholds"]["detection_nms"] = cfg.thresholds.detection_nms;
+    root["thresholds"]["tracking_high"] = cfg.thresholds.tracking_high;
+    root["thresholds"]["tracking_match"] = cfg.thresholds.tracking_match;
+    root["thresholds"]["tracking_match_second"] = cfg.thresholds.tracking_match_second;
+    root["thresholds"]["tracking_new"] = cfg.thresholds.tracking_new;
+
+    root["behavior"]["skip_frames"] = cfg.behavior.skip_frames;
+    root["behavior"]["ema_alpha"] = cfg.behavior.ema_alpha;
+    root["behavior"]["detection_interval"] = cfg.behavior.detection_interval;
+    root["behavior"]["max_frame_width"] = cfg.behavior.max_frame_width;
+    root["behavior"]["async_recognition"] = cfg.behavior.async_recognition;
+    root["behavior"]["target_recheck_interval"] = cfg.behavior.target_recheck_interval;
+
+    root["video"]["input_path"] = cfg.video.input_path;
+    root["video"]["output_path"] = cfg.video.output_path;
+
+    root["log"]["level"] = cfg.log.level;
+
+    std::ofstream fout(yaml_path);
+    if (!fout.is_open()) {
+        throw std::runtime_error("Failed to write config: " + yaml_path);
+    }
+    fout << root;
+}
+
+}  // namespace omniface

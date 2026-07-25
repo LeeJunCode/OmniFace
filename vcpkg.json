@@ -1,0 +1,15 @@
+{
+  "name": "omniface",
+  "version": "1.0.0",
+  "description": "Real-time face detection, tracking, and recognition on CPU",
+  "dependencies": [
+    {
+      "name": "opencv4",
+      "features": ["dnn", "highgui", "calib3d"]
+    },
+    "onnxruntime",
+    "eigen3",
+    "spdlog",
+    "yaml-cpp"
+  ]
+}

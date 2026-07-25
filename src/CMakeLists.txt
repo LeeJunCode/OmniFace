@@ -1,0 +1,119 @@
+# ============================================================
+# Detail layer — ONNX Runtime session wrapper + preprocessing
+# ============================================================
+add_library(omniface_detail STATIC
+    core/detail/onnx_session.cc
+    core/detail/preprocess.cc
+)
+
+target_include_directories(omniface_detail PUBLIC
+    ${PROJECT_SOURCE_DIR}/include
+)
+
+target_link_libraries(omniface_detail PUBLIC
+    onnxruntime::onnxruntime
+    spdlog::spdlog
+    opencv_core
+    opencv_imgproc
+    opencv_dnn
+)
+
+target_compile_features(omniface_detail PUBLIC cxx_std_20)
+
+# ============================================================
+# Detection module — SCRFD face detector
+# ============================================================
+add_library(omniface_detection STATIC
+    core/detection/face_detector.cc
+)
+
+target_include_directories(omniface_detection PUBLIC
+    ${PROJECT_SOURCE_DIR}/include
+)
+
+target_link_libraries(omniface_detection PUBLIC
+    omniface_detail
+    opencv_core
+)
+
+target_link_libraries(omniface_detection PRIVATE
+    opencv_dnn
+    opencv_imgproc
+)
+
+target_compile_features(omniface_detection PUBLIC cxx_std_20)
+
+# ============================================================
+# Tracking module — ByteTrack + FaceTracker
+# ============================================================
+add_library(omniface_tracking STATIC
+    core/tracking/bytetrack_engine.cc
+    core/tracking/face_tracker.cc
+    core/tracking/detail/kalman_filter.cc
+    core/tracking/detail/strack.cc
+    core/tracking/detail/lapjv.cc
+)
+
+target_include_directories(omniface_tracking PUBLIC
+    ${PROJECT_SOURCE_DIR}/include
+)
+
+target_link_libraries(omniface_tracking PUBLIC
+    omniface_detail
+    opencv_core
+    Eigen3::Eigen
+)
+
+target_compile_features(omniface_tracking PUBLIC cxx_std_20)
+
+# ============================================================
+# Recognition module — FaceRecognizer + FaceMatcher
+# ============================================================
+add_library(omniface_recognition STATIC
+    core/recognition/face_recognizer.cc
+    core/recognition/face_matcher.cc
+)
+
+target_include_directories(omniface_recognition PUBLIC
+    ${PROJECT_SOURCE_DIR}/include
+)
+
+target_link_libraries(omniface_recognition PUBLIC
+    omniface_detail
+    opencv_core
+    opencv_calib3d
+)
+
+target_link_libraries(omniface_recognition PRIVATE
+    Eigen3::Eigen
+    opencv_dnn
+    opencv_imgproc
+)
+
+target_compile_features(omniface_recognition PUBLIC cxx_std_20)
+
+# ============================================================
+# Pipeline module — config + orchestration
+# ============================================================
+add_library(omniface_pipeline STATIC
+    pipeline/config.cc
+    pipeline/pipeline.cc
+)
+
+target_include_directories(omniface_pipeline PUBLIC
+    ${PROJECT_SOURCE_DIR}/include
+)
+
+target_link_libraries(omniface_pipeline PUBLIC
+    omniface_detection
+    omniface_tracking
+    omniface_recognition
+    yaml-cpp::yaml-cpp
+    spdlog::spdlog
+    opencv_core
+    opencv_imgproc
+    opencv_highgui
+    opencv_videoio
+)
+
+target_compile_features(omniface_pipeline PUBLIC cxx_std_20)

@@ -1,0 +1,37 @@
+# OmniFace default configuration
+
+model:
+  detector_model: "models/buffalo_sc/det_500m.onnx"
+  recognizer_model: "models/buffalo_sc/w600k_mbf.onnx"
+  reference_image: ""
+  detection_threads: 4
+  recognition_threads: 4
+  detection_input_width: 640
+  detection_input_height: 640
+  min_face_area: 0.0
+  recognition_confidence_threshold: 0.0
+  recognition_iou: 0.3
+
+thresholds:
+  match_threshold: 0.25
+  detection_confidence: 0.5
+  detection_nms: 0.4
+  tracking_high: 0.5
+  tracking_match: 0.8
+  tracking_match_second: 0.5
+  tracking_new: 0.7
+
+behavior:
+  skip_frames: 0
+  ema_alpha: 0.7
+  detection_interval: 3
+  max_frame_width: 0
+  async_recognition: true
+  target_recheck_interval: 0
+
+video:
+  input_path: ""
+  output_path: ""
+
+log:
+  level: "info"

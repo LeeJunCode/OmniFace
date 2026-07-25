@@ -1,0 +1,46 @@
+# Build outputs
+build/
+cmake-build-*/
+out/
+*.o
+*.obj
+*.dll
+*.exe
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Dependencies
+vcpkg_installed/
+
+# Claude
+.claude/
+CLAUDE.md
+
+# Misc
+.DS_Store
+Thumbs.db
+
+# Python
+.venv/
+
+# Data (test images/videos, output)
+data/
+
+# CMake generated
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+
+# Third party
+third_party/
+
+# Docs
+docs/
+
+# models
+models/
