@@ -59,6 +59,8 @@ PipelineConfig LoadPipelineConfig(const std::string& yaml_path) {
                            cfg.model.recognition_confidence_threshold);
         cfg.model.recognition_iou =
             SafeGet<float>(m, "recognition_iou", cfg.model.recognition_iou);
+        cfg.model.openface_model_dir =
+            SafeGet<std::string>(m, "openface_model_dir", cfg.model.openface_model_dir);
     }
 
     if (auto t = SafeSub(root, "thresholds")) {
@@ -111,6 +113,7 @@ void SavePipelineConfig(const std::string& yaml_path, const PipelineConfig& cfg)
     root["model"]["min_face_area"] = cfg.model.min_face_area;
     root["model"]["recognition_confidence_threshold"] = cfg.model.recognition_confidence_threshold;
     root["model"]["recognition_iou"] = cfg.model.recognition_iou;
+    root["model"]["openface_model_dir"] = cfg.model.openface_model_dir;
 
     root["thresholds"]["match_threshold"] = cfg.thresholds.match_threshold;
     root["thresholds"]["detection_confidence"] = cfg.thresholds.detection_confidence;

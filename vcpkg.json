@@ -10,6 +10,11 @@
     "onnxruntime",
     "eigen3",
     "spdlog",
-    "yaml-cpp"
+    "yaml-cpp",
+    "dlib",
+    "openblas",
+    "lapack-reference",
+    "boost-filesystem",
+    "boost-system"
   ]
 }

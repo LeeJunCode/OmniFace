@@ -1,8 +1,10 @@
 add_library(omniface_ui STATIC
     main_window.cpp
     video_preview_widget.cpp
+    au_panel.cpp
     ${PROJECT_SOURCE_DIR}/include/omniface/ui/main_window.h
     ${PROJECT_SOURCE_DIR}/include/omniface/ui/video_preview_widget.h
+    ${PROJECT_SOURCE_DIR}/include/omniface/ui/au_panel.h
 )
 
 target_include_directories(omniface_ui PUBLIC

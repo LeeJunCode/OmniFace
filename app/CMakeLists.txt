@@ -32,6 +32,10 @@ set_target_properties(OmniFace PROPERTIES
 add_custom_command(TARGET OmniFace POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory
         ${PROJECT_SOURCE_DIR}/models $<TARGET_FILE_DIR:OmniFace>/models
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        ${PROJECT_SOURCE_DIR}/third_party/OpenFace/lib/local/LandmarkDetector/model $<TARGET_FILE_DIR:OmniFace>/openface_model
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        ${PROJECT_SOURCE_DIR}/third_party/OpenFace/lib/local/FaceAnalyser/AU_predictors $<TARGET_FILE_DIR:OmniFace>/AU_predictors
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
         ${PROJECT_SOURCE_DIR}/config.yaml $<TARGET_FILE_DIR:OmniFace>/config.yaml
     COMMAND

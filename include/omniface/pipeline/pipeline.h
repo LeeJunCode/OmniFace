@@ -19,6 +19,7 @@ struct FrameResult {
     int face_count = 0;
     std::vector<TrackedFace> tracked_faces;
     std::vector<MatchResult> match_results;
+    FaceAnalysisResult analysis;
 };
 
 using FrameCallback = std::function<void(const FrameResult&)>;

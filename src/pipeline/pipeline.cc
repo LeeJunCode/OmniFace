@@ -15,6 +15,7 @@
 
 #include <spdlog/spdlog.h>
 
+#include "omniface/core/analysis/face_analyzer.h"
 #include "omniface/core/detection/face_detector.h"
 #include "omniface/core/recognition/align.h"
 #include "omniface/core/recognition/face_matcher.h"
@@ -103,6 +104,7 @@ public:
     std::unique_ptr<tracking::FaceTracker> tracker_;
     std::unique_ptr<recognition::FaceRecognizer> recognizer_;
     std::unique_ptr<recognition::FaceMatcher> matcher_;
+    std::unique_ptr<analysis::FaceAnalyzer> face_analyzer_;
 
     cv::VideoCapture video_cap_;
     std::atomic<bool> stop_requested_{false};
@@ -173,6 +175,13 @@ public:
                 spdlog::warn("Failed to extract reference embedding on init");
             }
         }
+
+        // OpenFace analysis
+        if (!config_.model.openface_model_dir.empty()) {
+            analysis::FaceAnalyzer::Config fa_cfg;
+            fa_cfg.model_dir = config_.model.openface_model_dir;
+            face_analyzer_ = std::make_unique<analysis::FaceAnalyzer>(fa_cfg);
+        }
     }
 
     FrameResult ProcessFrame(cv::Mat& frame, int frame_index) {
@@ -220,7 +229,17 @@ public:
         // Update target state
         UpdateTargetState(tracked_faces, matches, best_match_idx, best_match_sim);
 
-        // Draw
+        // OpenFace analysis on target face (renders landmarks/pose/gaze/AUs via Visualizer)
+        if (face_analyzer_ && target_track_id_ > 0) {
+            cv::Rect_<float> target_bbox(
+                last_target_bbox_.x, last_target_bbox_.y,
+                last_target_bbox_.width, last_target_bbox_.height);
+            if (target_bbox.width > 0 && target_bbox.height > 0) {
+                result.analysis = face_analyzer_->Analyze(frame, target_bbox);
+            }
+        }
+
+        // Draw OmniFace overlays on top of OpenFace visualization
         DrawFaceResults(frame, tracked_faces, matches, target_track_id_);
         DrawInfo(frame, frame_index, 0.0);
 
@@ -598,6 +617,7 @@ public:
                 last_target_verify_frame_ = frame_index_;
                 target_verify_fails_ = 0;
                 target_demote_ = false;
+                if (face_analyzer_) face_analyzer_->Reset();
             }
             last_target_bbox_ = cv::Rect_<float>(box.x1, box.y1,
                                                   box.x2 - box.x1, box.y2 - box.y1);

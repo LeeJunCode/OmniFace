@@ -2,6 +2,8 @@
 
 #include <algorithm>
 #include <array>
+#include <string>
+#include <utility>
 #include <vector>
 
 namespace omniface {
@@ -35,6 +37,18 @@ struct HeadPose {
     float pitch = 0.0f;
     float yaw = 0.0f;
     float roll = 0.0f;
+};
+
+// Per-frame facial analysis result from OpenFace
+struct FaceAnalysisResult {
+    bool valid = false;
+    HeadPose head_pose;
+    float gaze_angle_x = 0.0f;  // radians
+    float gaze_angle_y = 0.0f;  // radians
+    // 68-point 2D landmarks (x1..x68, y1..y68)
+    std::array<float, 136> landmarks_2d{};
+    // AU names and their intensity values
+    std::vector<std::pair<std::string, double>> action_units;
 };
 
 // Cosine similarity match result

@@ -16,6 +16,7 @@ struct ModelConfig {
     float min_face_area = 0.0f;
     float recognition_confidence_threshold = 0.0f;
     float recognition_iou = 0.3f;
+    std::string openface_model_dir = "openface_model";
 };
 
 struct ThresholdConfig {

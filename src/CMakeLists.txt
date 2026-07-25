@@ -93,6 +93,29 @@ target_link_libraries(omniface_recognition PRIVATE
 target_compile_features(omniface_recognition PUBLIC cxx_std_20)
 
 # ============================================================
+# Analysis module — OpenFace wrapper (landmarks, gaze, AUs)
+# ============================================================
+add_library(omniface_analysis STATIC
+    core/analysis/face_analyzer.cc
+)
+
+target_include_directories(omniface_analysis PUBLIC
+    ${PROJECT_SOURCE_DIR}/include
+)
+
+target_link_libraries(omniface_analysis PUBLIC
+    omniface_detail
+    opencv_core
+    opencv_imgproc
+    OpenFace::LandmarkDetector
+    OpenFace::FaceAnalyser
+    OpenFace::GazeAnalyser
+    OpenFace::Utilities
+)
+
+target_compile_features(omniface_analysis PUBLIC cxx_std_20)
+
+# ============================================================
 # Pipeline module — config + orchestration
 # ============================================================
 add_library(omniface_pipeline STATIC
@@ -108,6 +131,7 @@ target_link_libraries(omniface_pipeline PUBLIC
     omniface_detection
     omniface_tracking
     omniface_recognition
+    omniface_analysis
     yaml-cpp::yaml-cpp
     spdlog::spdlog
     opencv_core

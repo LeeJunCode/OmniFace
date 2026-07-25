@@ -213,9 +213,15 @@ void MainWindow::setupUI() {
     video_label_->setAlignment(Qt::AlignCenter);
     video_label_->setMinimumSize(640, 480);
 
+    // ---- Right: AU panel ----
+    au_panel_ = new AUPanel;
+    au_panel_->setMaximumWidth(240);
+    au_panel_->setMinimumWidth(200);
+
     // ---- Layout assembly ----
     hlayout->addWidget(scroll_area);
     hlayout->addWidget(video_label_, 1);
+    hlayout->addWidget(au_panel_);
 
     // ---- Status bar ----
     status_label_ = new QLabel(QStringLiteral("\u5c31\u7eea"));
@@ -592,6 +598,11 @@ void MainWindow::processNextFrame() {
     }
 
     updateStatsDisplay(current_fps_, result.face_count, target_found);
+
+    // Update AU panel
+    if (result.analysis.valid && !result.analysis.action_units.empty()) {
+        au_panel_->setActionUnits(result.analysis.action_units);
+    }
 
     // Update progress
     if (total_frame_count_ > 0 && !progress_slider_->isSliderDown()) {

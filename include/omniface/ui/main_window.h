@@ -19,6 +19,7 @@
 #include "omniface/pipeline/pipeline.h"
 #include "omniface/types.h"
 #include "omniface/ui/video_preview_widget.h"
+#include "omniface/ui/au_panel.h"
 
 namespace omniface::ui {
 
@@ -83,6 +84,9 @@ private:
 
     // Video display
     QLabel* video_label_ = nullptr;
+
+    // AU panel
+    AUPanel* au_panel_ = nullptr;
 
     // Status bar
     QLabel* status_label_ = nullptr;

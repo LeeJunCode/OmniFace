@@ -26,6 +26,9 @@ else()
     add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
 
+# OpenFace — facial behavior analysis (landmarks, gaze, AUs)
+add_subdirectory(third_party/OpenFace)
+
 add_subdirectory(src)
 add_subdirectory(ui)
 add_subdirectory(app)
