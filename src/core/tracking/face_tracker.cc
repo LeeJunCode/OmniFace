@@ -42,7 +42,6 @@ std::vector<TrackedFace> FaceTracker::Update(const std::vector<BoundingBox>& det
         tf.consecutive_miss_count = t.miss_streak;
         result.push_back(tf);
     }
-    if (result.empty()) return last_output_;
     last_output_ = result;
     return result;
 }

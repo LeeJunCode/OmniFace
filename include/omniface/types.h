@@ -49,6 +49,38 @@ struct FaceAnalysisResult {
     std::array<float, 136> landmarks_2d{};
     // AU names and their intensity values
     std::vector<std::pair<std::string, double>> action_units;
+    // Quality indicators
+    float quality_score = 0.0f;   // 0=worst, 1=best
+    int visible_landmarks = 0;    // non-occluded landmark count (0..68)
+
+    // ---- FeatureExtraction-compatible fields ----
+    float detection_certainty = 0.0f;  // raw -1..1 from CLNF validator
+    bool detection_success = false;
+
+    // Gaze direction vectors (world coordinates, mm)
+    float gaze_0_x = 0, gaze_0_y = 0, gaze_0_z = 0;
+    float gaze_1_x = 0, gaze_1_y = 0, gaze_1_z = 0;
+
+    // Head pose translation (camera coordinates, mm)
+    float pose_Tx = 0, pose_Ty = 0, pose_Tz = 0;
+
+    // PDM rigid parameters: scale, Rx, Ry, Rz, Tx, Ty
+    std::array<float, 6> pdm_rigid{};
+
+    // PDM non-rigid shape parameters
+    std::vector<float> pdm_nonrigid;
+
+    // Eye-region 2D landmarks (56 points, pixel coords: x0..x55, y0..y55)
+    std::vector<float> eye_landmarks_2d;
+
+    // Eye-region 3D landmarks (56 points, world mm: X0..X55, Y0..Y55, Z0..Z55)
+    std::vector<float> eye_landmarks_3d;
+
+    // Face 3D landmarks (68 points, world mm: X0..X67, Y0..Y67, Z0..Z67)
+    std::vector<float> landmarks_3d;
+
+    // AU classifications (binary presence, 0/1)
+    std::vector<std::pair<std::string, double>> au_classifications;
 };
 
 // Cosine similarity match result

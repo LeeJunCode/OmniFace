@@ -75,9 +75,15 @@ void MainWindow::setupUI() {
 
     file_layout->addWidget(makeSectionHeader(QStringLiteral("\u6587\u4ef6\u9009\u62e9")));
 
-    open_video_btn_ = new QPushButton(QStringLiteral("\u9009\u62e9\u89c6\u9891..."));
+    auto* video_btn_row = new QHBoxLayout;
+    open_video_btn_ = new QPushButton(QStringLiteral("\u4e0a\u4f20\u89c6\u9891"));
     connect(open_video_btn_, &QPushButton::clicked, this, &MainWindow::onOpenVideo);
-    file_layout->addWidget(open_video_btn_);
+    video_btn_row->addWidget(open_video_btn_);
+
+    open_saved_video_btn_ = new QPushButton(QStringLiteral("\u9009\u62e9\u89c6\u9891"));
+    connect(open_saved_video_btn_, &QPushButton::clicked, this, &MainWindow::onOpenSavedVideo);
+    video_btn_row->addWidget(open_saved_video_btn_);
+    file_layout->addLayout(video_btn_row);
 
     video_preview_ = new VideoPlayerWidget;
     video_preview_->setObjectName("videoPreview");
@@ -85,9 +91,15 @@ void MainWindow::setupUI() {
     video_preview_->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
     file_layout->addWidget(video_preview_, 1);
 
-    open_ref_btn_ = new QPushButton(QStringLiteral("\u9009\u62e9\u76ee\u6807\u4eba\u7269\u56fe\u50cf..."));
+    auto* img_btn_row = new QHBoxLayout;
+    open_ref_btn_ = new QPushButton(QStringLiteral("\u4e0a\u4f20\u56fe\u7247"));
     connect(open_ref_btn_, &QPushButton::clicked, this, &MainWindow::onOpenReference);
-    file_layout->addWidget(open_ref_btn_);
+    img_btn_row->addWidget(open_ref_btn_);
+
+    open_saved_ref_btn_ = new QPushButton(QStringLiteral("\u9009\u62e9\u56fe\u7247"));
+    connect(open_saved_ref_btn_, &QPushButton::clicked, this, &MainWindow::onOpenSavedImage);
+    img_btn_row->addWidget(open_saved_ref_btn_);
+    file_layout->addLayout(img_btn_row);
 
     auto* ref_layout = new QHBoxLayout;
     ref_original_thumbnail_ = new QLabel;
@@ -123,12 +135,12 @@ void MainWindow::setupUI() {
     connect(play_btn_, &QPushButton::clicked, this, &MainWindow::onPlay);
     btn_row1->addWidget(play_btn_);
 
-    pause_btn_ = new QPushButton(QStringLiteral("\u23f8 \u6682\u505c\u63d0\u53d6"));
+    pause_btn_ = new QPushButton(QStringLiteral("\u23f8 \u6682\u505c\u5904\u7406"));
     pause_btn_->setEnabled(false);
     connect(pause_btn_, &QPushButton::clicked, this, &MainWindow::onPause);
     btn_row1->addWidget(pause_btn_);
 
-    stop_btn_ = new QPushButton(QStringLiteral("\u25a0 \u505c\u6b62\u63d0\u53d6"));
+    stop_btn_ = new QPushButton(QStringLiteral("\u25a0 \u505c\u6b62\u5904\u7406"));
     stop_btn_->setObjectName("stopBtn");
     stop_btn_->setEnabled(false);
     connect(stop_btn_, &QPushButton::clicked, this, &MainWindow::onStop);
@@ -137,7 +149,7 @@ void MainWindow::setupUI() {
     ctrl_layout->addLayout(btn_row1);
 
     auto* btn_row2 = new QHBoxLayout;
-    step_btn_ = new QPushButton(QStringLiteral("\u23ed \u9010\u5e27\u63d0\u53d6"));
+    step_btn_ = new QPushButton(QStringLiteral("\u23ed \u9010\u5e27\u5904\u7406"));
     step_btn_->setEnabled(false);
     connect(step_btn_, &QPushButton::clicked, this, &MainWindow::onStep);
     btn_row2->addWidget(step_btn_);
@@ -147,6 +159,11 @@ void MainWindow::setupUI() {
     replay_btn_->setEnabled(false);
     connect(replay_btn_, &QPushButton::clicked, this, &MainWindow::onReplay);
     btn_row2->addWidget(replay_btn_);
+
+    recognize_only_btn_ = new QPushButton(QStringLiteral("\U0001F50D \u5f00\u59cb\u8bc6\u522b\u76ee\u6807"));
+    recognize_only_btn_->setEnabled(false);
+    connect(recognize_only_btn_, &QPushButton::clicked, this, &MainWindow::onRecognizeOnly);
+    btn_row2->addWidget(recognize_only_btn_);
 
     ctrl_layout->addLayout(btn_row2);
 
@@ -204,7 +221,7 @@ void MainWindow::setupUI() {
     video_layout->setContentsMargins(0, 0, 0, 0);
     video_layout->setSpacing(2);
 
-    video_label_ = new QLabel(QStringLiteral("\u8bf7\u9009\u62e9\u89c6\u9891\u6587\u4ef6\u548c\u76ee\u6807\u4eba\u7269\u56fe\u50cf\uff0c\u7136\u540e\u70b9\u51fb\u5f00\u59cb\u63d0\u53d6"));
+    video_label_ = new QLabel(QStringLiteral("\u8bf7\u9009\u62e9\u89c6\u9891\u6587\u4ef6\u548c\u76ee\u6807\u4eba\u7269\u56fe\u50cf\uff0c\u7136\u540e\u70b9\u51fb\u5f00\u59cb\u5904\u7406"));
     video_label_->setObjectName("videoLabel");
     video_label_->setAlignment(Qt::AlignCenter);
     video_label_->setMinimumSize(320, 240);
@@ -450,7 +467,7 @@ void MainWindow::onOpenReference() {
 
     reference_cached_ = false;
     cached_reference_embedding_ = FaceEmbedding{};
-    status_label_->setText(QStringLiteral("\u6b63\u5728\u63d0\u53d6\u4eba\u8138\u7279\u5f81..."));
+    status_label_->setText(QStringLiteral("\u6b63\u5728\u5904\u7406\u4eba\u8138\u7279\u5f81..."));
     QApplication::processEvents();
 
     try {
@@ -480,7 +497,7 @@ void MainWindow::onOpenReference() {
                     if (reference_cached_) {
                         spdlog::info("Reference face embedding cached (confidence={:.2f})",
                                      best->confidence);
-                        status_label_->setText(QStringLiteral("\u56fe\u50cf\u4e0a\u4f20\u6210\u529f: %1  |  \u4eba\u8138\u5df2\u63d0\u53d6")
+                        status_label_->setText(QStringLiteral("\u56fe\u50cf\u4e0a\u4f20\u6210\u529f: %1  |  \u4eba\u8138\u5df2\u5904\u7406")
                                                   .arg(file_info.fileName()));
                     }
                 }
@@ -492,7 +509,7 @@ void MainWindow::onOpenReference() {
         }
     } catch (const std::exception& e) {
         spdlog::error("Failed to cache reference embedding: {}", e.what());
-        status_label_->setText(QStringLiteral("\u4eba\u8138\u7279\u5f81\u63d0\u53d6\u5931\u8d25"));
+        status_label_->setText(QStringLiteral("\u4eba\u8138\u7279\u5f81\u5904\u7406\u5931\u8d25"));
     }
 
     setUiEnabled(false);
@@ -514,6 +531,8 @@ void MainWindow::onPlay() {
 
     video_preview_->pause();
 
+    recognition_only_ = false;
+    config_.behavior.skip_analysis = false;
     config_.model.reference_image = reference_path_;
     config_.video.input_path = video_path_;
 
@@ -566,13 +585,13 @@ void MainWindow::onPause() {
     if (is_paused_) {
         is_paused_ = false;
         step_requested_ = false;
-        pause_btn_->setText(QStringLiteral("\u23f8 \u6682\u505c\u63d0\u53d6"));
+        pause_btn_->setText(QStringLiteral("\u23f8 \u6682\u505c\u5904\u7406"));
         step_btn_->setEnabled(false);
         status_label_->setText(QStringLiteral("\u6b63\u5728\u5904\u7406..."));
         QTimer::singleShot(0, this, &MainWindow::processNextFrame);
     } else {
         is_paused_ = true;
-        pause_btn_->setText(QStringLiteral("\u25b6 \u7ee7\u7eed\u63d0\u53d6"));
+        pause_btn_->setText(QStringLiteral("\u25b6 \u7ee7\u7eed\u5904\u7406"));
         step_btn_->setEnabled(true);
         status_label_->setText(QStringLiteral("\u5df2\u6682\u505c"));
     }
@@ -585,7 +604,7 @@ void MainWindow::onStop() {
 
     pipeline_.reset();
 
-    pause_btn_->setText(QStringLiteral("\u23f8 \u6682\u505c\u63d0\u53d6"));
+    pause_btn_->setText(QStringLiteral("\u23f8 \u6682\u505c\u5904\u7406"));
     step_btn_->setEnabled(false);
     status_label_->setText(QStringLiteral("\u5df2\u505c\u6b62"));
 
@@ -596,7 +615,8 @@ void MainWindow::onStop() {
     fps_panel_->updateData(dd);
     counter_summary_->setText(QStringLiteral("<span style='color:#999999'>\u5c1a\u672a\u5f00\u59cb\u5904\u7406</span>"));
 
-    setUiEnabled(false);
+    has_finished_once_ = true;
+    setFinishedState();
 }
 
 void MainWindow::onStep() {
@@ -608,7 +628,77 @@ void MainWindow::onStep() {
 
 void MainWindow::onReplay() {
     onStop();
-    QTimer::singleShot(200, this, &MainWindow::onPlay);
+    if (recognition_only_) {
+        QTimer::singleShot(200, this, &MainWindow::onRecognizeOnly);
+    } else {
+        QTimer::singleShot(200, this, &MainWindow::onPlay);
+    }
+}
+
+void MainWindow::onRecognizeOnly() {
+    if (video_path_.empty()) {
+        QMessageBox::warning(this,
+                             QStringLiteral("\u9519\u8bef"),
+                             QStringLiteral("\u8bf7\u5148\u9009\u62e9\u4e00\u4e2a\u89c6\u9891\u6587\u4ef6\u3002"));
+        return;
+    }
+    if (reference_path_.empty()) {
+        QMessageBox::warning(this,
+                             QStringLiteral("\u9519\u8bef"),
+                             QStringLiteral("\u8bf7\u5148\u9009\u62e9\u76ee\u6807\u4eba\u7269\u56fe\u50cf\u3002"));
+        return;
+    }
+
+    video_preview_->pause();
+
+    recognition_only_ = true;
+    config_.behavior.skip_analysis = true;
+    config_.model.reference_image = reference_path_;
+    config_.video.input_path = video_path_;
+
+    try {
+        pipeline_ = std::make_unique<Pipeline>(config_);
+        pipeline_->OpenVideo(video_path_);
+    } catch (const std::exception& e) {
+        QMessageBox::critical(this,
+                              QStringLiteral("\u9519\u8bef"),
+                              QStringLiteral("\u521d\u59cb\u5316\u7ba1\u7ebf\u5931\u8d25: %1").arg(e.what()));
+        config_.behavior.skip_analysis = false;
+        return;
+    }
+    config_.behavior.skip_analysis = false;
+
+    video_fps_ = pipeline_->GetFps();
+    total_frame_count_ = pipeline_->GetFrameCount();
+
+    if (total_frame_count_ > 0) {
+        processing_progress_->setRange(0, total_frame_count_);
+        processing_progress_->setValue(0);
+    }
+
+    is_running_ = true;
+    is_paused_ = false;
+    step_requested_ = false;
+    has_finished_once_ = false;
+    frame_count_ = 0;
+    fps_frame_count_ = 0;
+    current_fps_ = 0.0;
+    last_fps_time_ = std::chrono::steady_clock::now();
+
+    last_dashboard_time_ = last_fps_time_;
+    total_faces_detected_ = 0;
+    total_matches_ = 0;
+    total_openface_analyses_ = 0;
+    run_start_time_ = last_fps_time_;
+
+    DashboardData dd;
+    fps_panel_->updateData(dd);
+    counter_summary_->setText(QStringLiteral("<span style='color:#999999'>\u5c1a\u672a\u5f00\u59cb\u5904\u7406</span>"));
+
+    setUiEnabled(true);
+    status_label_->setText(QStringLiteral("\u6b63\u5728\u8bc6\u522b\u76ee\u6807..."));
+
+    QTimer::singleShot(0, this, &MainWindow::processNextFrame);
 }
 
 void MainWindow::processNextFrame() {
@@ -768,8 +858,11 @@ void MainWindow::setUiEnabled(bool running) {
     stop_btn_->setEnabled(running);
     step_btn_->setEnabled(running && is_paused_);
     replay_btn_->setEnabled(!running && has_finished_once_);
+    recognize_only_btn_->setEnabled(!running && has_both);
     open_video_btn_->setEnabled(!running);
+    open_saved_video_btn_->setEnabled(!running);
     open_ref_btn_->setEnabled(!running);
+    open_saved_ref_btn_->setEnabled(!running);
 }
 
 void MainWindow::setFinishedState() {
@@ -778,9 +871,96 @@ void MainWindow::setFinishedState() {
     pause_btn_->setEnabled(false);
     stop_btn_->setEnabled(false);
     step_btn_->setEnabled(false);
+    play_btn_->setEnabled(has_both);
     replay_btn_->setEnabled(has_both);
+    recognize_only_btn_->setEnabled(has_both);
     open_video_btn_->setEnabled(true);
+    open_saved_video_btn_->setEnabled(true);
     open_ref_btn_->setEnabled(true);
+    open_saved_ref_btn_->setEnabled(true);
+}
+
+void MainWindow::onOpenSavedVideo() {
+    QString app_dir = QCoreApplication::applicationDirPath();
+    QString videos_dir = app_dir + "/data/upload/video";
+    QDir().mkpath(videos_dir);
+
+    QString path = QFileDialog::getOpenFileName(
+        this,
+        QStringLiteral("\u9009\u62e9\u5df2\u4fdd\u5b58\u7684\u89c6\u9891"),
+        videos_dir,
+        QStringLiteral("\u89c6\u9891\u6587\u4ef6 (*.mp4 *.avi *.mkv *.mov);;\u6240\u6709\u6587\u4ef6 (*)"));
+    if (path.isEmpty()) return;
+
+    video_path_ = path.toStdString();
+    video_preview_->setVideoPath(video_path_);
+    setUiEnabled(false);
+
+    QFileInfo fi(path);
+    status_label_->setText(QStringLiteral("\u5df2\u9009\u62e9\u89c6\u9891: %1").arg(fi.fileName()));
+    spdlog::info("Selected saved video: {}", video_path_);
+}
+
+void MainWindow::onOpenSavedImage() {
+    QString app_dir = QCoreApplication::applicationDirPath();
+    QString img_dir = app_dir + "/data/upload/img";
+    QDir().mkpath(img_dir);
+
+    QString path = QFileDialog::getOpenFileName(
+        this,
+        QStringLiteral("\u9009\u62e9\u5df2\u4fdd\u5b58\u7684\u56fe\u7247"),
+        img_dir,
+        QStringLiteral("\u56fe\u7247\u6587\u4ef6 (*.jpg *.jpeg *.png *.bmp);;\u6240\u6709\u6587\u4ef6 (*)"));
+    if (path.isEmpty()) return;
+
+    reference_path_ = path.toStdString();
+    config_.model.reference_image = reference_path_;
+    updateRefThumbnails();
+    setUiEnabled(false);
+
+    // Eager embedding extraction (same as onOpenReference)
+    reference_cached_ = false;
+    cached_reference_embedding_ = FaceEmbedding{};
+    status_label_->setText(QStringLiteral("\u6b63\u5728\u5904\u7406\u4eba\u8138\u7279\u5f81..."));
+    QApplication::processEvents();
+
+    try {
+        cv::Mat ref_img = cv::imread(reference_path_);
+        if (!ref_img.empty()) {
+            detection::FaceDetector::Config det_cfg;
+            det_cfg.intra_threads = config_.model.detection_threads;
+            det_cfg.input_width = config_.model.detection_input_width;
+            det_cfg.input_height = config_.model.detection_input_height;
+            det_cfg.confidence_threshold = config_.thresholds.detection_confidence;
+            det_cfg.nms_threshold = config_.thresholds.detection_nms;
+            detection::FaceDetector detector(config_.model.detector_model, det_cfg);
+
+            auto boxes = detector.Detect(ref_img);
+            if (!boxes.empty()) {
+                const BoundingBox* best = &boxes[0];
+                for (const auto& b : boxes) {
+                    if (b.confidence > best->confidence) best = &b;
+                }
+                cv::Mat face_crop = recognition::AlignFace(ref_img, *best);
+                if (!face_crop.empty()) {
+                    recognition::FaceRecognizer::Config rec_cfg;
+                    rec_cfg.intra_threads = config_.model.recognition_threads;
+                    recognition::FaceRecognizer recognizer(config_.model.recognizer_model, rec_cfg);
+                    cached_reference_embedding_ = recognizer.Extract(face_crop);
+                    reference_cached_ = cached_reference_embedding_.valid;
+                }
+            }
+        }
+    } catch (const std::exception& e) {
+        spdlog::error("Failed to extract reference embedding: {}", e.what());
+    }
+
+    QFileInfo fi(path);
+    status_label_->setText(reference_cached_
+        ? QStringLiteral("\u5df2\u9009\u62e9: %1  |  \u4eba\u8138\u5df2\u5904\u7406").arg(fi.fileName())
+        : QStringLiteral("\u5df2\u9009\u62e9: %1  |  \u672a\u68c0\u6d4b\u5230\u4eba\u8138").arg(fi.fileName()));
+
+    spdlog::info("Selected saved image: {}", reference_path_);
 }
 
 }  // namespace omniface::ui

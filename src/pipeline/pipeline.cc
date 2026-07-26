@@ -4,6 +4,7 @@
 #include <atomic>
 #include <chrono>
 #include <cmath>
+#include <ctime>
 #include <filesystem>
 #include <thread>
 #include <unordered_map>
@@ -14,6 +15,9 @@
 #include <opencv2/videoio.hpp>
 
 #include <spdlog/spdlog.h>
+
+#include <RecorderOpenFace.h>
+#include <RecorderOpenFaceParameters.h>
 
 #include "omniface/core/analysis/face_analyzer.h"
 #include "omniface/core/detection/face_detector.h"
@@ -100,6 +104,16 @@ public:
     std::unique_ptr<recognition::FaceMatcher> matcher_;
     std::unique_ptr<analysis::FaceAnalyzer> face_analyzer_;
 
+    // OpenFace output recorder (CSV, aligned faces, metadata)
+    std::unique_ptr<Utilities::RecorderOpenFace> openface_recorder_;
+    bool recorder_initialized_ = false;
+
+    // Tracked video writer (handled ourselves for reliability)
+    cv::VideoWriter tracked_video_writer_;
+    std::string tracked_video_path_;
+    bool video_writer_initialized_ = false;
+    std::string output_run_dir_;
+
     cv::VideoCapture video_cap_;
     std::atomic<bool> stop_requested_{false};
 
@@ -129,6 +143,8 @@ public:
 
     ~Impl() {
         StopDecode();
+        if (openface_recorder_) openface_recorder_->Close();
+        if (tracked_video_writer_.isOpened()) tracked_video_writer_.release();
     }
 
     void InitializeModules() {
@@ -171,7 +187,8 @@ public:
         }
 
         // OpenFace analysis
-        if (!config_.model.openface_model_dir.empty()) {
+        if (!config_.model.openface_model_dir.empty()
+            && !config_.behavior.skip_analysis) {
             analysis::FaceAnalyzer::Config fa_cfg;
             fa_cfg.model_dir = config_.model.openface_model_dir;
             face_analyzer_ = std::make_unique<analysis::FaceAnalyzer>(fa_cfg);
@@ -182,6 +199,39 @@ public:
         frame_index_ = frame_index;
         FrameResult result;
         result.frame_index = frame_index;
+
+        // Init tracked video writer on first frame (separate from analysis)
+        if (!video_writer_initialized_ && !config_.behavior.skip_analysis) {
+            namespace fs = std::filesystem;
+            fs::path video_path(config_.video.input_path);
+            auto video_stem = video_path.stem().string();
+
+            auto now = std::chrono::system_clock::now();
+            auto t = std::chrono::system_clock::to_time_t(now);
+            std::tm tm_buf;
+            localtime_s(&tm_buf, &t);
+            char ts[16];
+            std::strftime(ts, sizeof(ts), "%Y%m%d_%H%M%S", &tm_buf);
+            output_run_dir_ = (fs::path("data/output")
+                / (video_stem + "_" + std::string(ts))).string();
+            fs::create_directories(output_run_dir_);
+
+            double fps = GetFpsImpl();
+            tracked_video_path_ =
+                (fs::path(output_run_dir_) / (video_stem + ".avi")).string();
+            tracked_video_writer_.open(
+                tracked_video_path_,
+                cv::VideoWriter::fourcc('M', 'J', 'P', 'G'),
+                fps, frame.size(), true);
+            if (!tracked_video_writer_.isOpened())
+                spdlog::warn("Failed to open tracked video: {}",
+                             tracked_video_path_);
+            else
+                spdlog::info("Tracked video output: {}",
+                             tracked_video_path_);
+
+            video_writer_initialized_ = true;
+        }
 
         auto t_start = std::chrono::steady_clock::now();
 
@@ -232,6 +282,89 @@ public:
                 last_target_bbox_.width, last_target_bbox_.height);
             if (target_bbox.width > 0 && target_bbox.height > 0) {
                 result.analysis = face_analyzer_->Analyze(frame, target_bbox);
+
+                if (result.analysis.valid && !config_.behavior.skip_analysis) {
+                    const auto& r = result.analysis;
+
+                    if (!recorder_initialized_) {
+                        std::vector<std::string> rec_args = {
+                            "",
+                            "-oc", "MJPG",
+                            "-simalign", "-2Dfp", "-3Dfp",
+                            "-pdmparams", "-pose",
+                            "-aus", "-gaze",
+                        };
+                        Utilities::RecorderOpenFaceParameters rec_params(
+                            rec_args, true, false,
+                            -1, -1, -1, -1, GetFpsImpl());
+
+                        openface_recorder_ =
+                            std::make_unique<Utilities::RecorderOpenFace>(
+                                config_.video.input_path, rec_params,
+                                output_run_dir_);
+                        recorder_initialized_ = true;
+                    }
+
+                    // Timestamp
+                    double fps = GetFpsImpl();
+                    double ts = (fps > 0.0) ? (frame_index - 1) / fps : 0.0;
+                    openface_recorder_->SetObservationTimestamp(ts);
+                    openface_recorder_->SetObservationFrameNumber(frame_index);
+                    openface_recorder_->SetObservationFaceID(0);
+
+                    // Landmarks (convert flat arrays → OpenCV types)
+                    cv::Mat_<float> lm2d(136, 1,
+                        const_cast<float*>(r.landmarks_2d.data()));
+                    int n3d = static_cast<int>(r.landmarks_3d.size());
+                    cv::Mat_<float> lm3d(n3d, 1,
+                        const_cast<float*>(r.landmarks_3d.data()));
+                    cv::Vec6f pdm_global(r.pdm_rigid[0], r.pdm_rigid[1],
+                        r.pdm_rigid[2], r.pdm_rigid[3],
+                        r.pdm_rigid[4], r.pdm_rigid[5]);
+                    int np = static_cast<int>(r.pdm_nonrigid.size());
+                    cv::Mat_<float> pdm_local(np, 1,
+                        const_cast<float*>(r.pdm_nonrigid.data()));
+                    openface_recorder_->SetObservationLandmarks(
+                        lm2d, lm3d, pdm_global, pdm_local,
+                        static_cast<double>(r.detection_certainty),
+                        r.detection_success);
+
+                    // Pose
+                    cv::Vec6f pose_vec(r.pose_Tx, r.pose_Ty, r.pose_Tz,
+                        r.head_pose.pitch, r.head_pose.yaw, r.head_pose.roll);
+                    openface_recorder_->SetObservationPose(pose_vec);
+
+                    // Action units
+                    openface_recorder_->SetObservationActionUnits(
+                        r.action_units, r.au_classifications);
+
+                    // Gaze
+                    cv::Point3f g0(r.gaze_0_x, r.gaze_0_y, r.gaze_0_z);
+                    cv::Point3f g1(r.gaze_1_x, r.gaze_1_y, r.gaze_1_z);
+                    cv::Vec2f ga(r.gaze_angle_x, r.gaze_angle_y);
+                    int ne2 = static_cast<int>(r.eye_landmarks_2d.size() / 2);
+                    std::vector<cv::Point2f> eye_lm2d(ne2);
+                    for (int i = 0; i < ne2; ++i)
+                        eye_lm2d[i] = cv::Point2f(
+                            r.eye_landmarks_2d[i],
+                            r.eye_landmarks_2d[i + ne2]);
+                    int ne3 = static_cast<int>(r.eye_landmarks_3d.size() / 3);
+                    std::vector<cv::Point3f> eye_lm3d(ne3);
+                    for (int i = 0; i < ne3; ++i)
+                        eye_lm3d[i] = cv::Point3f(
+                            r.eye_landmarks_3d[i],
+                            r.eye_landmarks_3d[i + ne3],
+                            r.eye_landmarks_3d[i + ne3 * 2]);
+                    openface_recorder_->SetObservationGaze(
+                        g0, g1, ga, eye_lm2d, eye_lm3d);
+
+                    // Aligned face
+                    cv::Mat aligned = face_analyzer_->GetAlignedFace();
+                    if (!aligned.empty())
+                        openface_recorder_->SetObservationFaceAlign(aligned);
+
+                    openface_recorder_->WriteObservation();
+                }
             }
         }
 
@@ -239,6 +372,10 @@ public:
 
         // Draw OmniFace overlays on top of OpenFace visualization
         DrawFaceResults(frame, tracked_faces, matches, target_track_id_);
+
+        // Write tracked video (OpenFace + OmniFace overlays)
+        if (tracked_video_writer_.isOpened())
+            tracked_video_writer_.write(frame);
 
         auto t_end = std::chrono::steady_clock::now();
         result.total_latency_ms =

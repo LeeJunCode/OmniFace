@@ -39,6 +39,9 @@ private slots:
     void onStop();
     void onStep();
     void onReplay();
+    void onRecognizeOnly();
+    void onOpenSavedVideo();
+    void onOpenSavedImage();
     void processNextFrame();
 
 private:
@@ -52,7 +55,9 @@ private:
 
     // File selection content
     QPushButton* open_video_btn_ = nullptr;
+    QPushButton* open_saved_video_btn_ = nullptr;
     QPushButton* open_ref_btn_ = nullptr;
+    QPushButton* open_saved_ref_btn_ = nullptr;
     VideoPlayerWidget* video_preview_ = nullptr;
     QLabel* ref_original_thumbnail_ = nullptr;
     QLabel* ref_detected_thumbnail_ = nullptr;
@@ -63,6 +68,7 @@ private:
     QPushButton* stop_btn_ = nullptr;
     QPushButton* step_btn_ = nullptr;
     QPushButton* replay_btn_ = nullptr;
+    QPushButton* recognize_only_btn_ = nullptr;
 
     // Real-time stats
     QLabel* fps_display_ = nullptr;
@@ -92,6 +98,7 @@ private:
     int total_frame_count_ = 0;
     double video_fps_ = 0.0;
     bool has_finished_once_ = false;
+    bool recognition_only_ = false;
 
     // Cached reference embedding
     FaceEmbedding cached_reference_embedding_;

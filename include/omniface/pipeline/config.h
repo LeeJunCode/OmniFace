@@ -33,6 +33,7 @@ struct PipelineBehavior {
     float ema_alpha = 0.7f;
     int max_frame_width = 0;
     int target_recheck_interval = 30;
+    bool skip_analysis = false;
 };
 
 struct VideoSourceConfig {
