@@ -2,6 +2,7 @@
 
 #include <atomic>
 #include <chrono>
+#include <cstdint>
 #include <memory>
 #include <string>
 
@@ -11,15 +12,15 @@
 #include <QImage>
 #include <QLabel>
 #include <QMainWindow>
+#include <QProgressBar>
 #include <QPushButton>
-#include <QSlider>
 #include <QVBoxLayout>
 
 #include "omniface/pipeline/config.h"
 #include "omniface/pipeline/pipeline.h"
 #include "omniface/types.h"
-#include "omniface/ui/video_preview_widget.h"
-#include "omniface/ui/au_panel.h"
+#include "omniface/ui/processing_dashboard.h"
+#include "omniface/ui/video_player_widget.h"
 
 namespace omniface::ui {
 
@@ -39,54 +40,40 @@ private slots:
     void onStep();
     void onReplay();
     void processNextFrame();
-    void onMatchThresholdChanged(int value);
-    void onDetectConfidenceChanged(int value);
 
 private:
     void setupUI();
     void setupStyleSheet();
-    void generateVideoThumbnail();
     void updateRefThumbnails();
     void updateStatsDisplay(double fps, int faceCount, bool targetFound);
-    void updateStateDisplay();
     void setUiEnabled(bool running);
     void setFinishedState();
     QImage matToQImage(const cv::Mat& bgr);
 
-    // File selection
+    // File selection content
     QPushButton* open_video_btn_ = nullptr;
     QPushButton* open_ref_btn_ = nullptr;
-    VideoPreviewWidget* video_preview_ = nullptr;
+    VideoPlayerWidget* video_preview_ = nullptr;
     QLabel* ref_original_thumbnail_ = nullptr;
     QLabel* ref_detected_thumbnail_ = nullptr;
 
-    // Playback controls
+    // Run controls content
     QPushButton* play_btn_ = nullptr;
     QPushButton* pause_btn_ = nullptr;
     QPushButton* stop_btn_ = nullptr;
     QPushButton* step_btn_ = nullptr;
     QPushButton* replay_btn_ = nullptr;
 
-    // Progress
-    QSlider* progress_slider_ = nullptr;
-    QLabel* time_display_ = nullptr;
-
-    // Thresholds
-    QSlider* match_threshold_slider_ = nullptr;
-    QSlider* detect_confidence_slider_ = nullptr;
-    QLabel* match_value_label_ = nullptr;
-    QLabel* detect_value_label_ = nullptr;
-
-    // Statistics
+    // Real-time stats
     QLabel* fps_display_ = nullptr;
     QLabel* face_count_display_ = nullptr;
     QLabel* target_status_display_ = nullptr;
+    QLabel* counter_summary_ = nullptr;
 
-    // Video display
+    // Center: video display
     QLabel* video_label_ = nullptr;
-
-    // AU panel
-    AUPanel* au_panel_ = nullptr;
+    QProgressBar* processing_progress_ = nullptr;
+    FpsPanel* fps_panel_ = nullptr;
 
     // Status bar
     QLabel* status_label_ = nullptr;
@@ -113,10 +100,19 @@ private:
     // Cached QImage buffer for frame display
     QImage qt_image_cache_;
 
-    // FPS tracking
+    // FPS tracking (overall)
     std::chrono::steady_clock::time_point last_fps_time_;
     int fps_frame_count_ = 0;
     double current_fps_ = 0.0;
+
+    // Dashboard update timing
+    std::chrono::steady_clock::time_point last_dashboard_time_;
+
+    // Cumulative counters
+    int64_t total_faces_detected_ = 0;
+    int64_t total_matches_ = 0;
+    int64_t total_openface_analyses_ = 0;
+    std::chrono::steady_clock::time_point run_start_time_;
 };
 
 }  // namespace omniface::ui

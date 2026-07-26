@@ -17,6 +17,8 @@ target_link_libraries(OmniFace PRIVATE
     Qt6::Core
     Qt6::Gui
     Qt6::Widgets
+    Qt6::Multimedia
+    Qt6::MultimediaWidgets
 )
 
 target_compile_features(OmniFace PRIVATE cxx_std_20)

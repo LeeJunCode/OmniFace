@@ -57,12 +57,6 @@ FaceEmbedding ExtractReference(const std::string& image_path,
     return recognizer.Extract(face_crop);
 }
 
-void DrawInfo(cv::Mat& image, int frame_count, double fps) {
-    char buf[128];
-    std::snprintf(buf, sizeof(buf), "Frame: %d | FPS: %.1f", frame_count, fps);
-    cv::putText(image, buf, cv::Point(10, 25), cv::FONT_HERSHEY_SIMPLEX, 0.7,
-                cv::Scalar(255, 255, 255), 2, cv::LINE_AA);
-}
 
 void DrawFaceResults(cv::Mat& image, const std::vector<TrackedFace>& tracked_faces,
                       const std::vector<MatchResult>& matches, int target_track_id) {
@@ -229,6 +223,8 @@ public:
         // Update target state
         UpdateTargetState(tracked_faces, matches, best_match_idx, best_match_sim);
 
+        auto t_recognition_done = std::chrono::steady_clock::now();
+
         // OpenFace analysis on target face (renders landmarks/pose/gaze/AUs via Visualizer)
         if (face_analyzer_ && target_track_id_ > 0) {
             cv::Rect_<float> target_bbox(
@@ -239,13 +235,19 @@ public:
             }
         }
 
+        auto t_analysis_done = std::chrono::steady_clock::now();
+
         // Draw OmniFace overlays on top of OpenFace visualization
         DrawFaceResults(frame, tracked_faces, matches, target_track_id_);
-        DrawInfo(frame, frame_index, 0.0);
 
         auto t_end = std::chrono::steady_clock::now();
         result.total_latency_ms =
             std::chrono::duration<double, std::milli>(t_end - t_start).count();
+        result.recognition_latency_ms =
+            std::chrono::duration<double, std::milli>(t_recognition_done - t_start).count();
+        result.analysis_latency_ms = result.analysis.valid
+            ? std::chrono::duration<double, std::milli>(t_analysis_done - t_recognition_done).count()
+            : 0.0;
         result.face_count = static_cast<int>(tracked_faces.size());
         result.tracked_faces = tracked_faces;
         result.match_results = matches;
@@ -740,7 +742,6 @@ public:
             }
 
             auto result = ProcessFrame(frame, frame_count);
-            DrawInfo(result.annotated_frame, frame_count, fps);
 
             cv::imshow(kWindowName, result.annotated_frame);
             if (writer.isOpened()) writer.write(result.annotated_frame);
