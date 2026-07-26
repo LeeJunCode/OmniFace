@@ -28,19 +28,19 @@ FaceRecognizer::FaceRecognizer(const std::string& model_path, Config config) {
 FaceRecognizer::~FaceRecognizer() = default;
 
 namespace {
-
-// Fused: BGR uint8 → RGB float32 NCHW normalized for InsightFace recognition
 std::vector<float> Preprocess(const cv::Mat& bgr_image, const FaceRecognizer::Config& cfg) {
     cv::Mat resized;
     cv::resize(bgr_image, resized, cv::Size(cfg.input_width, cfg.input_height),
                0, 0, cv::INTER_LINEAR);
 
     int H = cfg.input_height, W = cfg.input_width;
+    // 输出布局: BGR平面分离 — R_plane | G_plane | B_plane (各H*W)
     std::vector<float> blob(static_cast<size_t>(H) * W * 3);
     float* R_plane = blob.data();
     float* G_plane = blob.data() + static_cast<size_t>(H) * W;
     float* B_plane = blob.data() + static_cast<size_t>(H) * W * 2;
 
+    // InsightFace识别归一化: 将[0,255] uint8线性映射到[-1,1]范围
     constexpr float kScale = 1.0f / 127.5f;
     constexpr float kOffset = -1.0f;
 
@@ -72,18 +72,19 @@ FaceEmbedding FaceRecognizer::Extract(const cv::Mat& aligned_face_bgr) {
     FaceEmbedding embedding;
     try {
         auto& cfg = impl_->config_;
+        // 输入格式: NHWC (通道数3, BGR平面分离)
         auto outputs = impl_->session_.Run(blob, 3, cfg.input_height, cfg.input_width);
 
         const float* output_data = outputs[0].GetTensorData<float>();
         auto output_shape = outputs[0].GetTensorTypeAndShapeInfo().GetShape();
         if (output_shape.size() < 2) return {};
         int dim = static_cast<int>(output_shape[1]);
+        // 截断到512维: 部分模型可能输出更高维度，但系统固定使用512维特征
         if (dim > 512) dim = 512;
 
         std::copy_n(output_data, dim, embedding.features.begin());
         embedding.valid = true;
     } catch (const std::exception&) {
-        // Return valid=false embedding on failure
     }
     return embedding;
 }
@@ -92,6 +93,7 @@ std::vector<FaceEmbedding> FaceRecognizer::ExtractBatch(
     const std::vector<cv::Mat>& aligned_faces) {
     if (aligned_faces.empty()) return {};
 
+    // 单张人脸快速路径: 避免批量拼接和内存拷贝的开销
     if (aligned_faces.size() == 1) {
         return {Extract(aligned_faces[0])};
     }
@@ -146,6 +148,7 @@ std::vector<FaceEmbedding> FaceRecognizer::ExtractBatch(
         auto output_shape = outputs[0].GetTensorTypeAndShapeInfo().GetShape();
         if (output_shape.size() < 2) return results;
         int dim = static_cast<int>(output_shape[1]);
+        // 截断到512维
         if (dim > 512) dim = 512;
 
         for (size_t i = 0; i < aligned_faces.size(); ++i) {

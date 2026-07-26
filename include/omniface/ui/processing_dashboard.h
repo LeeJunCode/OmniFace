@@ -13,7 +13,6 @@ struct DashboardData {
     double analysis_fps = 0.0;
     bool analysis_running = false;
 
-    // Cumulative counters
     int64_t processed_frames = 0;
     int64_t face_detections = 0;
     int64_t target_matches = 0;

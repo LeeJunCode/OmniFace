@@ -31,6 +31,7 @@ public slots:
 
 signals:
     void playingChanged(bool playing);
+    void positionChanged(qint64 position);
 
 protected:
     void paintEvent(QPaintEvent* event) override;
@@ -49,12 +50,10 @@ private slots:
     void onHideControlsTimeout();
 
 private:
-    // --- Painting helpers ---
     void paintPoster(QPainter& p);
     void paintVideoFrame(QPainter& p);
     void paintControls(QPainter& p);
 
-    // --- Layout helpers ---
     QString formatTime(qint64 ms) const;
     double progressAtPos(const QPoint& pos) const;
     QRectF centerPlayBtnRect() const;
@@ -67,22 +66,18 @@ private:
     void showControls();
     void hideControls();
 
-    // --- Media ---
     QMediaPlayer* media_player_ = nullptr;
     QAudioOutput* audio_output_ = nullptr;
     QVideoSink* video_sink_ = nullptr;
 
-    // --- Frames ---
-    QImage poster_image_;      // first frame, displayed when stopped
-    QImage current_frame_;     // latest decoded frame from QVideoSink
+    QImage poster_image_;
+    QImage current_frame_;
     std::string video_path_;
     bool has_video_ = false;
 
-    // --- Playback timing ---
     qint64 current_position_ = 0;
     qint64 total_duration_ = 0;
 
-    // --- Controls ---
     QTimer* hide_controls_timer_ = nullptr;
     bool controls_visible_ = true;
     bool seeking_ = false;
@@ -90,7 +85,6 @@ private:
     int volume_ = 100;
     bool muted_ = false;
 
-    // --- Mouse ---
     QPoint mouse_pos_;
     bool hovered_ = false;
 };

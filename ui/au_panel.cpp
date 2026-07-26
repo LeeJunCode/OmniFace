@@ -80,13 +80,12 @@ void AUPanel::paintEvent(QPaintEvent* /*event*/) {
     p.setRenderHint(QPainter::Antialiasing);
 
     int w = width();
+    // 进度条区域宽度 = 面板宽度 - 左右内边距 - AU代码列宽 - 数值列宽 - 间距
     int bar_area_w = w - kHPadding * 2 - kNameWidth - kValueWidth - 12;
     bar_area_w = std::max(bar_area_w, kMinBarWidth);
 
-    // Background
     p.fillRect(rect(), QColor(0x18, 0x18, 0x25));
 
-    // Title
     QFont title_font = font();
     title_font.setBold(true);
     title_font.setPointSize(title_font.pointSize() + 1);
@@ -105,7 +104,6 @@ void AUPanel::paintEvent(QPaintEvent* /*event*/) {
         return;
     }
 
-    // AU bars
     QFont au_font = font();
     au_font.setPointSize(std::max(au_font.pointSize() - 1, 7));
     p.setFont(au_font);
@@ -113,41 +111,38 @@ void AUPanel::paintEvent(QPaintEvent* /*event*/) {
     int y = kHeaderHeight + kVPadding;
 
     for (const auto& au : au_entries_) {
+        // 强度>0.1视为该AU被激活，以高亮文字和彩色进度条显示
         bool present = au.intensity > 0.1;
         QColor text_color = present ? QColor(0xcd, 0xd6, 0xf4) : QColor(0x6c, 0x70, 0x86);
 
-        // AU code
         p.setPen(text_color);
         p.drawText(kHPadding, y, kNameWidth, kBarHeight,
                    Qt::AlignVCenter | Qt::AlignLeft,
                    QString::fromStdString(au.code));
 
-        // Bar background
         int bar_x = kHPadding + kNameWidth + 4;
         QRect bar_bg(bar_x, y + 3, bar_area_w, kBarHeight - 6);
         p.fillRect(bar_bg, QColor(0x31, 0x32, 0x44));
 
-        // Bar fill
         if (present) {
             double ratio = std::min(au.intensity / kMaxIntensity, 1.0);
             int fill_w = static_cast<int>(bar_area_w * ratio);
             if (fill_w > 0) {
                 QRect bar_fill(bar_x, y + 3, fill_w, kBarHeight - 6);
-                // Color gradient from blue (mild) to green to yellow to red (intense)
+                // 根据强度比例分四级着色：蓝(低) -> 绿(中低) -> 黄(中高) -> 红(高)
                 QColor bar_color;
                 if (ratio < 0.25)
-                    bar_color = QColor(0x89, 0xb4, 0xfa);  // blue
+                    bar_color = QColor(0x89, 0xb4, 0xfa);
                 else if (ratio < 0.5)
-                    bar_color = QColor(0xa6, 0xe3, 0xa1);  // green
+                    bar_color = QColor(0xa6, 0xe3, 0xa1);
                 else if (ratio < 0.75)
-                    bar_color = QColor(0xf9, 0xe2, 0xaf);  // yellow
+                    bar_color = QColor(0xf9, 0xe2, 0xaf);
                 else
-                    bar_color = QColor(0xfa, 0xb3, 0x87);  // orange/red
+                    bar_color = QColor(0xfa, 0xb3, 0x87);
                 p.fillRect(bar_fill, bar_color);
             }
         }
 
-        // Intensity value
         QString val_text = present ? QString::number(au.intensity, 'f', 2) : QStringLiteral("0.00");
         p.setPen(text_color);
         p.drawText(bar_x + bar_area_w + 4, y, kValueWidth, kBarHeight,

@@ -16,8 +16,8 @@ struct FrameResult {
     cv::Mat annotated_frame;
     int frame_index = 0;
     double total_latency_ms = 0;
-    double recognition_latency_ms = 0;  // detection + tracking + recognition
-    double analysis_latency_ms = 0;     // OpenFace analysis only
+    double recognition_latency_ms = 0;
+    double analysis_latency_ms = 0;
     int face_count = 0;
     std::vector<TrackedFace> tracked_faces;
     std::vector<MatchResult> match_results;
@@ -45,6 +45,7 @@ public:
     bool IsDecodeFinished() const;
     double GetFps() const;
     int GetFrameCount() const;
+    std::string GetOutputDir() const;
     void UpdateThresholds(const ThresholdConfig& thresholds);
     void EnrollReference(const FaceEmbedding& embedding);
 

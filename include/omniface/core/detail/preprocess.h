@@ -9,10 +9,10 @@
 namespace omniface::detail {
 
 enum class NormKind {
-    kInsightFaceDet,   // (pixel - 127.5) / 128.0
-    kInsightFaceRec,   // (pixel - 127.5) / 127.5
-    kSimple,           // pixel / 255.0
-    kImageNet,         // per-channel (pixel - mean) / std
+    kInsightFaceDet,
+    kInsightFaceRec,
+    kSimple,
+    kImageNet,
 };
 
 struct PreprocessConfig {
@@ -25,11 +25,10 @@ struct PreprocessConfig {
 };
 
 struct PreprocessResult {
-    cv::Mat blob;        // CV_32FC1, NCHW layout, continuous
-    cv::Rect crop_rect;  // crop region in original image
+    cv::Mat blob;
+    cv::Rect crop_rect;
 };
 
-// ImageNet normalization constants
 inline constexpr float kImageNetMean[3] = {0.485f, 0.456f, 0.406f};
 inline constexpr float kImageNetStd[3]  = {0.229f, 0.224f, 0.225f};
 

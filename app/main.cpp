@@ -10,12 +10,12 @@
 int main(int argc, char* argv[]) {
     using namespace omniface;
 
+    // 注册自定义类型，使ThresholdConfig可通过跨线程信号/槽传递
     qRegisterMetaType<omniface::ThresholdConfig>("ThresholdConfig");
 
-    // Default config path: next to executable
     std::string config_path = "config.yaml";
 
-    // Parse CLI args
+    // 解析--config命令行参数
     for (int i = 1; i < argc; ++i) {
         std::string arg(argv[i]);
         if (arg == "--config" && i + 1 < argc) {
@@ -23,7 +23,7 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    // Load config
+    // 尝试加载配置文件，失败则使用默认配置
     PipelineConfig config;
     if (std::filesystem::exists(config_path)) {
         try {

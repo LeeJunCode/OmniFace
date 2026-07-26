@@ -104,11 +104,9 @@ public:
     std::unique_ptr<recognition::FaceMatcher> matcher_;
     std::unique_ptr<analysis::FaceAnalyzer> face_analyzer_;
 
-    // OpenFace output recorder (CSV, aligned faces, metadata)
     std::unique_ptr<Utilities::RecorderOpenFace> openface_recorder_;
     bool recorder_initialized_ = false;
 
-    // Tracked video writer (handled ourselves for reliability)
     cv::VideoWriter tracked_video_writer_;
     std::string tracked_video_path_;
     bool video_writer_initialized_ = false;
@@ -117,11 +115,11 @@ public:
     cv::VideoCapture video_cap_;
     std::atomic<bool> stop_requested_{false};
 
-    // Decode thread
     BoundedQueue<cv::Mat> frame_queue_{4};
     std::thread decode_thread_;
     std::atomic<bool> decode_stop_requested_{false};
 
+    // 轨迹缓存：避免每帧对同一轨迹重复识别，提升性能
     struct TrackInfo {
         bool is_target = false;
         float similarity = 0.0f;
@@ -186,7 +184,6 @@ public:
             }
         }
 
-        // OpenFace analysis
         if (!config_.model.openface_model_dir.empty()
             && !config_.behavior.skip_analysis) {
             analysis::FaceAnalyzer::Config fa_cfg;
@@ -200,7 +197,7 @@ public:
         FrameResult result;
         result.frame_index = frame_index;
 
-        // Init tracked video writer on first frame (separate from analysis)
+        // 首帧初始化输出目录：data/output/<视频名>_<时间戳>/
         if (!video_writer_initialized_ && !config_.behavior.skip_analysis) {
             namespace fs = std::filesystem;
             fs::path video_path(config_.video.input_path);
@@ -215,6 +212,51 @@ public:
             output_run_dir_ = (fs::path("data/output")
                 / (video_stem + "_" + std::string(ts))).string();
             fs::create_directories(output_run_dir_);
+
+            {
+                std::string orig_ext = video_path.extension().string();
+                std::string orig_dst =
+                    (fs::path(output_run_dir_) / ("original" + orig_ext)).string();
+                std::error_code ec;
+                fs::copy_file(video_path, orig_dst,
+                              fs::copy_options::overwrite_existing, ec);
+                if (ec) spdlog::warn("Failed to copy original video to output: {}", ec.message());
+            }
+
+            if (!config_.model.reference_image.empty()
+                && fs::exists(config_.model.reference_image)) {
+                fs::path ref_path(config_.model.reference_image);
+                std::string ref_ext = ref_path.extension().string();
+                std::string ref_dst =
+                    (fs::path(output_run_dir_) / ("reference" + ref_ext)).string();
+                std::error_code ec;
+                fs::copy_file(ref_path, ref_dst,
+                              fs::copy_options::overwrite_existing, ec);
+                if (ec) spdlog::warn("Failed to copy reference image to output: {}", ec.message());
+
+                if (detector_) {
+                    cv::Mat ref_img = cv::imread(ref_dst);
+                    if (!ref_img.empty()) {
+                        auto boxes = detector_->Detect(ref_img);
+                        if (!boxes.empty()) {
+                            for (const auto& b : boxes) {
+                                cv::Rect r(static_cast<int>(b.x1), static_cast<int>(b.y1),
+                                           static_cast<int>(b.x2 - b.x1),
+                                           static_cast<int>(b.y2 - b.y1));
+                                cv::rectangle(ref_img, r, cv::Scalar(0, 220, 0), 4);
+                                for (int k = 0; k < 5; ++k) {
+                                    cv::Point kp(static_cast<int>(b.keypoints[k * 2]),
+                                                 static_cast<int>(b.keypoints[k * 2 + 1]));
+                                    cv::circle(ref_img, kp, 3, cv::Scalar(0, 0, 255), -1);
+                                }
+                            }
+                            std::string detected_dst =
+                                (fs::path(output_run_dir_) / "reference_detected.png").string();
+                            cv::imwrite(detected_dst, ref_img);
+                        }
+                    }
+                }
+            }
 
             double fps = GetFpsImpl();
             tracked_video_path_ =
@@ -258,10 +300,8 @@ public:
             }
         }
 
-        // Track
         auto tracked_faces = tracker_->Update(detections);
 
-        // Recognize
         std::vector<MatchResult> matches;
         int best_match_idx = -1;
         float best_match_sim = config_.thresholds.match_threshold;
@@ -270,12 +310,11 @@ public:
                              best_match_idx, best_match_sim);
         }
 
-        // Update target state
         UpdateTargetState(tracked_faces, matches, best_match_idx, best_match_sim);
 
         auto t_recognition_done = std::chrono::steady_clock::now();
 
-        // OpenFace analysis on target face (renders landmarks/pose/gaze/AUs via Visualizer)
+        // OpenFace分析：仅对已确认的目标轨迹执行
         if (face_analyzer_ && target_track_id_ > 0) {
             cv::Rect_<float> target_bbox(
                 last_target_bbox_.x, last_target_bbox_.y,
@@ -283,6 +322,7 @@ public:
             if (target_bbox.width > 0 && target_bbox.height > 0) {
                 result.analysis = face_analyzer_->Analyze(frame, target_bbox);
 
+                // 将分析结果写入OpenFace Recorder（CSV + 对齐人脸 + 可视化视频）
                 if (result.analysis.valid && !config_.behavior.skip_analysis) {
                     const auto& r = result.analysis;
 
@@ -305,14 +345,12 @@ public:
                         recorder_initialized_ = true;
                     }
 
-                    // Timestamp
                     double fps = GetFpsImpl();
                     double ts = (fps > 0.0) ? (frame_index - 1) / fps : 0.0;
                     openface_recorder_->SetObservationTimestamp(ts);
                     openface_recorder_->SetObservationFrameNumber(frame_index);
                     openface_recorder_->SetObservationFaceID(0);
 
-                    // Landmarks (convert flat arrays → OpenCV types)
                     cv::Mat_<float> lm2d(136, 1,
                         const_cast<float*>(r.landmarks_2d.data()));
                     int n3d = static_cast<int>(r.landmarks_3d.size());
@@ -329,16 +367,13 @@ public:
                         static_cast<double>(r.detection_certainty),
                         r.detection_success);
 
-                    // Pose
                     cv::Vec6f pose_vec(r.pose_Tx, r.pose_Ty, r.pose_Tz,
                         r.head_pose.pitch, r.head_pose.yaw, r.head_pose.roll);
                     openface_recorder_->SetObservationPose(pose_vec);
 
-                    // Action units
                     openface_recorder_->SetObservationActionUnits(
                         r.action_units, r.au_classifications);
 
-                    // Gaze
                     cv::Point3f g0(r.gaze_0_x, r.gaze_0_y, r.gaze_0_z);
                     cv::Point3f g1(r.gaze_1_x, r.gaze_1_y, r.gaze_1_z);
                     cv::Vec2f ga(r.gaze_angle_x, r.gaze_angle_y);
@@ -358,7 +393,6 @@ public:
                     openface_recorder_->SetObservationGaze(
                         g0, g1, ga, eye_lm2d, eye_lm3d);
 
-                    // Aligned face
                     cv::Mat aligned = face_analyzer_->GetAlignedFace();
                     if (!aligned.empty())
                         openface_recorder_->SetObservationFaceAlign(aligned);
@@ -370,10 +404,8 @@ public:
 
         auto t_analysis_done = std::chrono::steady_clock::now();
 
-        // Draw OmniFace overlays on top of OpenFace visualization
         DrawFaceResults(frame, tracked_faces, matches, target_track_id_);
 
-        // Write tracked video (OpenFace + OmniFace overlays)
         if (tracked_video_writer_.isOpened())
             tracked_video_writer_.write(frame);
 
@@ -745,6 +777,7 @@ public:
         track_cache_ = std::move(new_cache);
     }
 
+    // 目标状态机：维护target_track_id_，处理目标切换/丢失/降级
     bool UpdateTargetState(const std::vector<TrackedFace>& tracked_faces,
                            const std::vector<MatchResult>& match_results,
                            int best_match_idx, float best_match_sim) {
@@ -925,6 +958,8 @@ bool Pipeline::IsDecodeFinished() const {
 double Pipeline::GetFps() const { return impl_->GetFpsImpl(); }
 
 int Pipeline::GetFrameCount() const { return impl_->GetFrameCountImpl(); }
+
+std::string Pipeline::GetOutputDir() const { return impl_->output_run_dir_; }
 
 void Pipeline::UpdateThresholds(const ThresholdConfig& thresholds) {
     impl_->config_.thresholds = thresholds;

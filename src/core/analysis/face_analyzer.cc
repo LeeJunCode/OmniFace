@@ -35,9 +35,10 @@ class FaceAnalyzer::Impl {
 public:
     explicit Impl(const Config& cfg)
         : cfg_(cfg),
-          visualizer_(true, false, false, true)  // track, no HOG, no align, AUs
+          // Visualizer参数：显示关键点、不显示bbox、不显示坐标轴、显示AU
+          visualizer_(true, false, false, true)
     {
-        visualizer_.visualisation_boundary = -2.0;
+        visualizer_.visualisation_boundary = -2.0;  // 不裁剪可视化区域
         namespace fs = std::filesystem;
         fs::path model_path = fs::absolute(cfg.model_dir).lexically_normal();
 
@@ -46,41 +47,34 @@ public:
             return;
         }
 
-        // Use CECLM model (CEN patch experts) — the official default, most accurate.
+        // 使用CECLM + CEN模型（官方默认，比CLNF更鲁棒）
         fs::path model_file = model_path / "main_ceclm_general.txt";
         det_params_.model_location = model_file.string();
 
-        // Path for MTCNN face detector (used internally by DetectLandmarksInVideo
-        // for reinitialization when tracking fails).
         det_params_.mtcnn_face_detector_location =
             (model_path / "mtcnn_detector" / "MTCNN_detector.txt").string();
 
-        // Official defaults: validate landmarks with CNN SVR validator.
+        // CNN SVR验证器：检测劣质拟合并触发重初始化
         det_params_.validate_detections = true;
         det_params_.validation_boundary = 0.725f;
 
-        // Standard reinitialization scheduling: attempt re-detection every 2
-        // consecutive tracking failures (same as official FaceLandmarkVid).
+        // 每2个失败帧后触发MTCNN重检测
         det_params_.reinit_video_every = 2;
 
-        // Window sizes: official defaults.
-        // During tracking, skip the coarsest and finest scales for speed.
+        // 搜索窗口：跟踪用小窗口（加速），检测/重检用全尺度大窗口
         det_params_.window_sizes_small = {0, 9, 7, 0};
-        // During (re)initialization, search all 4 scales with large windows.
         det_params_.window_sizes_init = {11, 9, 7, 5};
 
-        // CLNF/CECLM fitting parameters — official defaults.
-        // CECLM overrides: sigma *= 1.5, reg_factor *= 0.9 internally.
+        // CECLM拟合参数（sigma×1.5，reg_factor×0.9为官方默认调整）
         det_params_.sigma = 1.5f;
         det_params_.reg_factor = 25.0f;
         det_params_.weight_factor = 0.0f;
         det_params_.num_optimisation_iteration = 5;
 
-        // Enable template-based global motion correction between frames.
+        // 人脸模板：大运动时用模板修正初始位置
         det_params_.use_face_template = true;
         det_params_.face_template_scale = 0.3f;
 
-        // Use hierarchical part models (eye models for gaze, inner face).
         det_params_.refine_hierarchical = true;
         det_params_.refine_parameters = true;
 
@@ -108,53 +102,31 @@ public:
         if (!clnf_) return result;
         if (frame.empty()) return result;
 
-        // ---- Quality pre-check ----
         float aspect = bbox.width / bbox.height;
         if (aspect < cfg_.min_face_aspect ||
             static_cast<int>(bbox.width) < cfg_.min_face_width_px) {
             return result;
         }
 
-        // ---- Camera intrinsics ----
         float fx, fy, cx, cy;
         ApproxIntrinsics(frame.cols, frame.rows, fx, fy, cx, cy);
 
-        // ---- Set up visualizer ----
         cv::Mat canvas = frame.clone();
         visualizer_.SetImage(canvas, fx, fy, cx, cy);
 
-        // ---- Grayscale for CLNF ----
         cv::Mat gray;
         if (frame.channels() == 3)
             cv::cvtColor(frame, gray, cv::COLOR_BGR2GRAY);
         else
             gray = frame;
 
-        // ---- Correct bbox: full-face (SCRFD) → chin-to-eyebrows (PDM) ----
-        // MTCNN applies this identical correction internally
-        // (FaceDetectorMTCNN.cpp:872-877) to match PDM's 3D mean shape.
-        // SCRFD outputs full-face bboxes, so we must replicate it.
+        // bbox校正：SCRFD检测框(含额头+下巴) → OpenFace期望区域(眉毛到下巴)
         cv::Rect_<float> cb = bbox;
         cb.x += cb.width * -0.0075f;
-        cb.y += cb.height * 0.2459f;
+        cb.y += cb.height * 0.2459f;   // 下移，跳过额头
         cb.width *= 1.0323f;
-        cb.height *= 0.7751f;
+        cb.height *= 0.7751f;          // 高度压缩到眉毛-下巴区域
 
-        // ---- Core: match official FaceLandmarkVid behavior ----
-        // Official workflow:
-        //   First frame: MTCNN detection → CalcParams → multi-view init
-        //                (11 rotation hypotheses, best fit selected)
-        //   Subsequent:  track from previous converged state (small windows)
-        //   On failure:  MTCNN re-detect → multi-view reinit → save/restore
-        //
-        // We substitute SCRFD bbox for MTCNN detection on first frame only.
-        // Subsequent frames never see the bbox — tracking is purely temporal.
-        //
-        // Guide internal MTCNN reinit to our target face: set preference_det
-        // to the normalized center of the SCRFD bbox. If tracking fails and
-        // MTCNN reinit triggers, DetectSingleFaceMTCNN selects the face
-        // closest to this point instead of the most confident/largest one,
-        // preventing reinit from latching onto a non-target face.
         clnf_->preference_det.x =
             (bbox.x + bbox.width * 0.5f) / frame.cols;
         clnf_->preference_det.y =
@@ -163,6 +135,7 @@ public:
         cv::Rect_<double> bbox_d(cb.x, cb.y, cb.width, cb.height);
         bool detected;
         if (!clnf_->tracking_initialised) {
+            // 首次初始化：bbox → PDM参数 → 多视角检测（11个旋转假设）
             clnf_->params_local.setTo(0);
             clnf_->pdm.CalcParams(clnf_->params_global, bbox_d,
                                   clnf_->params_local);
@@ -173,6 +146,8 @@ public:
                 frame, bbox_d, *clnf_, det_params_, gray);
             det_params_.multi_view = false;
         } else {
+            // 跟踪模式：从上一帧状态出发，小搜索窗口RLMS
+            // 内部自动处理重检测、失败恢复与CNN验证
             detected = LandmarkDetector::DetectLandmarksInVideo(
                 frame, *clnf_, det_params_, gray);
         }
@@ -183,7 +158,6 @@ public:
 
         result.valid = true;
 
-        // ---- Landmark visibility ----
         {
             auto vis = clnf_->GetVisibilities();
             int vis_count = 0;
@@ -195,9 +169,10 @@ public:
             }
             result.visible_landmarks = vis_count;
 
-            // Map detection_certainty (-1=perfect..1=worst) to quality (0..1)
+            // 质量分数：检测确定性(50%) + 可见关键点比例(50%)
+            // detection_certainty范围[-1,1]，-1最优，归一化后取反使高分=好质量
             float cert_norm = (clnf_->detection_certainty + 1.0f) / 2.0f;
-            cert_norm = std::clamp(1.0f - cert_norm, 0.0f, 1.0f); // invert: -1→1.0, 1→0.0
+            cert_norm = std::clamp(1.0f - cert_norm, 0.0f, 1.0f);
             result.quality_score = cert_norm * 0.5f +
                 (static_cast<float>(vis_count) / 68.0f) * 0.5f;
         }
@@ -205,12 +180,10 @@ public:
         result.detection_certainty = clnf_->detection_certainty;
         result.detection_success = clnf_->detection_success;
 
-        // ---- Feed OpenFace Visualizer ----
         visualizer_.SetObservationLandmarks(
             clnf_->detected_landmarks, clnf_->detection_certainty,
             clnf_->GetVisibilities());
 
-        // ---- Head pose ----
         cv::Vec6f pose_vec = LandmarkDetector::GetPose(*clnf_, fx, fy, cx, cy);
         result.head_pose.pitch = pose_vec[3] * kDegPerRad;
         result.head_pose.yaw   = pose_vec[4] * kDegPerRad;
@@ -230,7 +203,6 @@ public:
         }
         visualizer_.SetObservationPose(pose_vec, clnf_->detection_certainty);
 
-        // ---- Gaze ----
         if (clnf_->eye_model) {
             cv::Point3f gaze_left, gaze_right;
             GazeAnalysis::EstimateGaze(*clnf_, gaze_left, fx, fy, cx, cy, true);
@@ -248,7 +220,7 @@ public:
             auto eye_lm2d = LandmarkDetector::CalculateAllEyeLandmarks(*clnf_);
             auto eye_lm3d = LandmarkDetector::Calculate3DEyeLandmarks(
                 *clnf_, fx, fy, cx, cy);
-            // Store as x0..xN, y0..yN (matching FeatureExtraction column order)
+            // 存储格式：先存所有x，再存所有y（与OpenFace Recorder格式一致）
             if (!eye_lm2d.empty()) {
                 result.eye_landmarks_2d.reserve(eye_lm2d.size() * 2);
                 for (const auto& p : eye_lm2d)
@@ -270,7 +242,6 @@ public:
                 clnf_->detection_certainty);
         }
 
-        // ---- Action units ----
         face_analyser_->AddNextFrame(frame, clnf_->detected_landmarks,
                                      clnf_->detection_success, 0.0, false);
         auto au_reg = face_analyser_->GetCurrentAUsReg();
@@ -279,13 +250,11 @@ public:
         result.au_classifications = au_class;
         visualizer_.SetObservationActionUnits(au_reg, au_class);
 
-        // ---- 68-point 2D landmarks ----
         if (clnf_->detected_landmarks.rows >= 136) {
             for (int i = 0; i < 136; ++i)
                 result.landmarks_2d[i] = clnf_->detected_landmarks.at<float>(i);
         }
 
-        // ---- 68-point 3D landmarks (world mm) ----
         cv::Mat_<float> shape_3d = clnf_->GetShape(fx, fy, cx, cy);
         if (!shape_3d.empty()) {
             result.landmarks_3d.assign(

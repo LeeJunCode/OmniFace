@@ -54,6 +54,7 @@ public:
         float* G_plane = blob.data() + static_cast<size_t>(H) * W;
         float* B_plane = blob.data() + static_cast<size_t>(H) * W * 2;
 
+        // InsightFace检测归一化: 将[0,255] uint8映射到约[-1,1]范围
         constexpr float kAlpha = 1.0f / 128.0f;
         constexpr float kBeta = -127.5f / 128.0f;
 
@@ -65,6 +66,7 @@ public:
                 float g = static_cast<float>(row[w * 3 + 1]) * kAlpha + kBeta;
                 float r = static_cast<float>(row[w * 3 + 2]) * kAlpha + kBeta;
                 size_t idx = base + w;
+                // 输出布局: BGR平面分离 — R_plane | G_plane | B_plane (各H*W)
                 R_plane[idx] = r;
                 G_plane[idx] = g;
                 B_plane[idx] = b;
@@ -76,6 +78,8 @@ public:
 private:
     cv::Mat letterbox_canvas_;
 
+    // 生成三个stride层级(8/16/32)的锚点中心坐标
+    // SCRFD每个网格单元生成2个锚点(共用同一中心)，输出格式: [cx,cy, cx,cy, ...]
     static AnchorCenters GenerateAnchorCenters(int input_w, int input_h) {
         AnchorCenters centers;
         const int strides[] = {8, 16, 32};
@@ -83,15 +87,15 @@ private:
         for (int s : strides) {
             int grid_w = input_w / s;
             int grid_h = input_h / s;
-            int count = grid_w * grid_h * 2;
-            std::vector<float> buf(count * 2);
+            int count = grid_w * grid_h * 2;  // 每个网格单元格2个锚点
+            std::vector<float> buf(count * 2);  // 每锚点存(cx, cy)
 
             size_t idx = 0;
             for (int y = 0; y < grid_h; ++y) {
                 for (int x = 0; x < grid_w; ++x) {
                     float cx = static_cast<float>(x * s);
                     float cy = static_cast<float>(y * s);
-                    for (int a = 0; a < 2; ++a) {
+                    for (int a = 0; a < 2; ++a) {  // 同一中心复制两次
                         buf[idx++] = cx;
                         buf[idx++] = cy;
                     }
@@ -119,6 +123,7 @@ FaceDetector::~FaceDetector() = default;
 
 namespace {
 
+// SCRFD距离解码: 网络输出为到锚点中心的上/左/下/右距离(乘以stride映射回原图坐标)
 inline void Distance2Bbox(const float* anchor, const float* bbox_dist,
                           int stride, float& x1, float& y1, float& x2, float& y2) {
     x1 = anchor[0] - bbox_dist[0] * stride;
@@ -127,6 +132,7 @@ inline void Distance2Bbox(const float* anchor, const float* bbox_dist,
     y2 = anchor[1] + bbox_dist[3] * stride;
 }
 
+// 5点关键点解码: 左眼/右眼/鼻尖/左嘴角/右嘴角 (相对于锚点中心的偏移)
 inline void Distance2Kps(const float* anchor, const float* kps_dist,
                          int stride, float* kps_out) {
     for (int k = 0; k < 5; ++k) {
@@ -150,6 +156,7 @@ std::vector<BoundingBox> FaceDetector::Detect(const cv::Mat& bgr_image) {
         return {};
     }
 
+    // SCRFD输出9个tensor: [score_8,score_16,score_32, bbox_8,bbox_16,bbox_32, kps_8,kps_16,kps_32]
     struct StrideInfo { int stride; int count; const float* centers; };
     const int strides_arr[] = {8, 16, 32};
     const StrideInfo strides[] = {
@@ -162,6 +169,7 @@ std::vector<BoundingBox> FaceDetector::Detect(const cv::Mat& bgr_image) {
     std::vector<float> confidences;
     std::vector<cv::Rect2d> boxes_rect;
 
+    // 遍历三个stride层级，解码所有高于置信度阈值的检测结果
     for (int i = 0; i < 3; ++i) {
         const auto& s = strides[i];
         const float* scores  = outputs[i].GetTensorData<float>();
@@ -178,9 +186,11 @@ std::vector<BoundingBox> FaceDetector::Detect(const cv::Mat& bgr_image) {
             float x1, y1, x2, y2;
             Distance2Bbox(anchor, bbox, s.stride, x1, y1, x2, y2);
 
+            // 将letterbox缩放后的坐标映射回原始图像坐标
             x1 /= det_scale; y1 /= det_scale;
             x2 /= det_scale; y2 /= det_scale;
 
+            // 裁剪到有效图像范围内 (避免越界)
             x1 = std::max(0.0f, std::min(x1, static_cast<float>(bgr_image.cols - 1)));
             y1 = std::max(0.0f, std::min(y1, static_cast<float>(bgr_image.rows - 1)));
             x2 = std::max(0.0f, std::min(x2, static_cast<float>(bgr_image.cols - 1)));
@@ -201,6 +211,7 @@ std::vector<BoundingBox> FaceDetector::Detect(const cv::Mat& bgr_image) {
         }
     }
 
+    // NMS去重: 对三个层级解码后的所有候选框做非极大值抑制
     std::vector<int> keep;
     if (!candidates.empty()) {
         cv::dnn::NMSBoxes(boxes_rect, confidences, cfg.confidence_threshold,

@@ -35,6 +35,8 @@ STrack::List SubStracks(const STrack::List& tlista, const STrack::List& tlistb) 
     return result;
 }
 
+// 去重两个轨道列表中的重叠轨道: 保留存活更久(end_frame更大)的轨道
+// IoU阈值设为0.15(即IoU>0.85视为重叠), 确保同一目标只有一个活跃轨道
 void RemoveDuplicateStracks(STrack::List& a, STrack::List& b, float iou_thresh = 0.15f) {
     if (a.empty() || b.empty()) return;
 
@@ -70,6 +72,8 @@ void RemoveDuplicateStracks(STrack::List& a, STrack::List& b, float iou_thresh =
     b = std::move(new_b);
 }
 
+// 使用Jonker-Volgenant算法(线性分配)求解最小化代价矩阵的最优匹配
+// 代价超过thresh的配对被拒绝，未匹配的检测/轨道分别返回
 void LinearAssignment(const std::vector<float>& cost_matrix, int d_size, int t_size,
                       float thresh, std::vector<std::pair<int, int>>& matches,
                       std::vector<int>& unmatched_d, std::vector<int>& unmatched_t) {
@@ -106,6 +110,8 @@ public:
     std::vector<Track> Update(const std::vector<Detection>& detections) {
         frame_id_++;
 
+        // ByteTrack核心思想: 按置信度将检测结果分为高分(high)和低分(low)两组
+        // 高分检测用于常规匹配，低分检测用于挽回被遮挡/模糊的目标
         STrack::List det_high, det_low;
         det_high.reserve(detections.size());
         det_low.reserve(detections.size());
@@ -130,9 +136,11 @@ public:
             track_pool.push_back(&t);
         }
 
+        // 第一步: 所有现存轨道执行卡尔曼预测，得到当前帧的预测位置
         STrack::MultiPredict(tracked_stracks_, kalman_filter_);
         STrack::MultiPredict(lost_stracks_, kalman_filter_);
 
+        // 第一轮关联: 高分检测 ↔ 所有轨道(tracked + lost)，使用IoU距离矩阵
         std::vector<const STrack*> track_ptrs(track_pool.begin(), track_pool.end());
         auto dists = STrack::IoUDistance(track_ptrs, det_high, kalman_filter_);
         int d_size = static_cast<int>(det_high.size());
@@ -140,6 +148,7 @@ public:
 
         std::vector<std::pair<int, int>> matches;
         std::vector<int> unmatched_t, unmatched_d;
+        // IoU距离 = 1 - IoU, 所以 cost_limit = 1 - match_thresh 等价于 IoU >= match_thresh
         float cost_limit = 1.0f - config_.match_thresh;
         LinearAssignment(dists, d_size, t_size, cost_limit, matches, unmatched_d, unmatched_t);
 
@@ -167,6 +176,8 @@ public:
 
         std::vector<STrack*> to_mark_lost;
 
+        // 第二轮关联: 低分检测 ↔ 第一轮未匹配的Tracked轨道
+        // ByteTrack精髓: 利用低置信度检测挽救因遮挡/模糊丢失的目标
         if (!r_tracked.empty() && !det_low.empty()) {
             std::vector<const STrack*> r_ptrs(r_tracked.begin(), r_tracked.end());
             auto dists2 = STrack::IoUDistance(r_ptrs, det_low, kalman_filter_);
@@ -213,6 +224,8 @@ public:
             }
         }
 
+        // 第三轮关联: 未匹配高分检测 ↔ 未确认(新出现)轨道
+        // 新出现的轨道尚未被激活，使用较宽松的代价阈值(0.3)进行匹配
         if (!unconfirmed_now.empty() && !unmatched_high_after.empty()) {
             std::vector<const STrack*> u_ptrs(unconfirmed_now.begin(), unconfirmed_now.end());
             auto dists3 = STrack::IoUDistance(u_ptrs, unmatched_high_after, kalman_filter_);
@@ -221,6 +234,7 @@ public:
 
             std::vector<std::pair<int, int>> matches3;
             std::vector<int> unmatched_t3, unmatched_d3;
+            // 未确认轨道的匹配阈值固定为0.7 IoU (代价上限0.3)
             LinearAssignment(dists3, d3_size, t3_size, 0.3f,
                              matches3, unmatched_d3, unmatched_t3);
 
@@ -241,6 +255,7 @@ public:
             for (auto* t : unconfirmed_now) t->MarkRemoved();
         }
 
+        // 剩余未匹配的高分检测: 若置信度 >= high_thresh, 初始化为新轨道
         for (auto& det : unmatched_high_after) {
             if (det.Score() >= config_.high_thresh) {
                 det.Activate(kalman_filter_, frame_id_, next_track_id_);
@@ -248,6 +263,7 @@ public:
             }
         }
 
+        // 清理超时丢失轨道: 超过track_buffer帧未匹配则永久移除
         for (auto& t : lost_stracks_) {
             if (frame_id_ - t.EndFrame() > max_time_lost_) {
                 t.MarkRemoved();

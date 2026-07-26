@@ -16,10 +16,6 @@
 
 namespace omniface::ui {
 
-// ============================================================
-// Constructor / Destructor
-// ============================================================
-
 VideoPlayerWidget::VideoPlayerWidget(QWidget* parent)
     : QWidget(parent) {
 
@@ -28,15 +24,12 @@ VideoPlayerWidget::VideoPlayerWidget(QWidget* parent)
     setMouseTracking(true);
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
 
-    // Audio output
     audio_output_ = new QAudioOutput(this);
     audio_output_->setVolume(1.0);
 
-    // Media player
     media_player_ = new QMediaPlayer(this);
     media_player_->setAudioOutput(audio_output_);
 
-    // Video sink — receive decoded frames without native window
     video_sink_ = new QVideoSink(this);
     media_player_->setVideoSink(video_sink_);
 
@@ -49,7 +42,6 @@ VideoPlayerWidget::VideoPlayerWidget(QWidget* parent)
     connect(media_player_, &QMediaPlayer::playbackStateChanged,
             this, &VideoPlayerWidget::onPlayerStateChanged);
 
-    // Auto-hide timer
     hide_controls_timer_ = new QTimer(this);
     hide_controls_timer_->setSingleShot(true);
     hide_controls_timer_->setInterval(2500);
@@ -61,10 +53,6 @@ VideoPlayerWidget::~VideoPlayerWidget() {
     stop();
 }
 
-// ============================================================
-// Public API
-// ============================================================
-
 void VideoPlayerWidget::setVideoPath(const std::string& path) {
     stop();
     video_path_ = path;
@@ -72,7 +60,6 @@ void VideoPlayerWidget::setVideoPath(const std::string& path) {
     current_frame_ = QImage();
     has_video_ = false;
 
-    // Grab first frame as poster via OpenCV (no QMediaPlayer involvement)
     cv::VideoCapture cap(path);
     if (cap.isOpened()) {
         cv::Mat frame;
@@ -108,7 +95,7 @@ bool VideoPlayerWidget::isPlaying() const {
 void VideoPlayerWidget::play() {
     if (video_path_.empty()) return;
 
-    // Lazy-load source only when user explicitly plays
+    // 延迟加载：仅在用户主动播放时设置源
     if (media_player_->source().isEmpty()) {
         media_player_->setSource(QUrl::fromLocalFile(QString::fromStdString(video_path_)));
     }
@@ -124,7 +111,6 @@ void VideoPlayerWidget::stop() {
     hide_controls_timer_->stop();
     media_player_->stop();
 
-    // Release file handle
     if (!media_player_->source().isEmpty()) {
         media_player_->setSource(QUrl());
     }
@@ -136,15 +122,11 @@ void VideoPlayerWidget::stop() {
     update();
 }
 
-// ============================================================
-// Video sink
-// ============================================================
-
 void VideoPlayerWidget::onVideoFrameChanged(const QVideoFrame& frame) {
     if (!frame.isValid()) return;
     QVideoFrame f(frame);
     if (f.map(QVideoFrame::ReadOnly)) {
-        // Convert to QImage for painting — QVideoFrame formats vary by backend
+        // QVideoFrame 像素格式因后端而异，统一转为 QImage
         QImage img;
         if (f.pixelFormat() == QVideoFrameFormat::Format_ARGB8888 ||
             f.pixelFormat() == QVideoFrameFormat::Format_XRGB8888) {
@@ -156,7 +138,6 @@ void VideoPlayerWidget::onVideoFrameChanged(const QVideoFrame& frame) {
                          QImage::Format_ARGB32_Premultiplied).rgbSwapped().copy();
         } else if (f.pixelFormat() == QVideoFrameFormat::Format_YUV420P ||
                    f.pixelFormat() == QVideoFrameFormat::Format_NV12) {
-            // Common hardware formats — convert via QImage::convertTo
             img = f.toImage();
         } else {
             img = f.toImage();
@@ -170,15 +151,12 @@ void VideoPlayerWidget::onVideoFrameChanged(const QVideoFrame& frame) {
     }
 }
 
-// ============================================================
-// Media player slots
-// ============================================================
-
 void VideoPlayerWidget::onPositionChanged(qint64 pos) {
     if (!seeking_) {
         current_position_ = pos;
         update();
     }
+    emit positionChanged(pos);
 }
 
 void VideoPlayerWidget::onDurationChanged(qint64 dur) {
@@ -212,10 +190,6 @@ void VideoPlayerWidget::onHideControlsTimeout() {
     }
 }
 
-// ============================================================
-// Control visibility
-// ============================================================
-
 void VideoPlayerWidget::showControls() {
     controls_visible_ = true;
     setCursor(Qt::ArrowCursor);
@@ -226,12 +200,8 @@ void VideoPlayerWidget::showControls() {
 }
 
 void VideoPlayerWidget::hideControls() {
-    // Only hide via timer timeout; not called directly
+    // 仅由计时器超时触发，不直接调用
 }
-
-// ============================================================
-// Paint — single paintEvent: poster / video frame / controls
-// ============================================================
 
 void VideoPlayerWidget::paintPoster(QPainter& p) {
     int w = width(), h = height();
@@ -242,7 +212,6 @@ void VideoPlayerWidget::paintPoster(QPainter& p) {
         int y = (h - scaled.height()) / 2;
         p.drawImage(x, y, scaled);
 
-        // Semi-transparent dim
         p.fillRect(rect(), QColor(0, 0, 0, 50));
     } else if (!has_video_) {
         p.fillRect(rect(), QColor(0xf0, 0xf0, 0xf0));
@@ -254,7 +223,6 @@ void VideoPlayerWidget::paintPoster(QPainter& p) {
         return;
     }
 
-    // Center play button on poster
     QRectF btn = centerPlayBtnRect();
     p.setPen(Qt::NoPen);
     p.setBrush(QColor(0, 0, 0, 140));
@@ -279,7 +247,6 @@ void VideoPlayerWidget::paintVideoFrame(QPainter& p) {
     int x = (w - scaled.width()) / 2;
     int y = (h - scaled.height()) / 2;
 
-    // Fill letterbox area
     p.fillRect(rect(), QColor(0, 0, 0));
     p.drawImage(x, y, scaled);
 }
@@ -288,14 +255,12 @@ void VideoPlayerWidget::paintControls(QPainter& p) {
     bool playing = isPlaying();
     int w = width(), h = height();
 
-    // Dim overlay
-    p.fillRect(rect(), QColor(0, 0, 0, 50));
+    p.fillRect(rect(), QColor(0, 0, 0, 15));
 
-    // Center pause indicator (when paused)
     if (!playing) {
         QRectF btn = centerPlayBtnRect();
         p.setPen(Qt::NoPen);
-        p.setBrush(QColor(0, 0, 0, 140));
+        p.setBrush(QColor(0, 0, 0, 100));
         p.drawEllipse(btn);
 
         QPainterPath triangle;
@@ -305,21 +270,19 @@ void VideoPlayerWidget::paintControls(QPainter& p) {
         triangle.lineTo(cx - s * 0.6, cy + s);
         triangle.lineTo(cx + s * 1.15, cy);
         triangle.closeSubpath();
-        p.setBrush(QColor(255, 255, 255, 220));
+        p.setBrush(QColor(255, 255, 255, 180));
         p.drawPath(triangle);
     }
 
-    // --- Bottom control bar ---
     QRectF bar = bottomBarRect();
     double bar_h = bar.height();
     double bar_y = h - bar_h;
 
-    p.fillRect(QRectF(0, bar_y, w, bar_h), QColor(0xf5, 0xf5, 0xf5, 230));
+    p.fillRect(QRectF(0, bar_y, w, bar_h), QColor(0xf5, 0xf5, 0xf5, 160));
 
-    // Scale factor relative to widget height for proportional sizing
+    // 根据控件高度等比缩放控件大小
     double scale = std::min(std::max(h / 360.0, 0.6), 1.5);
 
-    // Play/pause button
     {
         double bs = 24.0 * scale;
         double bx = 10.0 * scale;
@@ -345,21 +308,18 @@ void VideoPlayerWidget::paintControls(QPainter& p) {
         }
     }
 
-    // Time font
     QFont time_font = font();
     time_font.setPointSize(std::max(static_cast<int>(9.0 * scale), 7));
     p.setFont(time_font);
 
-    // Current time (after play button)
     {
         p.setPen(QColor(0x55, 0x55, 0x55));
-        double tx = 38.0 * scale;  // play_btn(24) + gap(8) + offset(6)
+        double tx = 38.0 * scale;
         p.drawText(QRectF(tx, bar_y, 48 * scale, bar_h),
                    Qt::AlignVCenter | Qt::AlignLeft,
                    formatTime(current_position_));
     }
 
-    // Duration (between progress bar and volume icon)
     {
         QRectF pbar = progressBarRect();
         double dur_x = pbar.right() + 6.0 * scale;
@@ -369,7 +329,6 @@ void VideoPlayerWidget::paintControls(QPainter& p) {
                    formatTime(total_duration_));
     }
 
-    // Progress bar
     {
         QRectF pbar = progressBarRect();
         double frac = (total_duration_ > 0)
@@ -394,14 +353,12 @@ void VideoPlayerWidget::paintControls(QPainter& p) {
         p.drawEllipse(QPointF(hx, track.center().y()), hr, hr);
     }
 
-    // Volume
     {
         auto vs = volumeSliderRect();
         double pb_h = std::max(3.0 * scale, 2.0);
         double pb_y = bar_y + (bar_h - pb_h) / 2;
         QRectF track(vs.x(), pb_y, vs.width(), pb_h);
 
-        // Volume icon (between duration text and volume slider)
         QFont vf = font();
         vf.setPointSize(std::max(static_cast<int>(9.0 * scale), 7));
         p.setFont(vf);
@@ -412,7 +369,6 @@ void VideoPlayerWidget::paintControls(QPainter& p) {
                    (muted_ || volume_ == 0) ? QStringLiteral("\xF0\x9F\x94\x87")
                                             : QStringLiteral("\xF0\x9F\x94\x8A"));
 
-        // Track
         p.fillRect(track, QColor(0xe0, 0xe0, 0xe0));
         double vfrac = muted_ ? 0.0 : volume_ / 100.0;
         if (vfrac > 0.0) {
@@ -435,25 +391,18 @@ void VideoPlayerWidget::paintEvent(QPaintEvent* /*event*/) {
     bool playing = isPlaying();
     bool paused = media_player_->playbackState() == QMediaPlayer::PausedState;
 
-    // Layer 1: Video frame or poster
     if ((playing || paused) && !current_frame_.isNull()) {
         paintVideoFrame(p);
     } else {
         paintPoster(p);
-        // Don't paint controls in poster mode; center button is in paintPoster
-        return;
+        return;  // 海报模式下控件绘制由 paintPoster 处理
     }
 
-    // Layer 2: Controls (when visible)
     bool show_ctrl = controls_visible_ || !playing;
     if (show_ctrl) {
         paintControls(p);
     }
 }
-
-// ============================================================
-// Layout helpers (all coordinates in widget-local space)
-// ============================================================
 
 QString VideoPlayerWidget::formatTime(qint64 ms) const {
     int total_sec = static_cast<int>(ms / 1000);
@@ -483,12 +432,11 @@ QRectF VideoPlayerWidget::progressBarRect() const {
     double bar_y = height() - bar_h;
     double scale = std::min(std::max(height() / 360.0, 0.6), 1.5);
 
-    // Left: play_btn(24) + gap(8) + cur_time(48) = 80 scaled
+    // 左侧：播放按钮(24) + 间距(8) + 当前时间(48) = 80 * scale
     double left = 80.0 * scale;
-    // Right: duration(50) + gap(4) + vol_icon(22) + gap(4) + vol_slider(48) + pad(10) = 138 scaled
+    // 右侧：总时长(50) + 音量图标(22) + 间距(4) + 音量滑块(48) + 边距(10) = 138 * scale
     double right = width() - 138.0 * scale;
     if (right - left < 40.0) {
-        // Fallback for very narrow widgets
         left = 60.0;
         right = width() - 120.0;
     }
@@ -513,10 +461,6 @@ bool VideoPlayerWidget::isOverVolumeSlider(const QPoint& pos) const {
     return QRectF(bar.x(), bar.y() - 6, bar.width(), bar.height() + 12).contains(pos);
 }
 
-// ============================================================
-// Events
-// ============================================================
-
 void VideoPlayerWidget::resizeEvent(QResizeEvent* event) {
     QWidget::resizeEvent(event);
     update();
@@ -531,7 +475,6 @@ void VideoPlayerWidget::mousePressEvent(QMouseEvent* event) {
     bool paused_or_stopped = !playing;
     bool show_ctrl = controls_visible_ || paused_or_stopped;
 
-    // Volume slider
     if (show_ctrl && isOverVolumeSlider(pos)) {
         adjusting_volume_ = true;
         QRectF vs = volumeSliderRect();
@@ -544,7 +487,6 @@ void VideoPlayerWidget::mousePressEvent(QMouseEvent* event) {
         return;
     }
 
-    // Volume icon
     if (show_ctrl) {
         QRectF vs = volumeSliderRect();
         double scale = std::min(std::max(height() / 360.0, 0.6), 1.5);
@@ -559,7 +501,6 @@ void VideoPlayerWidget::mousePressEvent(QMouseEvent* event) {
         }
     }
 
-    // Progress bar
     if (show_ctrl && isOverProgressBar(pos)) {
         seeking_ = true;
         double frac = progressAtPos(pos);
@@ -569,7 +510,6 @@ void VideoPlayerWidget::mousePressEvent(QMouseEvent* event) {
         return;
     }
 
-    // Small play/pause button in bottom bar
     if (show_ctrl) {
         QRectF bar = bottomBarRect();
         double bs = 24.0;
@@ -579,20 +519,17 @@ void VideoPlayerWidget::mousePressEvent(QMouseEvent* event) {
         }
     }
 
-    // Center play button (poster or paused overlay)
     if (!playing) {
         if (centerPlayBtnRect().contains(pos)) {
             goto toggle;
         }
     }
 
-    // Click anywhere else while playing: toggle controls visibility
     if (playing && !controls_visible_) {
         showControls();
         return;
     }
 
-    // Click on video area toggles play/pause (web-like behavior)
 toggle:
     if (playing) {
         pause();

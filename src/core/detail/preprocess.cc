@@ -19,6 +19,10 @@ void FaceCropPreprocessor::ProcessFromCrop(const cv::Mat& face_roi_bgr,
     int target = cfg_.target_size;
     out.crop_rect = crop_rect;
 
+    // 归一化参数: 三种模式对应不同模型的训练预处理
+    // kInsightFaceDet: [0,255] → ~[-1,1]  (用于SCRFD检测)
+    // kInsightFaceRec: [0,255] → [-1,1]   (用于ArcFace识别)
+    // 默认:            [0,255] → [0,1]    (通用)
     float alpha = 1.0f;
     float beta = 0.0f;
     switch (cfg_.norm) {
@@ -47,8 +51,10 @@ void FaceCropPreprocessor::ProcessFromCrop(const cv::Mat& face_roi_bgr,
         resized_.convertTo(float_img_, CV_32FC3, alpha, beta);
     }
 
+    // 转换为RGB通道顺序 (OpenCV默认BGR)
     cv::cvtColor(float_img_, float_img_, cv::COLOR_BGR2RGB);
 
+    // ImageNet标准化: 每个通道独立减均值除标准差 (适用于部分分类模型)
     if (cfg_.norm == NormKind::kImageNet) {
         std::vector<cv::Mat> channels(3);
         cv::split(float_img_, channels);
@@ -69,6 +75,7 @@ void FaceCropPreprocessor::Process(const cv::Mat& bgr_image, const BoundingBox& 
 
     float bw = face_bbox.x2 - face_bbox.x1;
     float bh = face_bbox.y2 - face_bbox.y1;
+    // 按边界框尺寸比例扩展边距，为对齐/识别保留更多上下文信息
     float mx = bw * cfg_.margin;
     float my = bh * cfg_.margin;
 

@@ -14,7 +14,7 @@ model:
   openface_model_dir: "openface_model"
 
 thresholds:
-  match_threshold: 0.20
+  match_threshold: 0.30
   detection_confidence: 0.5
   detection_nms: 0.4
   tracking_high: 0.5

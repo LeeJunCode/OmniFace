@@ -5,16 +5,13 @@
 
 namespace omniface::ui {
 
-// ============================================================
-// FpsPanel
-// ============================================================
-
 FpsPanel::FpsPanel(QWidget* parent) : QWidget(parent) {
     setMinimumHeight(28);
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
 }
 
 void FpsPanel::updateData(const DashboardData& data) {
+    // 指数移动平均(EMA)平滑FPS显示，避免数值剧烈跳动
     if (smooth_pipe_ == 0.0) {
         smooth_pipe_ = data.pipeline_fps;
         smooth_rec_ = data.recognition_fps;
@@ -22,11 +19,12 @@ void FpsPanel::updateData(const DashboardData& data) {
     } else {
         smooth_pipe_ = kAlpha * data.pipeline_fps + (1.0 - kAlpha) * smooth_pipe_;
         smooth_rec_ = kAlpha * data.recognition_fps + (1.0 - kAlpha) * smooth_rec_;
+        // 仅当OpenFace实际在运行时才更新其FPS平滑值
         if (data.analysis_running && data.analysis_fps > 0.0)
             smooth_ana_ = kAlpha * data.analysis_fps + (1.0 - kAlpha) * smooth_ana_;
     }
     analysis_running_ = data.analysis_running;
-    if (!analysis_running_) smooth_ana_ = 0.0;
+    if (!analysis_running_) smooth_ana_ = 0.0;  // 未运行时清零
     update();
 }
 
@@ -37,6 +35,7 @@ void FpsPanel::paintEvent(QPaintEvent* /*event*/) {
     QPainter p(this);
     p.setRenderHint(QPainter::Antialiasing, true);
 
+    // FPS颜色编码：>=20绿色(流畅)，10-20橙色(一般)，<10红色(卡顿)，0灰色
     auto fpsColor = [](double fps) -> QColor {
         if (fps <= 0.0) return QColor(0xb0, 0xb0, 0xb0);
         if (fps >= 20.0) return QColor(0x2e, 0x7d, 0x32);
@@ -73,10 +72,6 @@ void FpsPanel::paintEvent(QPaintEvent* /*event*/) {
                    Qt::AlignHCenter | Qt::AlignTop, text);
     }
 }
-
-// ============================================================
-// CounterPanel
-// ============================================================
 
 CounterPanel::CounterPanel(QWidget* parent) : QWidget(parent) {
     setMinimumHeight(36);

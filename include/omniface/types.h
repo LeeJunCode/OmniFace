@@ -8,23 +8,27 @@
 
 namespace omniface {
 
-// Face detection bounding box with 5-point landmarks
+// 边界框: 左上角(x1,y1) + 右下角(x2,y2) + 置信度
+// keypoints[10]: 5个关键点 (x0,y0, x1,y1, ..., x4,y4) — 左眼/右眼/鼻尖/左嘴角/右嘴角
+// operator[]利用内存连续性将x1/y1/x2/y2作为数组访问 (用于ComputeIoU等通用接口)
 struct BoundingBox {
     float x1, y1, x2, y2;
     float confidence;
-    std::array<float, 10> keypoints{};  // 5 points: (x,y) alternating
+    std::array<float, 10> keypoints{};
 
     float operator[](int i) const { return (&x1)[i]; }
     float& operator[](int i) { return (&x1)[i]; }
 };
 
-// 512-D face feature embedding (MobileFaceNet)
+// 512维人脸特征向量 (ArcFace/InsightFace标准输出维度)，valid标识是否成功提取
 struct FaceEmbedding {
     std::array<float, 512> features{};
     bool valid = false;
 };
 
-// Tracked face info from ByteTrack
+// 跟踪输出: 包含轨道ID、当前边界框、连续命中/丢失计数
+// consecutive_hit_count: 用于判断跟踪稳定性(通常>3帧才算稳定)
+// consecutive_miss_count: 用于清理短暂丢失的轨道
 struct TrackedFace {
     int id;
     BoundingBox box;
@@ -32,58 +36,44 @@ struct TrackedFace {
     int consecutive_miss_count;
 };
 
-// Head pose angles (degrees)
 struct HeadPose {
     float pitch = 0.0f;
     float yaw = 0.0f;
     float roll = 0.0f;
 };
 
-// Per-frame facial analysis result from OpenFace
 struct FaceAnalysisResult {
     bool valid = false;
     HeadPose head_pose;
-    float gaze_angle_x = 0.0f;  // radians
-    float gaze_angle_y = 0.0f;  // radians
-    // 68-point 2D landmarks (x1..x68, y1..y68)
+    float gaze_angle_x = 0.0f;
+    float gaze_angle_y = 0.0f;
     std::array<float, 136> landmarks_2d{};
-    // AU names and their intensity values
     std::vector<std::pair<std::string, double>> action_units;
-    // Quality indicators
-    float quality_score = 0.0f;   // 0=worst, 1=best
-    int visible_landmarks = 0;    // non-occluded landmark count (0..68)
+    float quality_score = 0.0f;
+    int visible_landmarks = 0;
 
-    // ---- FeatureExtraction-compatible fields ----
-    float detection_certainty = 0.0f;  // raw -1..1 from CLNF validator
+    float detection_certainty = 0.0f;
     bool detection_success = false;
 
-    // Gaze direction vectors (world coordinates, mm)
     float gaze_0_x = 0, gaze_0_y = 0, gaze_0_z = 0;
     float gaze_1_x = 0, gaze_1_y = 0, gaze_1_z = 0;
 
-    // Head pose translation (camera coordinates, mm)
     float pose_Tx = 0, pose_Ty = 0, pose_Tz = 0;
 
-    // PDM rigid parameters: scale, Rx, Ry, Rz, Tx, Ty
     std::array<float, 6> pdm_rigid{};
 
-    // PDM non-rigid shape parameters
     std::vector<float> pdm_nonrigid;
 
-    // Eye-region 2D landmarks (56 points, pixel coords: x0..x55, y0..y55)
     std::vector<float> eye_landmarks_2d;
 
-    // Eye-region 3D landmarks (56 points, world mm: X0..X55, Y0..Y55, Z0..Z55)
     std::vector<float> eye_landmarks_3d;
 
-    // Face 3D landmarks (68 points, world mm: X0..X67, Y0..Y67, Z0..Z67)
     std::vector<float> landmarks_3d;
 
-    // AU classifications (binary presence, 0/1)
     std::vector<std::pair<std::string, double>> au_classifications;
 };
 
-// Cosine similarity match result
+// 人脸匹配结果: similarity为余弦相似度([-1,1])，is_match表示是否超过设定阈值
 struct MatchResult {
     BoundingBox box;
     float similarity = 0.0f;
@@ -92,7 +82,9 @@ struct MatchResult {
     bool valid = false;
 };
 
-// Generic IoU for any box type supporting operator[](int)
+// 通用IoU计算: 模板化支持所有提供operator[]的框类型(如BoundingBox, STrack等)
+// 公式: IoU = 交集面积 / 并集面积，其中并集 = A面积 + B面积 - 交集面积
+// 1e-8: 防止面积为零时的除零错误
 template <typename BoxA, typename BoxB>
 inline float ComputeIoU(const BoxA& a, const BoxB& b) noexcept {
     float inter_x1 = std::max(a[0], b[0]);
@@ -104,6 +96,7 @@ inline float ComputeIoU(const BoxA& a, const BoxB& b) noexcept {
     float area_a = (a[2] - a[0]) * (a[3] - a[1]);
     float area_b = (b[2] - b[0]) * (b[3] - b[1]);
     float denom = area_a + area_b - inter;
+    // 1e-8: 处理极端情况(两个框面积都为零)
     return (denom > 1e-8f) ? inter / denom : 0.0f;
 }
 
