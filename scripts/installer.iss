@@ -26,9 +26,6 @@ ArchitecturesInstallIn64BitMode=x64compatible
 SetupIconFile=..\resources\omniface.ico
 UninstallDisplayIcon={app}\OmniFace.exe
 
-[Languages]
-Name: "chinesesimplified"; MessagesFile: "ChineseSimplified.isl"
-
 [Tasks]
 Name: "desktopicon"; Description: "创建桌面快捷方式"; GroupDescription: "附加图标:"
 
