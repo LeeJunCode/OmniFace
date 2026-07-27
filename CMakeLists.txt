@@ -20,7 +20,7 @@ find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets Multimedia MultimediaWidge
 
 # Detect MSVC for platform-specific settings
 if(MSVC)
-    add_compile_options(/W3 /utf-8)
+    add_compile_options(/W3 /utf-8 /wd4828)
     add_compile_definitions(NOMINMAX)  # Prevent min/max macros from windows.h
 else()
     add_compile_options(-Wall -Wextra -Wpedantic)

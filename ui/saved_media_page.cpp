@@ -33,7 +33,7 @@ SavedMediaPage::SavedMediaPage(MediaType type, QWidget* parent)
 
     auto* top = new QHBoxLayout;
     auto* back_btn = new QPushButton(QStringLiteral("\u2190 \u8fd4\u56de"));
-    back_btn->setFixedWidth(100);
+    back_btn->setFixedHeight(28);
     connect(back_btn, &QPushButton::clicked, this, &SavedMediaPage::backRequested);
     top->addWidget(back_btn);
     top->addStretch();

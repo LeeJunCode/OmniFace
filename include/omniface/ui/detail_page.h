@@ -12,6 +12,8 @@
 #include <QPushButton>
 #include <QScrollArea>
 #include <QSplitter>
+#include <QStackedWidget>
+#include <QTableWidget>
 #include <QVBoxLayout>
 #include <QWidget>
 
@@ -37,6 +39,7 @@ private slots:
 
 private:
     void setupUI();
+    void showCsvView();
     void loadCSV(const std::string& output_dir);
     QImage matToQImage(const cv::Mat& bgr);
 
@@ -47,6 +50,9 @@ private:
     QLabel* detail_info_label_ = nullptr;
     QLabel* detail_face_thumb_ = nullptr;
     QLabel* detail_data_label_ = nullptr;
+
+    QStackedWidget* detail_stack_ = nullptr;
+    QTableWidget* csv_table_ = nullptr;
 
     std::vector<std::string> csv_headers_;
     std::vector<std::vector<std::string>> csv_rows_;

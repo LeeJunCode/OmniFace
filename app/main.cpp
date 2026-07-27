@@ -27,6 +27,10 @@ int main(int argc, char* argv[]) {
     // 解析--config命令行参数
     for (int i = 1; i < argc; ++i) {
         std::string arg(argv[i]);
+        if (arg == "--version" || arg == "-v") {
+            std::cout << "1.0.0" << std::endl;
+            return 0;
+        }
         if (arg == "--config" && i + 1 < argc) {
             config_path = argv[++i];
         }

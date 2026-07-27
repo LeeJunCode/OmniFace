@@ -10,8 +10,12 @@
 #include <opencv2/imgproc.hpp>
 #include <opencv2/videoio.hpp>
 
+#include <QDesktopServices>
+#include <QHBoxLayout>
+#include <QHeaderView>
 #include <QVBoxLayout>
 #include <QTimer>
+#include <QUrl>
 
 namespace omniface::ui {
 
@@ -22,12 +26,12 @@ DetailPage::DetailPage(QWidget* parent) : QWidget(parent) {
 
 void DetailPage::setupUI() {
     auto* dl = new QVBoxLayout(this);
-    dl->setContentsMargins(8, 6, 8, 6);
-    dl->setSpacing(6);
+    dl->setContentsMargins(12, 10, 12, 10);
+    dl->setSpacing(10);
 
     auto* top = new QHBoxLayout;
     auto* back_btn = new QPushButton(QStringLiteral("\u2190 \u8fd4\u56de"));
-    back_btn->setFixedWidth(100);
+    back_btn->setFixedHeight(28);
     connect(back_btn, &QPushButton::clicked, this, [this]() {
         detail_video_->stop();
         detail_orig_video_->stop();
@@ -47,8 +51,37 @@ void DetailPage::setupUI() {
             emit backRequested();
     });
     top->addWidget(back_btn);
+
+    auto* sep = new QFrame;
+    sep->setFrameShape(QFrame::VLine);
+    sep->setStyleSheet("QFrame { color: #d0d0d0; background: transparent; }");
+    top->addWidget(sep);
+
+    auto* open_dir_btn = new QPushButton(QStringLiteral("\u6253\u5f00\u4efb\u52a1\u76ee\u5f55"));
+    open_dir_btn->setFixedHeight(28);
+    open_dir_btn->setStyleSheet(
+        "QPushButton { background-color: #f5f5f5; color: #333; border: 1px solid #d0d0d0; "
+        "border-radius: 4px; padding: 4px 14px; font-size: 12px; }"
+        "QPushButton:hover { background-color: #e0e0e0; }");
+    connect(open_dir_btn, &QPushButton::clicked, this, [this]() {
+        QDesktopServices::openUrl(
+            QUrl::fromLocalFile(QString::fromStdString(current_dir_)));
+    });
+    top->addWidget(open_dir_btn);
+
+    auto* csv_btn = new QPushButton(QStringLiteral("\u67e5\u770bCSV\u8be6\u7ec6\u6570\u636e"));
+    csv_btn->setFixedHeight(28);
+    csv_btn->setStyleSheet(
+        "QPushButton { background-color: #f5f5f5; color: #333; border: 1px solid #d0d0d0; "
+        "border-radius: 4px; padding: 4px 14px; font-size: 12px; }"
+        "QPushButton:hover { background-color: #e0e0e0; }");
+    connect(csv_btn, &QPushButton::clicked, this, &DetailPage::showCsvView);
+    top->addWidget(csv_btn);
+
     top->addStretch();
     dl->addLayout(top);
+
+    detail_stack_ = new QStackedWidget;
 
     auto* split = new QSplitter(Qt::Horizontal);
 
@@ -79,20 +112,6 @@ void DetailPage::setupUI() {
     p1title->setStyleSheet(panelTitleStyle);
     p1title_row->addWidget(p1title);
     p1title_row->addStretch();
-    auto* detail_del_btn = new QPushButton(QStringLiteral("\u5220\u9664"));
-    detail_del_btn->setFixedHeight(26);
-    detail_del_btn->setStyleSheet(
-        "QPushButton { background-color: #e53935; color: white; border: none; "
-        "border-radius: 3px; padding: 4px 12px; font-size: 11px; }"
-        "QPushButton:hover { background-color: #c62828; }");
-    connect(detail_del_btn, &QPushButton::clicked, this, [this]() {
-        detail_video_->stop();
-        detail_orig_video_->stop();
-        QTimer::singleShot(200, this, [this]() {
-            emit deleteRequested(current_dir_);
-        });
-    });
-    p1title_row->addWidget(detail_del_btn);
     p1l->addLayout(p1title_row);
 
     detail_info_label_ = new QLabel;
@@ -105,6 +124,24 @@ void DetailPage::setupUI() {
     detail_orig_video_->setMinimumHeight(120);
     detail_orig_video_->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
     p1l->addWidget(detail_orig_video_, 1);
+
+    auto* del_row = new QHBoxLayout;
+    del_row->addStretch();
+    auto* detail_del_btn = new QPushButton(QStringLiteral("\u5220\u9664"));
+    detail_del_btn->setFixedHeight(28);
+    detail_del_btn->setStyleSheet(
+        "QPushButton { background-color: #e53935; color: white; border: none; "
+        "border-radius: 4px; padding: 4px 14px; font-size: 12px; }"
+        "QPushButton:hover { background-color: #c62828; }");
+    connect(detail_del_btn, &QPushButton::clicked, this, [this]() {
+        detail_video_->stop();
+        detail_orig_video_->stop();
+        QTimer::singleShot(200, this, [this]() {
+            emit deleteRequested(current_dir_);
+        });
+    });
+    del_row->addWidget(detail_del_btn);
+    p1l->addLayout(del_row);
     right_split->addWidget(panel1);
 
     // Panel 2: Reference face
@@ -199,7 +236,38 @@ void DetailPage::setupUI() {
     split->addWidget(right_split);
     split->setStretchFactor(0, 3);
     split->setStretchFactor(1, 1);
-    dl->addWidget(split, 1);
+    detail_stack_->addWidget(split);
+
+    // Page 1: CSV data view
+    auto* csv_page = new QWidget;
+    auto* csv_page_layout = new QVBoxLayout(csv_page);
+    csv_page_layout->setContentsMargins(0, 0, 0, 0);
+    csv_page_layout->setSpacing(6);
+
+    auto* csv_top = new QHBoxLayout;
+    auto* csv_back_btn = new QPushButton(QStringLiteral("\u2190 \u8fd4\u56de\u8be6\u60c5"));
+    csv_back_btn->setFixedHeight(28);
+    connect(csv_back_btn, &QPushButton::clicked, this, [this]() {
+        detail_stack_->setCurrentIndex(0);
+    });
+    csv_top->addWidget(csv_back_btn);
+    csv_top->addStretch();
+    csv_page_layout->addLayout(csv_top);
+
+    csv_table_ = new QTableWidget(0, 0);
+    csv_table_->setAlternatingRowColors(true);
+    csv_table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    csv_table_->setSelectionBehavior(QAbstractItemView::SelectRows);
+    csv_table_->setSelectionMode(QAbstractItemView::ExtendedSelection);
+    csv_table_->setHorizontalScrollMode(QAbstractItemView::ScrollPerPixel);
+    csv_table_->setStyleSheet(
+        "QTableWidget { gridline-color: #e0e0e0; font-size: 12px; background-color: #ffffff; }"
+        "QHeaderView::section { background-color: #f5f5f5; border: 1px solid #e0e0e0; "
+        "padding: 4px 8px; font-weight: bold; color: #333; }");
+    csv_page_layout->addWidget(csv_table_, 1);
+    detail_stack_->addWidget(csv_page);
+
+    dl->addWidget(detail_stack_, 1);
 }
 
 QImage DetailPage::matToQImage(const cv::Mat& bgr) {
@@ -213,6 +281,7 @@ void DetailPage::showTask(const std::string& output_dir, bool from_history) {
 
     from_history_ = from_history;
     current_dir_ = output_dir;
+    detail_stack_->setCurrentIndex(0);
 
     csv_headers_.clear();
     csv_rows_.clear();
@@ -358,6 +427,36 @@ void DetailPage::showTask(const std::string& output_dir, bool from_history) {
             this, &DetailPage::onDetailFrameSync);
 
     if (!tracked_path.empty()) detail_video_->play();
+}
+
+void DetailPage::showCsvView() {
+    int col_count = static_cast<int>(csv_headers_.size());
+    int row_count = static_cast<int>(csv_rows_.size());
+
+    csv_table_->clear();
+    csv_table_->setRowCount(row_count);
+    csv_table_->setColumnCount(col_count);
+
+    QStringList header_labels;
+    header_labels.reserve(col_count);
+    for (const auto& h : csv_headers_)
+        header_labels << QString::fromStdString(h);
+    csv_table_->setHorizontalHeaderLabels(header_labels);
+
+    for (int r = 0; r < row_count; ++r) {
+        const auto& row = csv_rows_[r];
+        for (int c = 0; c < col_count && c < static_cast<int>(row.size()); ++c) {
+            auto* item = new QTableWidgetItem(QString::fromStdString(row[c]));
+            item->setTextAlignment(Qt::AlignCenter);
+            csv_table_->setItem(r, c, item);
+        }
+    }
+
+    csv_table_->horizontalHeader()->setSectionResizeMode(QHeaderView::Interactive);
+    csv_table_->horizontalHeader()->setStretchLastSection(true);
+    csv_table_->verticalHeader()->setDefaultSectionSize(24);
+
+    detail_stack_->setCurrentIndex(1);
 }
 
 void DetailPage::loadCSV(const std::string& output_dir) {

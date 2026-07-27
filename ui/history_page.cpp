@@ -7,10 +7,13 @@
 #include <vector>
 
 #include <QApplication>
+#include <QDesktopServices>
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QMenu>
 #include <QPushButton>
+#include <QUrl>
 
 namespace omniface::ui {
 
@@ -23,7 +26,7 @@ HistoryPage::HistoryPage(QWidget* parent) : QWidget(parent) {
 
     auto* top = new QHBoxLayout;
     auto* back_btn = new QPushButton(QStringLiteral("\u2190 \u8fd4\u56de"));
-    back_btn->setFixedWidth(100);
+    back_btn->setFixedHeight(28);
     connect(back_btn, &QPushButton::clicked, this, &HistoryPage::backRequested);
     top->addWidget(back_btn);
     top->addStretch();
@@ -121,6 +124,18 @@ void HistoryPage::refresh() {
         card->setStyleSheet(
             "QFrame { background-color: #ffffff; border: 1px solid #e0e0e0; border-radius: 6px; }"
             "QFrame:hover { border-color: #90caf9; background-color: #fafcff; }");
+        card->setContextMenuPolicy(Qt::CustomContextMenu);
+        connect(card, &QFrame::customContextMenuRequested, this,
+                [this, dir_path = t.dir_path](const QPoint& pos) {
+                    QMenu menu;
+                    auto* open_dir_action = menu.addAction(
+                        QStringLiteral("\u67e5\u770b\u6587\u4ef6\u6240\u5728\u76ee\u5f55"));
+                    connect(open_dir_action, &QAction::triggered, this, [dir_path]() {
+                        QDesktopServices::openUrl(
+                            QUrl::fromLocalFile(QString::fromStdString(dir_path)));
+                    });
+                    menu.exec(QCursor::pos());
+                });
         auto* card_layout = new QHBoxLayout(card);
         card_layout->setContentsMargins(16, 12, 16, 12);
         card_layout->setSpacing(12);
