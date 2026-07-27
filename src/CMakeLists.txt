@@ -120,6 +120,11 @@ target_compile_features(omniface_analysis PUBLIC cxx_std_20)
 # ============================================================
 add_library(omniface_pipeline STATIC
     pipeline/config.cc
+    pipeline/decode_worker.cc
+    pipeline/module_factory.cc
+    pipeline/openface_writer.cc
+    pipeline/output_manager.cc
+    pipeline/target_tracker.cc
     pipeline/pipeline.cc
 )
 

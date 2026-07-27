@@ -14,8 +14,8 @@ public:
 
     OnnxSession(const OnnxSession&) = delete;
     OnnxSession& operator=(const OnnxSession&) = delete;
-    OnnxSession(OnnxSession&&) = default;
-    OnnxSession& operator=(OnnxSession&&) = default;
+    OnnxSession(OnnxSession&&) = delete;
+    OnnxSession& operator=(OnnxSession&&) = delete;
 
     std::vector<Ort::Value> Run(const float* data, size_t count,
                                 int64_t channels, int64_t height, int64_t width);

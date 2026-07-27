@@ -9,8 +9,8 @@ struct ModelConfig {
     std::string detector_model = "models/buffalo_sc/det_500m.onnx";
     std::string recognizer_model = "models/buffalo_sc/w600k_mbf.onnx";
     std::string reference_image;
-    int detection_threads = 2;
-    int recognition_threads = 1;
+    int detection_threads = 4;
+    int recognition_threads = 4;
     int detection_input_width = 640;
     int detection_input_height = 640;
     float min_face_area = 0.0f;
@@ -21,7 +21,7 @@ struct ModelConfig {
 
 struct ThresholdConfig {
     float match_threshold = 0.3f;
-    float detection_confidence = 0.8f;
+    float detection_confidence = 0.5f;
     float detection_nms = 0.4f;
     float tracking_high = 0.5f;
     float tracking_match = 0.4f;
@@ -32,8 +32,9 @@ struct ThresholdConfig {
 struct PipelineBehavior {
     float ema_alpha = 0.7f;
     int max_frame_width = 0;
-    int target_recheck_interval = 30;
+    int target_recheck_interval = 0;
     bool skip_analysis = false;
+    bool headless = false;
 };
 
 struct VideoSourceConfig {
@@ -42,7 +43,7 @@ struct VideoSourceConfig {
 };
 
 struct LogConfig {
-    std::string level = "info";
+    std::string level = "debug";
 };
 
 struct PipelineConfig {
@@ -51,6 +52,7 @@ struct PipelineConfig {
     PipelineBehavior behavior;
     VideoSourceConfig video;
     LogConfig log;
+    std::string output_base_dir;
 };
 
 PipelineConfig LoadPipelineConfig(const std::string& yaml_path);

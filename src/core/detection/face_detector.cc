@@ -4,6 +4,8 @@
 #include <stdexcept>
 #include <vector>
 
+#include <spdlog/spdlog.h>
+
 #include <onnxruntime_cxx_api.h>
 #include <opencv2/dnn.hpp>
 #include <opencv2/imgproc.hpp>
@@ -152,7 +154,8 @@ std::vector<BoundingBox> FaceDetector::Detect(const cv::Mat& bgr_image) {
     std::vector<Ort::Value> outputs;
     try {
         outputs = impl_->session_.Run(blob, 3, cfg.input_height, cfg.input_width);
-    } catch (const std::exception&) {
+    } catch (const std::exception& e) {
+        spdlog::error("FaceDetector ONNX inference failed: {}", e.what());
         return {};
     }
 

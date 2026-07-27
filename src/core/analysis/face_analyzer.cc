@@ -265,6 +265,8 @@ public:
         return result;
     }
 
+    bool IsValid() const { return clnf_ != nullptr; }
+
     void Reset() {
         if (clnf_) clnf_->Reset();
         if (face_analyser_) face_analyser_->Reset();
@@ -294,6 +296,10 @@ FaceAnalyzer::FaceAnalyzer(const Config& cfg)
     : impl_(std::make_unique<Impl>(cfg)) {}
 
 FaceAnalyzer::~FaceAnalyzer() = default;
+
+bool FaceAnalyzer::IsValid() const {
+    return impl_->IsValid();
+}
 
 FaceAnalysisResult FaceAnalyzer::Analyze(cv::Mat& frame,
                                          const cv::Rect_<float>& bbox) {

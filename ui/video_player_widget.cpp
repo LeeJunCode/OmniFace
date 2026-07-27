@@ -50,6 +50,7 @@ VideoPlayerWidget::VideoPlayerWidget(QWidget* parent)
 }
 
 VideoPlayerWidget::~VideoPlayerWidget() {
+    // Safe: class is final, stop() only accesses members that are still alive
     stop();
 }
 

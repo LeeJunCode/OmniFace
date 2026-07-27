@@ -25,6 +25,8 @@ public:
 
     FaceAnalysisResult Analyze(cv::Mat& frame, const cv::Rect_<float>& bbox);
 
+    bool IsValid() const;
+
     cv::Mat GetAlignedFace() const;
 
     void GetHOG(cv::Mat_<double>& hog, int& num_rows, int& num_cols) const;

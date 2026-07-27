@@ -3,6 +3,8 @@
 #include <onnxruntime_cxx_api.h>
 #include <opencv2/dnn.hpp>
 #include <opencv2/imgproc.hpp>
+
+#include <spdlog/spdlog.h>
 #include <stdexcept>
 
 #include "omniface/core/detail/onnx_session.h"
@@ -63,7 +65,7 @@ std::vector<float> Preprocess(const cv::Mat& bgr_image, const FaceRecognizer::Co
 }  // namespace
 
 FaceEmbedding FaceRecognizer::Extract(const cv::Mat& aligned_face_bgr) {
-    if (aligned_face_bgr.empty()) {
+    if (aligned_face_bgr.empty() || aligned_face_bgr.channels() != 3) {
         return {};
     }
 
@@ -84,7 +86,8 @@ FaceEmbedding FaceRecognizer::Extract(const cv::Mat& aligned_face_bgr) {
 
         std::copy_n(output_data, dim, embedding.features.begin());
         embedding.valid = true;
-    } catch (const std::exception&) {
+    } catch (const std::exception& e) {
+        spdlog::error("FaceRecognizer ONNX inference failed: {}", e.what());
     }
     return embedding;
 }
@@ -155,7 +158,8 @@ std::vector<FaceEmbedding> FaceRecognizer::ExtractBatch(
             std::copy_n(output_data + i * dim, dim, results[i].features.begin());
             results[i].valid = true;
         }
-    } catch (const std::exception&) {
+    } catch (const std::exception& e) {
+        spdlog::error("FaceRecognizer ONNX batch inference failed: {}", e.what());
     }
     return results;
 }

@@ -16,8 +16,24 @@ struct BoundingBox {
     float confidence;
     std::array<float, 10> keypoints{};
 
-    float operator[](int i) const { return (&x1)[i]; }
-    float& operator[](int i) { return (&x1)[i]; }
+    float operator[](int i) const {
+        switch (i) {
+        case 0: return x1;
+        case 1: return y1;
+        case 2: return x2;
+        case 3: return y2;
+        default: return 0.0f;
+        }
+    }
+    float& operator[](int i) {
+        switch (i) {
+        case 0: return x1;
+        case 1: return y1;
+        case 2: return x2;
+        case 3: return y2;
+        default: return x1;
+        }
+    }
 };
 
 // 512维人脸特征向量 (ArcFace/InsightFace标准输出维度)，valid标识是否成功提取

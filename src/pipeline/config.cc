@@ -1,6 +1,7 @@
 #include "omniface/pipeline/config.h"
 
 #include <yaml-cpp/yaml.h>
+#include <algorithm>
 #include <fstream>
 #include <stdexcept>
 
@@ -86,6 +87,8 @@ PipelineConfig LoadPipelineConfig(const std::string& yaml_path) {
             SafeGet<int>(b, "max_frame_width", cfg.behavior.max_frame_width);
         cfg.behavior.target_recheck_interval =
             SafeGet<int>(b, "target_recheck_interval", cfg.behavior.target_recheck_interval);
+        cfg.behavior.headless =
+            SafeGet<bool>(b, "headless", cfg.behavior.headless);
     }
 
     if (auto v = SafeSub(root, "video")) {
@@ -96,6 +99,27 @@ PipelineConfig LoadPipelineConfig(const std::string& yaml_path) {
     if (auto l = SafeSub(root, "log")) {
         cfg.log.level = SafeGet<std::string>(l, "level", cfg.log.level);
     }
+
+    // Sanitize: clamp values to valid ranges
+    cfg.model.detection_threads = std::clamp(cfg.model.detection_threads, 1, 32);
+    cfg.model.recognition_threads = std::clamp(cfg.model.recognition_threads, 1, 32);
+    cfg.model.detection_input_width = std::max(cfg.model.detection_input_width, 64);
+    cfg.model.detection_input_height = std::max(cfg.model.detection_input_height, 64);
+    cfg.model.min_face_area = std::max(cfg.model.min_face_area, 0.0f);
+    cfg.model.recognition_confidence_threshold = std::clamp(cfg.model.recognition_confidence_threshold, 0.0f, 1.0f);
+    cfg.model.recognition_iou = std::clamp(cfg.model.recognition_iou, 0.0f, 1.0f);
+
+    cfg.thresholds.match_threshold = std::clamp(cfg.thresholds.match_threshold, 0.0f, 1.0f);
+    cfg.thresholds.detection_confidence = std::clamp(cfg.thresholds.detection_confidence, 0.0f, 1.0f);
+    cfg.thresholds.detection_nms = std::clamp(cfg.thresholds.detection_nms, 0.0f, 1.0f);
+    cfg.thresholds.tracking_high = std::clamp(cfg.thresholds.tracking_high, 0.0f, 1.0f);
+    cfg.thresholds.tracking_match = std::clamp(cfg.thresholds.tracking_match, 0.0f, 1.0f);
+    cfg.thresholds.tracking_match_second = std::clamp(cfg.thresholds.tracking_match_second, 0.0f, 1.0f);
+    cfg.thresholds.tracking_new = std::clamp(cfg.thresholds.tracking_new, 0.0f, 1.0f);
+
+    cfg.behavior.ema_alpha = std::clamp(cfg.behavior.ema_alpha, 0.0f, 1.0f);
+    cfg.behavior.max_frame_width = std::max(cfg.behavior.max_frame_width, 0);
+    cfg.behavior.target_recheck_interval = std::clamp(cfg.behavior.target_recheck_interval, 1, 300);
 
     return cfg;
 }
@@ -126,6 +150,7 @@ void SavePipelineConfig(const std::string& yaml_path, const PipelineConfig& cfg)
     root["behavior"]["ema_alpha"] = cfg.behavior.ema_alpha;
     root["behavior"]["max_frame_width"] = cfg.behavior.max_frame_width;
     root["behavior"]["target_recheck_interval"] = cfg.behavior.target_recheck_interval;
+    root["behavior"]["headless"] = cfg.behavior.headless;
 
     root["video"]["input_path"] = cfg.video.input_path;
     root["video"]["output_path"] = cfg.video.output_path;

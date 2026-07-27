@@ -1,12 +1,27 @@
 add_library(omniface_ui STATIC
     main_window.cpp
+    process_page.cpp
+    detail_page.cpp
+    history_page.cpp
+    saved_media_page.cpp
+    reference_face_service.cpp
     video_player_widget.cpp
     processing_dashboard.cpp
     au_panel.cpp
+    settings_dialog.cpp
     ${PROJECT_SOURCE_DIR}/include/omniface/ui/main_window.h
+    ${PROJECT_SOURCE_DIR}/include/omniface/ui/process_page.h
+    ${PROJECT_SOURCE_DIR}/include/omniface/ui/detail_page.h
+    ${PROJECT_SOURCE_DIR}/include/omniface/ui/history_page.h
+    ${PROJECT_SOURCE_DIR}/include/omniface/ui/saved_media_page.h
+    ${PROJECT_SOURCE_DIR}/include/omniface/ui/reference_face_service.h
+    ${PROJECT_SOURCE_DIR}/include/omniface/ui/app_state.h
+    ${PROJECT_SOURCE_DIR}/include/omniface/ui/stylesheet.h
     ${PROJECT_SOURCE_DIR}/include/omniface/ui/video_player_widget.h
     ${PROJECT_SOURCE_DIR}/include/omniface/ui/processing_dashboard.h
     ${PROJECT_SOURCE_DIR}/include/omniface/ui/au_panel.h
+    ${PROJECT_SOURCE_DIR}/include/omniface/ui/image_utils.h
+    ${PROJECT_SOURCE_DIR}/include/omniface/ui/settings_dialog.h
 )
 
 target_include_directories(omniface_ui PUBLIC
