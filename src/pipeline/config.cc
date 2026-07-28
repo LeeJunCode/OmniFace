@@ -137,6 +137,40 @@ PipelineConfig LoadPipelineConfig(const std::string& yaml_path) {
         cfg.log.level = SafeGet<std::string>(l, "level", cfg.log.level);
     }
 
+    cfg.analysis_backend = AnalysisBackendFromString(
+        SafeGet<std::string>(root, "analysis_backend", "openface"));
+
+    if (auto onx = SafeSub(root, "onnx")) {
+        cfg.onnx.enable_pose =
+            SafeGet<bool>(onx, "enable_pose", cfg.onnx.enable_pose);
+        cfg.onnx.enable_gaze =
+            SafeGet<bool>(onx, "enable_gaze", cfg.onnx.enable_gaze);
+        cfg.onnx.enable_au =
+            SafeGet<bool>(onx, "enable_au", cfg.onnx.enable_au);
+        cfg.onnx.landmark_model =
+            SafeGet<std::string>(onx, "landmark_model", cfg.onnx.landmark_model);
+        cfg.onnx.canonical_model =
+            SafeGet<std::string>(onx, "canonical_model", cfg.onnx.canonical_model);
+        cfg.onnx.gaze_model =
+            SafeGet<std::string>(onx, "gaze_model", cfg.onnx.gaze_model);
+        cfg.onnx.au_model =
+            SafeGet<std::string>(onx, "au_model", cfg.onnx.au_model);
+        cfg.onnx.analysis_threads =
+            SafeGet<int>(onx, "analysis_threads", cfg.onnx.analysis_threads);
+        cfg.onnx.margin =
+            SafeGet<float>(onx, "margin", cfg.onnx.margin);
+        cfg.onnx.score_threshold =
+            SafeGet<float>(onx, "score_threshold", cfg.onnx.score_threshold);
+        cfg.onnx.realtime_display =
+            SafeGet<bool>(onx, "realtime_display", cfg.onnx.realtime_display);
+        cfg.onnx.draw_landmarks =
+            SafeGet<bool>(onx, "draw_landmarks", cfg.onnx.draw_landmarks);
+        cfg.onnx.draw_face_wireframe =
+            SafeGet<bool>(onx, "draw_face_wireframe", cfg.onnx.draw_face_wireframe);
+        cfg.onnx.draw_face_normal =
+            SafeGet<bool>(onx, "draw_face_normal", cfg.onnx.draw_face_normal);
+    }
+
     // Sanitize: clamp values to valid ranges
     cfg.model.detection_threads = std::clamp(cfg.model.detection_threads, 1, 32);
     cfg.model.recognition_threads = std::clamp(cfg.model.recognition_threads, 1, 32);
@@ -157,6 +191,10 @@ PipelineConfig LoadPipelineConfig(const std::string& yaml_path) {
     cfg.behavior.ema_alpha = std::clamp(cfg.behavior.ema_alpha, 0.0f, 1.0f);
     cfg.behavior.max_frame_width = std::max(cfg.behavior.max_frame_width, 0);
     cfg.behavior.target_recheck_interval = std::clamp(cfg.behavior.target_recheck_interval, 1, 300);
+
+    cfg.onnx.analysis_threads = std::clamp(cfg.onnx.analysis_threads, 1, 32);
+    cfg.onnx.margin = std::clamp(cfg.onnx.margin, 0.0f, 1.0f);
+    cfg.onnx.score_threshold = std::clamp(cfg.onnx.score_threshold, 0.0f, 1.0f);
 
     return cfg;
 }
@@ -230,6 +268,26 @@ void SavePipelineConfig(const std::string& yaml_path, const PipelineConfig& cfg)
     root["video"]["output_path"] = cfg.video.output_path;
 
     root["log"]["level"] = cfg.log.level;
+
+    root["analysis_backend"] = AnalysisBackendToString(cfg.analysis_backend);
+
+    {
+        const auto& onx = cfg.onnx;
+        root["onnx"]["enable_pose"] = onx.enable_pose;
+        root["onnx"]["enable_gaze"] = onx.enable_gaze;
+        root["onnx"]["enable_au"] = onx.enable_au;
+        root["onnx"]["landmark_model"] = onx.landmark_model;
+        root["onnx"]["canonical_model"] = onx.canonical_model;
+        root["onnx"]["gaze_model"] = onx.gaze_model;
+        root["onnx"]["au_model"] = onx.au_model;
+        root["onnx"]["analysis_threads"] = onx.analysis_threads;
+        root["onnx"]["margin"] = onx.margin;
+        root["onnx"]["score_threshold"] = onx.score_threshold;
+        root["onnx"]["realtime_display"] = onx.realtime_display;
+        root["onnx"]["draw_landmarks"] = onx.draw_landmarks;
+        root["onnx"]["draw_face_wireframe"] = onx.draw_face_wireframe;
+        root["onnx"]["draw_face_normal"] = onx.draw_face_normal;
+    }
 
     std::ofstream fout(yaml_path);
     if (!fout.is_open()) {

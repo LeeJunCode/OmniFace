@@ -49,6 +49,7 @@ private:
     QLabel* detail_ref_detected_ = nullptr;
     QLabel* detail_info_label_ = nullptr;
     QLabel* detail_face_thumb_ = nullptr;
+    QLabel* align_caption_ = nullptr;
     QLabel* detail_data_label_ = nullptr;
 
     QStackedWidget* detail_stack_ = nullptr;
@@ -60,6 +61,7 @@ private:
     std::vector<std::string> aligned_paths_;
     double tracked_fps_ = 0.0;
     bool from_history_ = false;
+    bool is_onnx_csv_ = false;
     std::string current_dir_;
 
     QImage qt_image_cache_;

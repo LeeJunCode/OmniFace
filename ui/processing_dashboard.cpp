@@ -24,6 +24,9 @@ void FpsPanel::updateData(const DashboardData& data) {
             smooth_ana_ = kAlpha * data.analysis_fps + (1.0 - kAlpha) * smooth_ana_;
     }
     analysis_running_ = data.analysis_running;
+    analysis_label_ = data.analysis_label.empty()
+        ? QStringLiteral("OpenFace")
+        : QString::fromStdString(data.analysis_label);
     if (!analysis_running_) smooth_ana_ = 0.0;  // 未运行时清零
     update();
 }
@@ -47,7 +50,7 @@ void FpsPanel::paintEvent(QPaintEvent* /*event*/) {
     Block blocks[] = {
         {QStringLiteral("\u7ba1\u7ebf"),    smooth_pipe_, fpsColor(smooth_pipe_)},
         {QStringLiteral("\u4eba\u8138\u8bc6\u522b"), smooth_rec_,  fpsColor(smooth_rec_)},
-        {QStringLiteral("OpenFace"), smooth_ana_, analysis_running_ ? fpsColor(smooth_ana_) : QColor(0xb0, 0xb0, 0xb0)},
+        {analysis_label_, smooth_ana_, analysis_running_ ? fpsColor(smooth_ana_) : QColor(0xb0, 0xb0, 0xb0)},
     };
 
     int bw = width() / 3;

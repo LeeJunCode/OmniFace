@@ -8,6 +8,7 @@ add_library(omniface_ui STATIC
     video_player_widget.cpp
     processing_dashboard.cpp
     au_panel.cpp
+    onnx_analysis_panel.cpp
     settings_dialog.cpp
     ${PROJECT_SOURCE_DIR}/include/omniface/ui/main_window.h
     ${PROJECT_SOURCE_DIR}/include/omniface/ui/process_page.h
@@ -22,6 +23,7 @@ add_library(omniface_ui STATIC
     ${PROJECT_SOURCE_DIR}/include/omniface/ui/au_panel.h
     ${PROJECT_SOURCE_DIR}/include/omniface/ui/image_utils.h
     ${PROJECT_SOURCE_DIR}/include/omniface/ui/settings_dialog.h
+    ${PROJECT_SOURCE_DIR}/include/omniface/ui/onnx_analysis_panel.h
 )
 
 target_include_directories(omniface_ui PUBLIC

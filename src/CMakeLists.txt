@@ -116,6 +116,29 @@ target_link_libraries(omniface_analysis PUBLIC
 target_compile_features(omniface_analysis PUBLIC cxx_std_20)
 
 # ============================================================
+# ONNX Analysis module — PoseEstimator + PoseVisualizer + OnnxFaceAnalyzer
+# ============================================================
+add_library(omniface_analysis_onnx STATIC
+    core/analysis/onnx/pose_estimator.cc
+    core/analysis/onnx/pose_visualizer.cc
+    core/analysis/onnx/onnx_face_analyzer.cc
+)
+
+target_include_directories(omniface_analysis_onnx PUBLIC
+    ${PROJECT_SOURCE_DIR}/include
+)
+
+target_link_libraries(omniface_analysis_onnx PUBLIC
+    omniface_detail
+    spdlog::spdlog
+    opencv_core
+    opencv_imgproc
+    opencv_calib3d
+)
+
+target_compile_features(omniface_analysis_onnx PUBLIC cxx_std_20)
+
+# ============================================================
 # Pipeline module — config + orchestration
 # ============================================================
 add_library(omniface_pipeline STATIC
@@ -137,6 +160,7 @@ target_link_libraries(omniface_pipeline PUBLIC
     omniface_tracking
     omniface_recognition
     omniface_analysis
+    omniface_analysis_onnx
     yaml-cpp::yaml-cpp
     spdlog::spdlog
     opencv_core

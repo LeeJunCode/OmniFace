@@ -62,7 +62,8 @@ PipelineModules CreateModules(const PipelineConfig& config) {
     }
 
     if (!config.model.openface_model_dir.empty()
-        && !config.behavior.skip_analysis) {
+        && !config.behavior.skip_analysis
+        && config.analysis_backend == AnalysisBackend::kOpenFace) {
         analysis::OpenFaceProfile profile = analysis::ParseProfile(config.openface.profile);
         analysis::OpenFaceParams of_params = analysis::MakeProfileParams(
             profile, config.model.openface_model_dir);
@@ -73,6 +74,23 @@ PipelineModules CreateModules(const PipelineConfig& config) {
         fa_cfg.model_dir = config.model.openface_model_dir;
         fa_cfg.openface  = std::move(of_params);
         mods.face_analyzer = std::make_unique<analysis::FaceAnalyzer>(fa_cfg);
+    }
+
+    if (config.analysis_backend == AnalysisBackend::kOnnx) {
+        analysis::onnx::OnnxAnalyzerConfig onnx_cfg;
+        onnx_cfg.enable_pose = config.onnx.enable_pose;
+        onnx_cfg.enable_gaze = config.onnx.enable_gaze;
+        onnx_cfg.enable_au   = config.onnx.enable_au;
+        onnx_cfg.landmark_model = config.onnx.landmark_model;
+        onnx_cfg.canonical_model = config.onnx.canonical_model;
+        onnx_cfg.gaze_model = config.onnx.gaze_model;
+        onnx_cfg.au_model   = config.onnx.au_model;
+        onnx_cfg.analysis_threads = config.onnx.analysis_threads;
+        onnx_cfg.margin           = config.onnx.margin;
+        onnx_cfg.score_threshold  = config.onnx.score_threshold;
+
+        mods.onnx_analyzer = std::make_unique<analysis::onnx::OnnxFaceAnalyzer>(onnx_cfg);
+        spdlog::info("ONNX analysis backend activated (pose={})", config.onnx.enable_pose);
     }
 
     return mods;

@@ -3,6 +3,7 @@
 #include <QComboBox>
 #include <QDialog>
 #include <QDoubleSpinBox>
+#include <QLineEdit>
 #include <QSpinBox>
 
 #include "omniface/pipeline/config.h"
@@ -43,6 +44,17 @@ private:
 
     // OpenFace
     QComboBox* of_profile_ = nullptr;
+
+    // Backend
+    QComboBox* analysis_backend_ = nullptr;
+
+    // ONNX
+    QSpinBox* onnx_threads_ = nullptr;
+    QDoubleSpinBox* onnx_margin_ = nullptr;
+    QDoubleSpinBox* onnx_score_threshold_ = nullptr;
+    QComboBox* onnx_draw_landmarks_ = nullptr;
+    QComboBox* onnx_draw_wireframe_ = nullptr;
+    QComboBox* onnx_draw_normal_ = nullptr;
 };
 
 }  // namespace omniface::ui

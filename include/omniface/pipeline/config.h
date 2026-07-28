@@ -6,6 +6,23 @@
 
 namespace omniface {
 
+enum class AnalysisBackend { kOpenFace, kOnnx, kNone };
+
+inline const char* AnalysisBackendToString(AnalysisBackend b) {
+    switch (b) {
+    case AnalysisBackend::kOpenFace: return "openface";
+    case AnalysisBackend::kOnnx:     return "onnx";
+    case AnalysisBackend::kNone:     return "none";
+    }
+    return "openface";
+}
+
+inline AnalysisBackend AnalysisBackendFromString(const std::string& s) {
+    if (s == "onnx")     return AnalysisBackend::kOnnx;
+    if (s == "none")     return AnalysisBackend::kNone;
+    return AnalysisBackend::kOpenFace;
+}
+
 struct ModelConfig {
     std::string detector_model = "models/buffalo_sc/det_500m.onnx";
     std::string recognizer_model = "models/buffalo_sc/w600k_mbf.onnx";
@@ -70,6 +87,24 @@ struct OpenFaceConfig {
     int    limit_pose             = -1;
 };
 
+// ---- ONNX analysis configuration (MediaPipe FaceMesh + more) ------------------
+struct OnnxAnalysisConfig {
+    bool enable_pose = true;
+    bool enable_gaze = false;
+    bool enable_au = false;
+    std::string landmark_model = "models/mediapipe/face_mesh_Nx3x192x192_post.onnx";
+    std::string canonical_model = "models/mediapipe/canonical_face_model.obj";
+    std::string gaze_model;
+    std::string au_model;
+    int analysis_threads = 1;
+    float margin = 0.25f;
+    float score_threshold = 0.95f;
+    bool realtime_display = true;
+    bool draw_landmarks = true;
+    bool draw_face_wireframe = true;
+    bool draw_face_normal = true;
+};
+
 struct PipelineConfig {
     ModelConfig model;
     ThresholdConfig thresholds;
@@ -77,6 +112,8 @@ struct PipelineConfig {
     VideoSourceConfig video;
     LogConfig log;
     OpenFaceConfig openface;
+    OnnxAnalysisConfig onnx;
+    AnalysisBackend analysis_backend = AnalysisBackend::kOpenFace;
     std::string output_base_dir;
 };
 

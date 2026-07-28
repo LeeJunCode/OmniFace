@@ -8,6 +8,7 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QPushButton>
+#include <QStackedWidget>
 #include <QTabWidget>
 #include <QVBoxLayout>
 
@@ -46,6 +47,15 @@ QLabel* WarnLabel(const QString& text) {
     auto* label = new QLabel(text);
     label->setStyleSheet("color: #e65100; font-size: 11px; font-weight: bold; padding-left: 4px;");
     return label;
+}
+
+QComboBox* makeBoolCombo(bool val) {
+    auto* box = new QComboBox;
+    box->addItem(QStringLiteral("\u5173\u95ed"), false);
+    box->addItem(QStringLiteral("\u5f00\u542f"), true);
+    box->setCurrentIndex(val ? 1 : 0);
+    box->setMinimumWidth(120);
+    return box;
 }
 
 }  // namespace
@@ -144,6 +154,35 @@ void SettingsDialog::setupUI() {
     connect(recognition_threads_, QOverload<int>::of(&QSpinBox::valueChanged),
             this, checkThreads);
     checkThreads();
+
+    // ===== 分析后端选择 =====
+    auto* backend_container = new QHBoxLayout;
+    auto* backend_label = new QLabel(QStringLiteral("\u5206\u6790\u540e\u7aef\uff1a"));
+    backend_label->setStyleSheet("font-weight: bold; font-size: 13px; color: #1565c0;");
+
+    analysis_backend_ = new QComboBox;
+    analysis_backend_->addItem(QStringLiteral("OpenFace (CE-CLM)"), "openface");
+    analysis_backend_->addItem(QStringLiteral("ONNX (MediaPipe)"), "onnx");
+    analysis_backend_->addItem(QStringLiteral("\u65e0"), "none");
+    analysis_backend_->setCurrentIndex(
+        analysis_backend_->findData(
+            AnalysisBackendToString(config_.analysis_backend)));
+    analysis_backend_->setMinimumWidth(200);
+    backend_container->addWidget(backend_label);
+    backend_container->addWidget(analysis_backend_);
+    backend_container->addStretch();
+
+    // Analysis config stack
+    auto* config_stack = new QStackedWidget;
+
+    auto syncAnalysisPage = [config_stack, this]() {
+        QString backend = analysis_backend_->currentData().toString();
+        if (backend == "onnx") config_stack->setCurrentIndex(1);
+        else if (backend == "none") config_stack->setCurrentIndex(2);
+        else config_stack->setCurrentIndex(0);
+    };
+    connect(analysis_backend_, QOverload<int>::of(&QComboBox::currentIndexChanged),
+            this, syncAnalysisPage);
 
     // ===== 高级参数 =====
     auto* adv_group = new QGroupBox(QStringLiteral("\u9ad8\u7ea7\u53c2\u6570"));
@@ -268,6 +307,55 @@ void SettingsDialog::setupUI() {
             this, updateOfHint);
     updateOfHint();
 
+    // --- Page 0: OpenFace (already built as of_group above) ---
+    config_stack->addWidget(of_group);
+
+    // --- Page 1: ONNX config ---
+    auto* onnx_page = new QWidget;
+    auto* onnx_form = new QFormLayout(onnx_page);
+    onnx_form->setContentsMargins(0, 8, 0, 0);
+    onnx_form->setSpacing(6);
+
+    auto addOnnxRow = [&](const QString& label, QWidget* widget, const QString& hint) {
+        auto* row = new QHBoxLayout;
+        row->setContentsMargins(0, 2, 0, 2);
+        row->addWidget(widget);
+        if (!hint.isEmpty()) row->addWidget(HintLabel(hint));
+        row->addStretch();
+        onnx_form->addRow(new QLabel(label), row);
+    };
+
+    onnx_threads_ = MakeIntBox(1, 32, config_.onnx.analysis_threads);
+    addOnnxRow(QStringLiteral("\u5206\u6790\u7ebf\u7a0b\u6570"), onnx_threads_,
+               QStringLiteral("ONNX\u63a8\u7406\u7ebf\u7a0b\u6570"));
+
+    onnx_margin_ = MakeDoubleBox(0.0, 1.0, config_.onnx.margin, 2);
+    addOnnxRow(QStringLiteral("\u8fb9\u6846\u6269\u5c55\u6bd4\u4f8b"), onnx_margin_,
+               QStringLiteral("\u4eba\u8138\u88c1\u526a\u8fb9\u6846\u6269\u5c55\u6bd4\u4f8b"));
+
+    onnx_score_threshold_ = MakeDoubleBox(0.0, 1.0, config_.onnx.score_threshold, 2);
+    addOnnxRow(QStringLiteral("\u7f6e\u4fe1\u5ea6\u9608\u503c"), onnx_score_threshold_,
+               QStringLiteral("\u4ec5\u663e\u793a\u9ad8\u4e8e\u6b64\u503c\u7684\u68c0\u6d4b\u7ed3\u679c"));
+
+    onnx_draw_landmarks_ = makeBoolCombo(config_.onnx.draw_landmarks);
+    addOnnxRow(QStringLiteral("\u663e\u793a\u5173\u952e\u70b9 (468)"), onnx_draw_landmarks_,
+               QStringLiteral("\u5728\u89c6\u9891\u5e27\u4e0a\u7ed8\u5236\u9762\u90e8\u7f51\u683c\u5173\u952e\u70b9"));
+
+    onnx_draw_wireframe_ = makeBoolCombo(config_.onnx.draw_face_wireframe);
+    addOnnxRow(QStringLiteral("\u663e\u793a\u7ebf\u6846\u6a21\u578b"), onnx_draw_wireframe_,
+               QStringLiteral("\u7ed8\u5236 3D \u4eba\u8138\u7ebf\u6846\u6295\u5f71"));
+
+    onnx_draw_normal_ = makeBoolCombo(config_.onnx.draw_face_normal);
+    addOnnxRow(QStringLiteral("\u663e\u793a\u6cd5\u7ebf\u7bad\u5934"), onnx_draw_normal_,
+               QStringLiteral("\u7ed8\u5236\u9f3b\u5c16\u6cd5\u7ebf\u65b9\u5411\u7bad\u5934"));
+
+    config_stack->addWidget(onnx_page);
+
+    // --- Page 2: None (empty) ---
+    config_stack->addWidget(new QWidget);
+
+    syncAnalysisPage();
+
     // ===== Assemble tabs =====
     auto* tabs = new QTabWidget;
     tabs->setStyleSheet(
@@ -281,7 +369,8 @@ void SettingsDialog::setupUI() {
         "font-weight: bold; color: #1565c0; }");
     tabs->addTab(core_group, QStringLiteral("\u6838\u5fc3\u53c2\u6570"));
     tabs->addTab(adv_group, QStringLiteral("\u9ad8\u7ea7\u53c2\u6570"));
-    tabs->addTab(of_group, QStringLiteral("OpenFace"));
+    tabs->addTab(config_stack, QStringLiteral("\u5206\u6790"));
+    root->addLayout(backend_container);
     root->addWidget(tabs);
 
     // ===== 按钮 =====
@@ -317,6 +406,18 @@ void SettingsDialog::setupUI() {
         int of_prof_idx = of_profile_->findData(
             QString::fromStdString(defaults.openface.profile));
         of_profile_->setCurrentIndex(std::max(0, of_prof_idx));
+
+        // ONNX defaults
+        onnx_threads_->setValue(defaults.onnx.analysis_threads);
+        onnx_margin_->setValue(defaults.onnx.margin);
+        onnx_score_threshold_->setValue(defaults.onnx.score_threshold);
+        onnx_draw_landmarks_->setCurrentIndex(defaults.onnx.draw_landmarks ? 1 : 0);
+        onnx_draw_wireframe_->setCurrentIndex(defaults.onnx.draw_face_wireframe ? 1 : 0);
+        onnx_draw_normal_->setCurrentIndex(defaults.onnx.draw_face_normal ? 1 : 0);
+
+        analysis_backend_->setCurrentIndex(
+            analysis_backend_->findData(
+                AnalysisBackendToString(defaults.analysis_backend)));
     });
     btn_row->addWidget(reset_btn);
     btn_row->addStretch();
@@ -366,6 +467,18 @@ void SettingsDialog::saveTo(PipelineConfig& cfg) const {
 
     // OpenFace
     cfg.openface.profile = of_profile_->currentData().toString().toStdString();
+
+    // Backend
+    cfg.analysis_backend = AnalysisBackendFromString(
+        analysis_backend_->currentData().toString().toStdString());
+
+    // ONNX
+    cfg.onnx.analysis_threads = onnx_threads_->value();
+    cfg.onnx.margin = static_cast<float>(onnx_margin_->value());
+    cfg.onnx.score_threshold = static_cast<float>(onnx_score_threshold_->value());
+    cfg.onnx.draw_landmarks = onnx_draw_landmarks_->currentData().toBool();
+    cfg.onnx.draw_face_wireframe = onnx_draw_wireframe_->currentData().toBool();
+    cfg.onnx.draw_face_normal = onnx_draw_normal_->currentData().toBool();
 }
 
 PipelineConfig SettingsDialog::getConfig() const {

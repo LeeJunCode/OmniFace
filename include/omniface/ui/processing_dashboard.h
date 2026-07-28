@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <string>
 
 #include <QString>
 #include <QWidget>
@@ -17,7 +18,9 @@ struct DashboardData {
     int64_t face_detections = 0;
     int64_t target_matches = 0;
     int64_t openface_analyses = 0;
+    int64_t onnx_analyses = 0;
     int64_t elapsed_seconds = 0;
+    std::string analysis_label;
 };
 
 class FpsPanel : public QWidget {
@@ -37,6 +40,7 @@ private:
     double smooth_rec_ = 0.0;
     double smooth_ana_ = 0.0;
     bool analysis_running_ = false;
+    QString analysis_label_;
 
     static constexpr double kAlpha = 0.3;
 };

@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <atomic>
 #include <chrono>
+#include <fstream>
 #include <thread>
 
 #include <opencv2/highgui.hpp>
@@ -11,6 +12,7 @@
 
 #include <spdlog/spdlog.h>
 
+#include "omniface/core/analysis/onnx/pose_visualizer.h"
 #include "omniface/pipeline/decode_worker.h"
 #include "omniface/pipeline/module_factory.h"
 #include "omniface/pipeline/openface_writer.h"
@@ -64,6 +66,8 @@ public:
     TargetTracker target_tracker_;
 
     std::atomic<bool> stop_requested_{false};
+    std::ofstream onnx_csv_;
+    bool onnx_csv_initialized_ = false;
 
     Impl(const PipelineConfig& cfg, FrameCallback callback)
         : config_(cfg)
@@ -121,6 +125,51 @@ public:
 
         auto t_recognition_done = std::chrono::steady_clock::now();
 
+        // ONNX analysis — only process the target face (skipped in recognize-only mode)
+        if (!config_.behavior.skip_analysis && modules_.onnx_analyzer
+            && target_tracker_.HasTarget()) {
+            cv::Rect_<float> target_bbox_onnx = target_tracker_.GetTargetBbox();
+            if (target_bbox_onnx.width > 0 && target_bbox_onnx.height > 0) {
+                BoundingBox bbox;
+                bbox.x1 = target_bbox_onnx.x;
+                bbox.y1 = target_bbox_onnx.y;
+                bbox.x2 = target_bbox_onnx.x + target_bbox_onnx.width;
+                bbox.y2 = target_bbox_onnx.y + target_bbox_onnx.height;
+                bbox.confidence = 1.0f;
+                auto r = modules_.onnx_analyzer->Analyze(
+                    frame, bbox, target_tracker_.GetTargetTrackId());
+
+                if (r.pose_valid) {
+                    if (!onnx_csv_initialized_) {
+                        std::string csv_path = output_mgr_.GetOutputDir() +
+                                               "/onnx_analysis.csv";
+                        onnx_csv_.open(csv_path);
+                        if (onnx_csv_.is_open()) {
+                            onnx_csv_ << "frame,timestamp,pitch,yaw,roll";
+                            for (int i = 0; i < 468; ++i)
+                                onnx_csv_ << ",x_" << i << ",y_" << i;
+                            onnx_csv_ << "\n";
+                            onnx_csv_initialized_ = true;
+                            spdlog::info("ONNX CSV output: {}", csv_path);
+                        }
+                    }
+                    if (onnx_csv_.is_open()) {
+                        double ts = (decoder_.GetFps() > 0.0)
+                            ? (frame_index - 1) / decoder_.GetFps() : 0.0;
+                        onnx_csv_ << frame_index << "," << ts << ","
+                                  << r.pose.pose.pitch << ","
+                                  << r.pose.pose.yaw << ","
+                                  << r.pose.pose.roll;
+                        for (const auto& lm : r.pose.landmarks)
+                            onnx_csv_ << "," << lm.x << "," << lm.y;
+                        onnx_csv_ << "\n";
+                    }
+                }
+
+                result.onnx_results.push_back(std::move(r));
+            }
+        }
+
         // OpenFace analysis for confirmed target
         if (modules_.face_analyzer && modules_.face_analyzer->IsValid()
             && target_tracker_.HasTarget()) {
@@ -143,6 +192,36 @@ public:
 
         auto t_analysis_done = std::chrono::steady_clock::now();
 
+        // Draw ONNX analysis results on frame
+        if (config_.analysis_backend == AnalysisBackend::kOnnx
+            && config_.onnx.realtime_display
+            && modules_.onnx_analyzer && modules_.onnx_analyzer->has_pose()) {
+            const auto* pose_est = modules_.onnx_analyzer->pose_estimator();
+            for (const auto& r : result.onnx_results) {
+                if (!r.pose_valid) continue;
+                if (config_.onnx.draw_landmarks) {
+                    analysis::onnx::PoseVisualizer::DrawLandmarks(frame, r.pose.landmarks);
+                }
+                if (config_.onnx.draw_face_wireframe) {
+                    analysis::onnx::PoseVisualizer::DrawProjectedModel(
+                        frame, r.pose, pose_est->canonical_model());
+                }
+                if (config_.onnx.draw_face_normal) {
+                    analysis::onnx::PoseVisualizer::DrawFaceNormal(
+                        frame, r.pose, pose_est->face_size(),
+                        pose_est->canonical_model()[1]);
+                }
+                char pose_text[64];
+                std::snprintf(pose_text, sizeof(pose_text), "P:%.2f Y:%.2f R:%.2f",
+                              r.pose.pose.pitch, r.pose.pose.yaw, r.pose.pose.roll);
+                cv::putText(frame, pose_text,
+                            cv::Point(static_cast<int>(r.pose.nose_tip.x),
+                                      static_cast<int>(r.pose.nose_tip.y) - 10),
+                            cv::FONT_HERSHEY_SIMPLEX, 0.5,
+                            cv::Scalar(0, 255, 255), 1, cv::LINE_AA);
+            }
+        }
+
         DrawFaceResults(frame, tracked_faces, matches, target_tracker_.GetTargetTrackId());
 
         output_mgr_.WriteFrame(frame);
@@ -152,7 +231,8 @@ public:
             std::chrono::duration<double, std::milli>(t_end - t_start).count();
         result.recognition_latency_ms =
             std::chrono::duration<double, std::milli>(t_recognition_done - t_start).count();
-        result.analysis_latency_ms = result.analysis.valid
+        bool any_analysis = result.analysis.valid || !result.onnx_results.empty();
+        result.analysis_latency_ms = any_analysis
             ? std::chrono::duration<double, std::milli>(t_analysis_done - t_recognition_done).count()
             : 0.0;
         result.face_count = static_cast<int>(tracked_faces.size());

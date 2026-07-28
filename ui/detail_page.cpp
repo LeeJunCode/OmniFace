@@ -205,10 +205,10 @@ void DetailPage::setupUI() {
         "background-color: #fafafa; border: 1px solid #d0d0d0; border-radius: 4px; color: #999;");
     p3l->addWidget(detail_face_thumb_, 0, Qt::AlignHCenter);
 
-    auto* align_cap = new QLabel(QStringLiteral("\u5f53\u524d\u5e27\u5bf9\u9f50\u4eba\u8138"));
-    align_cap->setAlignment(Qt::AlignCenter);
-    align_cap->setStyleSheet("border: none; font-size: 11px; color: #888;");
-    p3l->addWidget(align_cap);
+    align_caption_ = new QLabel(QStringLiteral("\u5f53\u524d\u5e27\u5bf9\u9f50\u4eba\u8138"));
+    align_caption_->setAlignment(Qt::AlignCenter);
+    align_caption_->setStyleSheet("border: none; font-size: 11px; color: #888;");
+    p3l->addWidget(align_caption_);
 
     auto* sep2 = new QFrame;
     sep2->setFrameShape(QFrame::HLine);
@@ -288,6 +288,7 @@ void DetailPage::showTask(const std::string& output_dir, bool from_history) {
     frame_to_row_.clear();
     aligned_paths_.clear();
     tracked_fps_ = 0.0;
+    is_onnx_csv_ = false;
 
     loadCSV(output_dir);
 
@@ -496,6 +497,12 @@ void DetailPage::loadCSV(const std::string& output_dir) {
     for (size_t i = 0; i < csv_headers_.size(); ++i) {
         if (csv_headers_[i] == "frame") { frame_col = static_cast<int>(i); break; }
     }
+
+    // Detect ONNX CSV format (has "pitch" column vs OpenFace's "pose_Rx")
+    is_onnx_csv_ = false;
+    for (const auto& h : csv_headers_) {
+        if (h == "pitch") { is_onnx_csv_ = true; break; }
+    }
     if (frame_col >= 0) {
         for (size_t r = 0; r < csv_rows_.size(); ++r) {
             try {
@@ -536,6 +543,105 @@ void DetailPage::onDetailFrameSync(qint64 positionMs) {
     auto valf = [&val](int idx) -> double {
         try { return std::stod(val(idx)); } catch (...) { return 0.0; }
     };
+
+    if (is_onnx_csv_) {
+        double pitch = valf(col("pitch"));
+        double yaw   = valf(col("yaw"));
+        double roll  = valf(col("roll"));
+        bool has_pose = (col("pitch") >= 0);
+
+        double pose_dev = std::sqrt(pitch * pitch + yaw * yaw);
+        double frontal_score = std::max(0.0, 1.0 - pose_dev / 45.0);
+
+        // Compute face size from landmark bounding box for size score
+        double face_min_x = 1e9, face_max_x = -1e9;
+        double face_min_y = 1e9, face_max_y = -1e9;
+        int lm_found = 0;
+        for (int i = 0; i < 468; ++i) {
+            int cx = col("x_" + std::to_string(i));
+            int cy = col("y_" + std::to_string(i));
+            if (cx < 0 || cy < 0) continue;
+            double px = valf(cx), py = valf(cy);
+            if (px == 0.0 && py == 0.0) continue;
+            ++lm_found;
+            if (px < face_min_x) face_min_x = px;
+            if (px > face_max_x) face_max_x = px;
+            if (py < face_min_y) face_min_y = py;
+            if (py > face_max_y) face_max_y = py;
+        }
+        double face_area = (face_max_x - face_min_x) * (face_max_y - face_min_y);
+        double size_score = (lm_found >= 10) ? std::min(1.0, face_area / 40000.0) : 0.0;
+
+        double quality_val = frontal_score * 0.6 + size_score * 0.4;
+
+        QString quality;
+        if (!has_pose)
+            quality = QStringLiteral("<span style='color:#e53935;'>\u68c0\u6d4b\u5931\u8d25</span>");
+        else if (quality_val > 0.80)
+            quality = QStringLiteral("<span style='color:#2e7d32;'>\u4f18\u79c0</span>");
+        else if (quality_val > 0.55)
+            quality = QStringLiteral("<span style='color:#4caf50;'>\u826f\u597d</span>");
+        else if (quality_val > 0.30)
+            quality = QStringLiteral("<span style='color:#f9a825;'>\u4e00\u822c</span>");
+        else
+            quality = QStringLiteral("<span style='color:#e53935;'>\u8f83\u5dee</span>");
+
+        QStringList pose_parts;
+        if (pitch > 18.0) pose_parts << QStringLiteral("\u4f4e\u5934");
+        else if (pitch > 7.0) pose_parts << QStringLiteral("\u5fae\u4f4e\u5934");
+        else if (pitch < -18.0) pose_parts << QStringLiteral("\u62ac\u5934");
+        else if (pitch < -7.0) pose_parts << QStringLiteral("\u5fae\u62ac\u5934");
+        if (yaw > 18.0) pose_parts << QStringLiteral("\u53f3\u8f6c");
+        else if (yaw > 7.0) pose_parts << QStringLiteral("\u5fae\u53f3\u8f6c");
+        else if (yaw < -18.0) pose_parts << QStringLiteral("\u5de6\u8f6c");
+        else if (yaw < -7.0) pose_parts << QStringLiteral("\u5fae\u5de6\u8f6c");
+        if (roll > 12.0) pose_parts << QStringLiteral("\u53f3\u503e");
+        else if (roll < -12.0) pose_parts << QStringLiteral("\u5de6\u503e");
+
+        QString pose_desc;
+        if (!has_pose)
+            pose_desc = QStringLiteral("<span style='color:#999;'>\u65e0\u59ff\u6001\u6570\u636e</span>");
+        else if (pose_parts.isEmpty())
+            pose_desc = QStringLiteral("\u6b63\u5bf9\u955c\u5934");
+        else
+            pose_desc = pose_parts.join(QStringLiteral("\u3001"));
+
+        QString html;
+        html += "<div style='font-size:13px; line-height:1.8; color:#333;'>";
+        html += QStringLiteral(
+            "<div>"
+            "<span style='color:#888;'>\u7b2c </span><b>%1</b>"
+            "<span style='color:#888;'> \u5e27 &nbsp;|&nbsp; \u65f6\u95f4 </span><b>%2 \u79d2</b>"
+            "<span style='color:#888;'> &nbsp;|&nbsp; \u8d28\u91cf </span><b>%3</b>"
+            "</div>")
+            .arg(QString::fromStdString(val(col("frame"))).toHtmlEscaped())
+            .arg(QString::fromStdString(val(col("timestamp"))).toHtmlEscaped())
+            .arg(quality);
+        html += QStringLiteral(
+            "<div style='margin-top:4px;'>"
+            "<span style='color:#888;'>\u5934\u90e8\u59ff\u6001\uff1a</span><b>%1</b>"
+            "</div>").arg(pose_desc);
+        html += QStringLiteral(
+            "<div>"
+            "<span style='color:#888;'>\u4fef\u4ef0\u89d2\uff1a</span><b>%1\u00b0</b>"
+            "&nbsp;&nbsp;<span style='color:#888;'>\u504f\u822a\u89d2\uff1a</span><b>%2\u00b0</b>"
+            "&nbsp;&nbsp;<span style='color:#888;'>\u7ffb\u6eda\u89d2\uff1a</span><b>%3\u00b0</b>"
+            "</div>").arg(pitch, 0, 'f', 2).arg(yaw, 0, 'f', 2).arg(roll, 0, 'f', 2);
+        html += QStringLiteral(
+            "<div>"
+            "<span style='color:#888;'>\u5173\u952e\u70b9\uff1a</span><b>468 \u4e2a</b>"
+            "&nbsp;&nbsp;<span style='color:#888;'>\u6a21\u578b\uff1a</span><b>MediaPipe FaceMesh</b>"
+            "</div>");
+        html += "</div>";
+        detail_data_label_->setText(html);
+
+        detail_face_thumb_->setVisible(false);
+        align_caption_->setVisible(false);
+        return;
+    }
+
+    detail_face_thumb_->setVisible(true);
+    align_caption_->setVisible(true);
 
     double pitch = valf(col("pose_Rx"));
     double yaw   = valf(col("pose_Ry"));

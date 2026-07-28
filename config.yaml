@@ -1,5 +1,8 @@
 # OmniFace default configuration
 
+# Analysis backend: openface | onnx | none
+analysis_backend: openface
+
 model:
   detector_model: "models/buffalo_sc/det_500m.onnx"
   recognizer_model: "models/buffalo_sc/w600k_mbf.onnx"
@@ -52,6 +55,21 @@ openface:
 video:
   input_path: ""
   output_path: ""
+
+# ---- ONNX analysis configuration (MediaPipe FaceMesh + more) -------------------
+onnx:
+  enable_pose: true
+  enable_gaze: false       # reserved for L2CS-Net
+  enable_au: false         # reserved for OpenGprahAU
+  landmark_model: "models/mediapipe/face_mesh_Nx3x192x192_post.onnx"
+  canonical_model: "models/mediapipe/canonical_face_model.obj"
+  analysis_threads: 1
+  margin: 0.25
+  score_threshold: 0.95
+  realtime_display: true
+  draw_landmarks: true
+  draw_face_wireframe: true
+  draw_face_normal: true
 
 log:
   level: "debug"

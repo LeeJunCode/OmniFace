@@ -228,14 +228,19 @@ void ProcessPage::setupUI() {
 
     fps_panel_ = new FpsPanel;
 
+    onnx_panel_ = new OnnxAnalysisPanel;
+    onnx_panel_->setVisible(false);
+
     auto* right_splitter = new QSplitter(Qt::Vertical);
     right_splitter->setHandleWidth(3);
     right_splitter->setChildrenCollapsible(false);
     right_splitter->addWidget(video_section);
+    right_splitter->addWidget(onnx_panel_);
     right_splitter->addWidget(fps_panel_);
     right_splitter->setStretchFactor(0, 1);
     right_splitter->setStretchFactor(1, 0);
-    right_splitter->setSizes({500, 34});
+    right_splitter->setStretchFactor(2, 0);
+    right_splitter->setSizes({500, 140, 34});
 
     auto* main_splitter = new QSplitter(Qt::Horizontal);
     main_splitter->setHandleWidth(4);
@@ -509,6 +514,7 @@ void ProcessPage::onPlay() {
     state_.total_faces_detected_ = 0;
     state_.total_matches_ = 0;
     state_.total_openface_analyses_ = 0;
+    state_.total_onnx_analyses_ = 0;
     state_.run_start_time_ = state_.last_fps_time;
 
     DashboardData dd;
@@ -519,6 +525,7 @@ void ProcessPage::onPlay() {
     setUiEnabled(true);
     emit statusMessage(QStringLiteral("\u6b63\u5728\u5904\u7406..."));
     completion_panel_->hide();
+    onnx_panel_->setVisible(config_.analysis_backend == AnalysisBackend::kOnnx);
 
     QTimer::singleShot(0, this, &ProcessPage::processNextFrame);
 }
@@ -560,6 +567,8 @@ void ProcessPage::onStop() {
     DashboardData dd;
     fps_panel_->updateData(dd);
     counter_summary_->setText(QStringLiteral("<span style='color:#999999'>\u5c1a\u672a\u5f00\u59cb\u5904\u7406</span>"));
+    onnx_panel_->clear();
+    onnx_panel_->setVisible(false);
 
     state_.has_finished_once = true;
     setFinishedState();
@@ -630,6 +639,7 @@ void ProcessPage::onRecognizeOnly() {
     state_.total_faces_detected_ = 0;
     state_.total_matches_ = 0;
     state_.total_openface_analyses_ = 0;
+    state_.total_onnx_analyses_ = 0;
     state_.run_start_time_ = state_.last_fps_time;
 
     DashboardData dd;
@@ -640,6 +650,7 @@ void ProcessPage::onRecognizeOnly() {
     setUiEnabled(true);
     emit statusMessage(QStringLiteral("\u6b63\u5728\u8bc6\u522b\u76ee\u6807..."));
     completion_panel_->hide();
+    onnx_panel_->setVisible(config_.analysis_backend == AnalysisBackend::kOnnx);
 
     QTimer::singleShot(0, this, &ProcessPage::processNextFrame);
 }
@@ -700,6 +711,16 @@ void ProcessPage::processNextFrame() {
     if (target_found) state_.total_matches_++;
     if (result.analysis.valid) state_.total_openface_analyses_++;
 
+    bool has_onnx = false;
+    for (const auto& r : result.onnx_results) {
+        if (r.pose_valid) { has_onnx = true; break; }
+    }
+    if (has_onnx) state_.total_onnx_analyses_++;
+
+    if (!result.onnx_results.empty()) {
+        onnx_panel_->updateResults(result.onnx_results);
+    }
+
     double dash_elapsed = std::chrono::duration<double>(now - state_.last_dashboard_time).count();
     if (dash_elapsed >= 0.5) {
         state_.last_dashboard_time = now;
@@ -715,11 +736,17 @@ void ProcessPage::processNextFrame() {
         dd.pipeline_fps = state_.current_fps;
         dd.recognition_fps = rec_fps;
         dd.analysis_fps = ana_fps;
-        dd.analysis_running = (state_.total_openface_analyses_ > 0 && result.analysis.valid);
+        if (config_.analysis_backend == AnalysisBackend::kOnnx) {
+            dd.analysis_label = "ONNX";
+            dd.analysis_running = (state_.total_onnx_analyses_ > 0 && has_onnx);
+        } else {
+            dd.analysis_running = (state_.total_openface_analyses_ > 0 && result.analysis.valid);
+        }
         dd.processed_frames = state_.frame_count;
         dd.face_detections = state_.total_faces_detected_;
         dd.target_matches = state_.total_matches_;
         dd.openface_analyses = state_.total_openface_analyses_;
+        dd.onnx_analyses = state_.total_onnx_analyses_;
         dd.elapsed_seconds = static_cast<int64_t>(run_elapsed);
         fps_panel_->updateData(dd);
 
@@ -732,19 +759,27 @@ void ProcessPage::processNextFrame() {
                                       .arg(s, 2, 10, QChar('0'));
         };
 
+        const char* analysis_label = "OpenFace\u5206\u6790";
+        int64_t analysis_count = state_.total_openface_analyses_;
+        if (config_.analysis_backend == AnalysisBackend::kOnnx) {
+            analysis_label = "ONNX\u5206\u6790";
+            analysis_count = state_.total_onnx_analyses_;
+        }
+
         counter_summary_->setText(QStringLiteral(
             "<span style='color:#555555'>"
             "\u5df2\u5904\u7406: %1 \u5e27  |  "
             "\u68c0\u6d4b\u4eba\u8138: %2 \u6b21  |  "
             "\u76ee\u6807\u5339\u914d: %3 \u5e27  |  "
-            "OpenFace\u5206\u6790: %4 \u5e27  |  "
+            "%6: %4 \u5e27  |  "
             "\u8fd0\u884c: %5"
             "</span>")
             .arg(state_.frame_count)
             .arg(state_.total_faces_detected_)
             .arg(state_.total_matches_)
-            .arg(state_.total_openface_analyses_)
-            .arg(fmtTime(dd.elapsed_seconds)));
+            .arg(analysis_count)
+            .arg(fmtTime(dd.elapsed_seconds))
+            .arg(QString::fromUtf8(analysis_label)));
     }
 
     if (state_.total_frame_count > 0) {
