@@ -63,8 +63,15 @@ PipelineModules CreateModules(const PipelineConfig& config) {
 
     if (!config.model.openface_model_dir.empty()
         && !config.behavior.skip_analysis) {
+        analysis::OpenFaceProfile profile = analysis::ParseProfile(config.openface.profile);
+        analysis::OpenFaceParams of_params = analysis::MakeProfileParams(
+            profile, config.model.openface_model_dir);
+        analysis::ApplyOverrides(of_params, config.openface,
+                                 config.model.openface_model_dir);
+
         analysis::FaceAnalyzer::Config fa_cfg;
         fa_cfg.model_dir = config.model.openface_model_dir;
+        fa_cfg.openface  = std::move(of_params);
         mods.face_analyzer = std::make_unique<analysis::FaceAnalyzer>(fa_cfg);
     }
 

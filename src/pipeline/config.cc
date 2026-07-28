@@ -64,6 +64,43 @@ PipelineConfig LoadPipelineConfig(const std::string& yaml_path) {
             SafeGet<std::string>(m, "openface_model_dir", cfg.model.openface_model_dir);
     }
 
+    if (auto of = SafeSub(root, "openface")) {
+        cfg.openface.profile =
+            SafeGet<std::string>(of, "profile", cfg.openface.profile);
+        if (of["model_file"])
+            cfg.openface.model_file = of["model_file"].as<std::string>();
+        if (of["sigma"])
+            cfg.openface.sigma = of["sigma"].as<float>();
+        if (of["reg_factor"])
+            cfg.openface.reg_factor = of["reg_factor"].as<float>();
+        if (of["weight_factor"])
+            cfg.openface.weight_factor = of["weight_factor"].as<float>();
+        if (of["optimise_iterations"])
+            cfg.openface.optimise_iterations = of["optimise_iterations"].as<int>();
+        if (of["use_face_template"])
+            cfg.openface.use_face_template = of["use_face_template"].as<bool>() ? 1 : 0;
+        if (of["face_template_scale"])
+            cfg.openface.face_template_scale = of["face_template_scale"].as<float>();
+        if (of["validate_detections"])
+            cfg.openface.validate_detections = of["validate_detections"].as<bool>() ? 1 : 0;
+        if (of["validation_boundary"])
+            cfg.openface.validation_boundary = of["validation_boundary"].as<float>();
+        if (of["refine_hierarchical"])
+            cfg.openface.refine_hierarchical = of["refine_hierarchical"].as<bool>() ? 1 : 0;
+        if (of["refine_parameters"])
+            cfg.openface.refine_parameters = of["refine_parameters"].as<bool>() ? 1 : 0;
+        if (of["multi_view_first_frame"])
+            cfg.openface.multi_view_first_frame = of["multi_view_first_frame"].as<bool>() ? 1 : 0;
+        if (of["reinit_video_every"])
+            cfg.openface.reinit_video_every = of["reinit_video_every"].as<int>();
+        if (of["limit_pose"])
+            cfg.openface.limit_pose = of["limit_pose"].as<bool>() ? 1 : 0;
+        if (of["window_sizes_small"] && of["window_sizes_small"].IsSequence())
+            cfg.openface.window_sizes_small = of["window_sizes_small"].as<std::vector<int>>();
+        if (of["window_sizes_init"] && of["window_sizes_init"].IsSequence())
+            cfg.openface.window_sizes_init = of["window_sizes_init"].as<std::vector<int>>();
+    }
+
     if (auto t = SafeSub(root, "thresholds")) {
         cfg.thresholds.match_threshold =
             SafeGet<float>(t, "match_threshold", cfg.thresholds.match_threshold);
@@ -138,6 +175,43 @@ void SavePipelineConfig(const std::string& yaml_path, const PipelineConfig& cfg)
     root["model"]["recognition_confidence_threshold"] = cfg.model.recognition_confidence_threshold;
     root["model"]["recognition_iou"] = cfg.model.recognition_iou;
     root["model"]["openface_model_dir"] = cfg.model.openface_model_dir;
+
+    {
+        const auto& of = cfg.openface;
+        root["openface"]["profile"] = of.profile;
+        if (!of.model_file.empty())
+            root["openface"]["model_file"] = of.model_file;
+        if (of.sigma >= 0.0f)
+            root["openface"]["sigma"] = of.sigma;
+        if (of.reg_factor >= 0.0f)
+            root["openface"]["reg_factor"] = of.reg_factor;
+        if (of.weight_factor >= 0.0f)
+            root["openface"]["weight_factor"] = of.weight_factor;
+        if (of.optimise_iterations >= 0)
+            root["openface"]["optimise_iterations"] = of.optimise_iterations;
+        if (of.use_face_template >= 0)
+            root["openface"]["use_face_template"] = (of.use_face_template != 0);
+        if (of.face_template_scale >= 0.0f)
+            root["openface"]["face_template_scale"] = of.face_template_scale;
+        if (of.validate_detections >= 0)
+            root["openface"]["validate_detections"] = (of.validate_detections != 0);
+        if (of.validation_boundary >= 0.0f)
+            root["openface"]["validation_boundary"] = of.validation_boundary;
+        if (of.refine_hierarchical >= 0)
+            root["openface"]["refine_hierarchical"] = (of.refine_hierarchical != 0);
+        if (of.refine_parameters >= 0)
+            root["openface"]["refine_parameters"] = (of.refine_parameters != 0);
+        if (of.multi_view_first_frame >= 0)
+            root["openface"]["multi_view_first_frame"] = (of.multi_view_first_frame != 0);
+        if (of.reinit_video_every >= 0)
+            root["openface"]["reinit_video_every"] = of.reinit_video_every;
+        if (of.limit_pose >= 0)
+            root["openface"]["limit_pose"] = (of.limit_pose != 0);
+        if (!of.window_sizes_small.empty())
+            root["openface"]["window_sizes_small"] = of.window_sizes_small;
+        if (!of.window_sizes_init.empty())
+            root["openface"]["window_sizes_init"] = of.window_sizes_init;
+    }
 
     root["thresholds"]["match_threshold"] = cfg.thresholds.match_threshold;
     root["thresholds"]["detection_confidence"] = cfg.thresholds.detection_confidence;

@@ -189,7 +189,7 @@ void ProcessPage::setupUI() {
     video_layout->setContentsMargins(0, 0, 0, 0);
     video_layout->setSpacing(2);
 
-    video_label_ = new QLabel(QStringLiteral("\u8bf7\u9009\u62e9\u89c6\u9891\u6587\u4ef6\u548c\u76ee\u6807\u4eba\u7269\u56fe\u50cf\uff0c\u7136\u540e\u70b9\u51fb\u5f00\u59cb\u5904\u7406"));
+    video_label_ = new QLabel(QStringLiteral("\u8bf7\u9009\u62e9\u89c6\u9891\u6587\u4ef6\u548c\u76ee\u6807\u4eba\u7269\u56fe\u50cf\uff0c\u7136\u540e\u70b9\u51fb\u5f00\u59cb\u63d0\u53d6"));
     video_label_->setObjectName("videoLabel");
     video_label_->setAlignment(Qt::AlignCenter);
     video_label_->setMinimumSize(320, 240);
@@ -705,11 +705,6 @@ void ProcessPage::processNextFrame() {
         state_.last_dashboard_time = now;
 
         auto run_elapsed = std::chrono::duration<double>(now - state_.run_start_time_).count();
-        int64_t au_pts = state_.total_openface_analyses_ * 17;
-        int64_t lm_pts = state_.total_openface_analyses_ * 68 * 2;
-        int64_t pose_recs = state_.total_openface_analyses_ * 6;
-        int64_t gaze_recs = state_.total_openface_analyses_ * 2;
-        double vol_mb = (state_.total_openface_analyses_ * 644.0 + state_.total_matches_ * 2048.0) / (1024.0 * 1024.0);
 
         double rec_fps = (result.recognition_latency_ms > 0.0)
             ? 1000.0 / result.recognition_latency_ms : 0.0;
@@ -725,18 +720,9 @@ void ProcessPage::processNextFrame() {
         dd.face_detections = state_.total_faces_detected_;
         dd.target_matches = state_.total_matches_;
         dd.openface_analyses = state_.total_openface_analyses_;
-        dd.au_data_points = au_pts;
-        dd.landmark_points = lm_pts;
-        dd.pose_records = pose_recs;
-        dd.gaze_records = gaze_recs;
-        dd.data_volume_mb = vol_mb;
         dd.elapsed_seconds = static_cast<int64_t>(run_elapsed);
         fps_panel_->updateData(dd);
 
-        auto fmtMb = [](double mb) {
-            if (mb < 1.0) return QString::number(mb * 1024.0, 'f', 0) + " KB";
-            return QString::number(mb, 'f', 1) + " MB";
-        };
         auto fmtTime = [](int64_t sec) {
             int h = static_cast<int>(sec / 3600);
             int m = static_cast<int>((sec % 3600) / 60);
@@ -748,16 +734,17 @@ void ProcessPage::processNextFrame() {
 
         counter_summary_->setText(QStringLiteral(
             "<span style='color:#555555'>"
-            "\u5df2\u5904\u7406: %1 \u5e27  |  \u4eba\u8138\u68c0\u6d4b: %2 \u6b21  |  \u76ee\u6807\u5339\u914d: %3 \u6b21  |  OpenFace: %4 \u5e27<br>"
-            "AU\u6570\u636e: %5 \u70b9  |  \u5173\u952e\u70b9: %6 \u70b9  |  \u59ff\u6001: %7 \u6761  |  \u89c6\u7ebf: %8 \u6761  |  "
-            "\u6570\u636e\u91cf: %9  |  \u8fd0\u884c: %10"
+            "\u5df2\u5904\u7406: %1 \u5e27  |  "
+            "\u68c0\u6d4b\u4eba\u8138: %2 \u6b21  |  "
+            "\u76ee\u6807\u5339\u914d: %3 \u5e27  |  "
+            "OpenFace\u5206\u6790: %4 \u5e27  |  "
+            "\u8fd0\u884c: %5"
             "</span>")
             .arg(state_.frame_count)
             .arg(state_.total_faces_detected_)
             .arg(state_.total_matches_)
             .arg(state_.total_openface_analyses_)
-            .arg(au_pts).arg(lm_pts).arg(pose_recs).arg(gaze_recs)
-            .arg(fmtMb(vol_mb)).arg(fmtTime(dd.elapsed_seconds)));
+            .arg(fmtTime(dd.elapsed_seconds)));
     }
 
     if (state_.total_frame_count > 0) {

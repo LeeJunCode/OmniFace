@@ -27,6 +27,28 @@ behavior:
   max_frame_width: 0
   target_recheck_interval: 0
 
+# ---- OpenFace analysis configuration ----------------------------------------
+openface:
+  profile: standard          # standard | max_quality
+
+  # Optional per-field overrides (comment out to use profile default):
+  # model_file: main_ceclm_general.txt
+  # sigma: 1.25
+  # reg_factor: 35.0
+  # weight_factor: 2.5
+  # optimise_iterations: 10
+  # use_face_template: true
+  # face_template_scale: 0.5
+  # validate_detections: true
+  # validation_boundary: 0.725
+  # refine_hierarchical: true
+  # refine_parameters: true
+  # multi_view_first_frame: true
+  # reinit_video_every: 2
+  # limit_pose: true
+  # window_sizes_small: [0, 9, 7, 0]
+  # window_sizes_init: [11, 9, 7, 5]
+
 video:
   input_path: ""
   output_path: ""

@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <string>
+#include <vector>
 
 namespace omniface {
 
@@ -46,12 +47,36 @@ struct LogConfig {
     std::string level = "debug";
 };
 
+// ---- OpenFace configuration (profile + per-field overrides) ------------------
+struct OpenFaceConfig {
+    std::string profile = "standard";  // "standard" | "max_quality"
+
+    // Per-field overrides — sentinel values mean "use profile default"
+    std::string model_file;
+    std::vector<int> window_sizes_small;
+    std::vector<int> window_sizes_init;
+    int    optimise_iterations    = -1;
+    float  sigma                  = -1.0f;
+    float  reg_factor             = -1.0f;
+    float  weight_factor          = -1.0f;
+    int    use_face_template      = -1;   // -1=unset, 0=false, 1=true
+    float  face_template_scale    = -1.0f;
+    int    validate_detections    = -1;
+    float  validation_boundary    = -1.0f;
+    int    refine_hierarchical    = -1;
+    int    refine_parameters      = -1;
+    int    multi_view_first_frame = -1;
+    int    reinit_video_every     = -1;
+    int    limit_pose             = -1;
+};
+
 struct PipelineConfig {
     ModelConfig model;
     ThresholdConfig thresholds;
     PipelineBehavior behavior;
     VideoSourceConfig video;
     LogConfig log;
+    OpenFaceConfig openface;
     std::string output_base_dir;
 };
 

@@ -17,11 +17,6 @@ struct DashboardData {
     int64_t face_detections = 0;
     int64_t target_matches = 0;
     int64_t openface_analyses = 0;
-    int64_t au_data_points = 0;
-    int64_t landmark_points = 0;
-    int64_t pose_records = 0;
-    int64_t gaze_records = 0;
-    double data_volume_mb = 0.0;
     int64_t elapsed_seconds = 0;
 };
 

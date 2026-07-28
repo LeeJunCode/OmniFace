@@ -94,10 +94,6 @@ void CounterPanel::paintEvent(QPaintEvent* /*event*/) {
     auto fmt = [](const QString& label, int64_t n) {
         return label + ": " + QString::number(n);
     };
-    auto fmtMb = [](double mb) {
-        if (mb < 1.0) return QString::number(mb * 1024.0, 'f', 0) + " KB";
-        return QString::number(mb, 'f', 1) + " MB";
-    };
     auto fmtTime = [](int64_t sec) {
         int h = static_cast<int>(sec / 3600);
         int m = static_cast<int>((sec % 3600) / 60);
@@ -112,31 +108,18 @@ void CounterPanel::paintEvent(QPaintEvent* /*event*/) {
                    + fmt(QStringLiteral("\u4eba\u8138\u68c0\u6d4b"), data_.face_detections)
                    + QStringLiteral(" \u6b21  |  ")
                    + fmt(QStringLiteral("\u76ee\u6807\u5339\u914d"), data_.target_matches)
-                   + QStringLiteral(" \u6b21  |  ")
-                   + fmt(QStringLiteral("OpenFace"), data_.openface_analyses)
-                   + QStringLiteral(" \u5e27");
-
-    QString row2 = fmt(QStringLiteral("AU\u6570\u636e"), data_.au_data_points)
-                   + QStringLiteral(" \u70b9  |  ")
-                   + fmt(QStringLiteral("\u5173\u952e\u70b9"), data_.landmark_points)
-                   + QStringLiteral(" \u70b9  |  ")
-                   + fmt(QStringLiteral("\u59ff\u6001"), data_.pose_records)
-                   + QStringLiteral(" \u6761  |  ")
-                   + fmt(QStringLiteral("\u89c6\u7ebf"), data_.gaze_records)
-                   + QStringLiteral(" \u6761  |  ")
-                   + QStringLiteral("\u6570\u636e\u91cf: ") + fmtMb(data_.data_volume_mb)
-                   + QStringLiteral("  |  ")
+                   + QStringLiteral(" \u5e27  |  ")
+                   + fmt(QStringLiteral("OpenFace\u5206\u6790"), data_.openface_analyses)
+                   + QStringLiteral(" \u5e27  |  ")
                    + QStringLiteral("\u8fd0\u884c: ") + fmtTime(data_.elapsed_seconds);
 
     int row_h = height() / 2;
-    QRect r1(4, 0, width() - 8, row_h);
-    QRect r2(4, row_h, width() - 8, height() - row_h);
+    QRect r1(4, 0, width() - 8, height());
+    QRect r2(4, row_h, width() - 8, 0);  // unused
 
     auto fm = p.fontMetrics();
     p.drawText(r1, Qt::AlignVCenter | Qt::AlignLeft,
                fm.elidedText(row1, Qt::ElideRight, r1.width()));
-    p.drawText(r2, Qt::AlignVCenter | Qt::AlignLeft,
-               fm.elidedText(row2, Qt::ElideRight, r2.width()));
 }
 
 }  // namespace omniface::ui

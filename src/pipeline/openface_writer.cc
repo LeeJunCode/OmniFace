@@ -15,16 +15,19 @@ OpenFaceWriter::OpenFaceWriter() = default;
 OpenFaceWriter::~OpenFaceWriter() { Close(); }
 
 void OpenFaceWriter::Initialize(const std::string& input_path,
-                                 const std::string& output_dir, double fps) {
+                                 const std::string& output_dir, double fps,
+                                 bool output_aligned) {
     if (initialized_) return;
 
     std::vector<std::string> rec_args = {
         "",
         "-oc", "MJPG",
-        "-simalign", "-2Dfp", "-3Dfp",
+        "-2Dfp", "-3Dfp",
         "-pdmparams", "-pose",
         "-aus", "-gaze",
     };
+    if (output_aligned)
+        rec_args.push_back("-simalign");
     Utilities::RecorderOpenFaceParameters rec_params(
         rec_args, true, false,
         -1, -1, -1, -1, fps);

@@ -8,6 +8,7 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QPushButton>
+#include <QTabWidget>
 #include <QVBoxLayout>
 
 namespace omniface::ui {
@@ -52,7 +53,8 @@ QLabel* WarnLabel(const QString& text) {
 SettingsDialog::SettingsDialog(const PipelineConfig& current, QWidget* parent)
     : QDialog(parent), config_(current) {
     setWindowTitle(QStringLiteral("\u53c2\u6570\u8bbe\u7f6e"));
-    setMinimumWidth(540);
+    setMinimumSize(580, 520);
+    resize(620, 560);
     setStyleSheet("QDialog { background-color: #ffffff; }"
                   "QComboBox QAbstractItemView { background-color: #ffffff; }");
     setupUI();
@@ -143,8 +145,6 @@ void SettingsDialog::setupUI() {
             this, checkThreads);
     checkThreads();
 
-    root->addWidget(core_group);
-
     // ===== 高级参数 =====
     auto* adv_group = new QGroupBox(QStringLiteral("\u9ad8\u7ea7\u53c2\u6570"));
     adv_group->setStyleSheet(
@@ -216,7 +216,73 @@ void SettingsDialog::setupUI() {
     addAdvRow(QStringLiteral("\u65e5\u5fd7\u7ea7\u522b"), log_level_,
               QStringLiteral("debug=\u6700\u8be6\u7ec6\uff0cinfo=\u4e00\u822c\uff0cwarn=\u8b66\u544a"));
 
-    root->addWidget(adv_group);
+    // ===== OpenFace 参数 =====
+    auto* of_group = new QGroupBox(QStringLiteral("OpenFace \u53c2\u6570"));
+    of_group->setStyleSheet(
+        "QGroupBox { font-weight: bold; font-size: 13px; color: #6a1b9a; "
+        "border: 2px solid #f3e5f5; border-radius: 8px; "
+        "background-color: #fdfbff; margin-top: 12px; padding-top: 18px; }"
+        "QGroupBox::title { subcontrol-origin: margin; left: 16px; padding: 0 8px; }");
+
+    auto* of_form = new QFormLayout(of_group);
+    of_form->setContentsMargins(20, 16, 20, 12);
+    of_form->setSpacing(8);
+
+    auto addOfRow = [&](const QString& label, QWidget* widget, const QString& hint) {
+        auto* row = new QHBoxLayout;
+        row->setContentsMargins(0, 2, 0, 2);
+        row->addWidget(widget);
+        if (!hint.isEmpty()) row->addWidget(HintLabel(hint));
+        row->addStretch();
+        of_form->addRow(new QLabel(label), row);
+    };
+
+    of_profile_ = new QComboBox;
+    const QStringList profile_names = {"standard", "max_quality"};
+    const QStringList profile_labels = {
+        QStringLiteral("Standard (\u6807\u51c6)"), QStringLiteral("Max Quality (\u6700\u9ad8\u7cbe\u5ea6)")};
+    for (int i = 0; i < profile_names.size(); ++i)
+        of_profile_->addItem(profile_labels[i], profile_names[i]);
+    int prof_idx = profile_names.indexOf(QString::fromStdString(config_.openface.profile));
+    of_profile_->setCurrentIndex(prof_idx >= 0 ? prof_idx : 1);
+    of_profile_->setMinimumWidth(200);
+    addOfRow(QStringLiteral("\u9884\u8bbe\u65b9\u6848"), of_profile_,
+             QStringLiteral("\u63a7\u5236\u7b97\u6cd5\u901f\u5ea6\u4e0e\u7cbe\u5ea6\u5e73\u8861"));
+
+    // Profile description hint
+    auto updateOfHint = [this, of_form]() {
+        auto* old = of_form->parentWidget()->findChild<QLabel*>("ofHint");
+        if (old) old->deleteLater();
+        QString hint;
+        QString prof = of_profile_->currentData().toString();
+        if (prof == "standard")
+            hint = QStringLiteral("\u25b6 CE-CLM + 5\u6b21\u8fed\u4ee3 + \u9762\u90e8\u6a21\u677f\uff0c\u7cbe\u5ea6\u4e0e\u901f\u5ea6\u5747\u8861\uff08\u63a8\u8350\uff09");
+        else if (prof == "max_quality")
+            hint = QStringLiteral("\u25b6 10\u6b21\u8fed\u4ee3 + NU-RLMS + \u5927\u7a97\u53e3 + \u591a\u89c6\u56fe\uff0c\u6700\u9ad8\u7cbe\u5ea6\uff0c\u901f\u5ea6\u8f83\u6162");
+        auto* h = HintLabel(hint);
+        h->setObjectName("ofHint");
+        h->setWordWrap(true);
+        of_form->addRow(h);
+    };
+    connect(of_profile_, QOverload<int>::of(&QComboBox::currentIndexChanged),
+            this, updateOfHint);
+    updateOfHint();
+
+    // ===== Assemble tabs =====
+    auto* tabs = new QTabWidget;
+    tabs->setStyleSheet(
+        "QTabWidget::pane { border: 1px solid #e0e0e0; border-radius: 6px; "
+        "background-color: #ffffff; }"
+        "QTabBar::tab { padding: 8px 20px; font-size: 13px; "
+        "border: 1px solid #e0e0e0; border-bottom: none; "
+        "border-top-left-radius: 6px; border-top-right-radius: 6px; "
+        "background-color: #f5f5f5; margin-right: 2px; }"
+        "QTabBar::tab:selected { background-color: #ffffff; "
+        "font-weight: bold; color: #1565c0; }");
+    tabs->addTab(core_group, QStringLiteral("\u6838\u5fc3\u53c2\u6570"));
+    tabs->addTab(adv_group, QStringLiteral("\u9ad8\u7ea7\u53c2\u6570"));
+    tabs->addTab(of_group, QStringLiteral("OpenFace"));
+    root->addWidget(tabs);
 
     // ===== 按钮 =====
     auto* btn_row = new QHBoxLayout;
@@ -246,6 +312,11 @@ void SettingsDialog::setupUI() {
         max_frame_width_->setValue(defaults.behavior.max_frame_width);
         log_level_->setCurrentText(
             QString::fromStdString(defaults.log.level));
+
+        // OpenFace defaults
+        int of_prof_idx = of_profile_->findData(
+            QString::fromStdString(defaults.openface.profile));
+        of_profile_->setCurrentIndex(std::max(0, of_prof_idx));
     });
     btn_row->addWidget(reset_btn);
     btn_row->addStretch();
@@ -292,6 +363,9 @@ void SettingsDialog::saveTo(PipelineConfig& cfg) const {
     cfg.behavior.ema_alpha = static_cast<float>(ema_alpha_->value());
     cfg.behavior.max_frame_width = max_frame_width_->value();
     cfg.log.level = log_level_->currentText().toStdString();
+
+    // OpenFace
+    cfg.openface.profile = of_profile_->currentData().toString().toStdString();
 }
 
 PipelineConfig SettingsDialog::getConfig() const {

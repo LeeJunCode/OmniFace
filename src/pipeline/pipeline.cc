@@ -132,7 +132,8 @@ public:
                 if (result.analysis.valid && !config_.behavior.skip_analysis) {
                     openface_writer_.Initialize(config_.video.input_path,
                                                 output_mgr_.GetOutputDir(),
-                                                decoder_.GetFps());
+                                                decoder_.GetFps(),
+                                                modules_.face_analyzer->CanAlignFace());
                     cv::Mat aligned = modules_.face_analyzer->GetAlignedFace();
                     openface_writer_.WriteObservation(result.analysis, frame_index,
                                                       decoder_.GetFps(), aligned);

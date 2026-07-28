@@ -92,20 +92,19 @@ void MainWindow::setupMenus() {
 
     auto* nav_menu = menuBar()->addMenu(QStringLiteral("\u5bfc\u822a(&N)"));
     nav_menu->addAction(QStringLiteral("\u8fd4\u56de\u4e3b\u754c\u9762(&M)"), this, &MainWindow::onBackToProcess);
-
-    auto* tool_menu = menuBar()->addMenu(QStringLiteral("\u5de5\u5177(&T)"));
-    tool_menu->addAction(QStringLiteral("\u53c2\u6570\u8bbe\u7f6e(&S)..."), this, &MainWindow::onSettings);
-    tool_menu->addSeparator();
-    tool_menu->addAction(QStringLiteral("\u4efb\u52a1\u5386\u53f2(&H)..."), this, &MainWindow::onTaskHistory);
-    tool_menu->addSeparator();
-    saved_videos_action_ = tool_menu->addAction(QStringLiteral("\u67e5\u770b\u4e0a\u4f20\u7684\u89c6\u9891(&V)..."), this, [this]() {
+    nav_menu->addSeparator();
+    nav_menu->addAction(QStringLiteral("\u4efb\u52a1\u5386\u53f2(&H)..."), this, &MainWindow::onTaskHistory);
+    saved_videos_action_ = nav_menu->addAction(QStringLiteral("\u67e5\u770b\u4e0a\u4f20\u7684\u89c6\u9891(&V)..."), this, [this]() {
         saved_videos_page_->refresh();
         central_stack_->setCurrentWidget(saved_videos_page_);
     });
-    saved_images_action_ = tool_menu->addAction(QStringLiteral("\u67e5\u770b\u4e0a\u4f20\u7684\u56fe\u7247(&I)..."), this, [this]() {
+    saved_images_action_ = nav_menu->addAction(QStringLiteral("\u67e5\u770b\u4e0a\u4f20\u7684\u56fe\u7247(&I)..."), this, [this]() {
         saved_images_page_->refresh();
         central_stack_->setCurrentWidget(saved_images_page_);
     });
+
+    auto* tool_menu = menuBar()->addMenu(QStringLiteral("\u5de5\u5177(&T)"));
+    tool_menu->addAction(QStringLiteral("\u53c2\u6570\u8bbe\u7f6e(&S)..."), this, &MainWindow::onSettings);
 
     auto* help_menu = menuBar()->addMenu(QStringLiteral("\u5e2e\u52a9(&H)"));
     help_menu->addAction(QStringLiteral("\u5173\u4e8e(&A)"), this, [this]() {
@@ -141,17 +140,9 @@ void MainWindow::onSettings() {
         process_page_->updateConfig(config_);
         spdlog::default_logger()->set_level(
             spdlog::level::from_str(config_.log.level));
-        try {
-            SavePipelineConfig(config_path_, config_);
-        } catch (const std::exception& e) {
-            QMessageBox::warning(this,
-                QStringLiteral("\u4fdd\u5b58\u5931\u8d25"),
-                QStringLiteral("\u65e0\u6cd5\u4fdd\u5b58\u914d\u7f6e\uff1a") + QString::fromStdString(e.what()));
-            return;
-        }
         QMessageBox::information(this,
-            QStringLiteral("\u4fdd\u5b58\u6210\u529f"),
-            QStringLiteral("\u53c2\u6570\u5df2\u4fdd\u5b58\uff0c\u4e0b\u6b21\u5904\u7406\u65f6\u5c06\u751f\u6548\u3002"));
+            QStringLiteral("\u751f\u6548"),
+            QStringLiteral("\u53c2\u6570\u5df2\u66f4\u65b0\uff0c\u5f53\u524d\u5904\u7406\u4f1a\u8bdd\u751f\u6548\uff0c\u91cd\u65b0\u542f\u52a8\u540e\u6062\u590d\u9ed8\u8ba4\u503c\u3002"));
     }
 }
 

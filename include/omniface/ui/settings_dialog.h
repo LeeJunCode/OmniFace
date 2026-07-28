@@ -40,6 +40,9 @@ private:
     QDoubleSpinBox* ema_alpha_ = nullptr;
     QSpinBox* max_frame_width_ = nullptr;
     QComboBox* log_level_ = nullptr;
+
+    // OpenFace
+    QComboBox* of_profile_ = nullptr;
 };
 
 }  // namespace omniface::ui

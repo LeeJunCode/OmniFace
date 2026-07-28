@@ -540,8 +540,13 @@ void DetailPage::onDetailFrameSync(qint64 positionMs) {
     double pitch = valf(col("pose_Rx"));
     double yaw   = valf(col("pose_Ry"));
     double roll  = valf(col("pose_Rz"));
-    double gaze_x = valf(col("gaze_angle_x"));
-    double gaze_y = valf(col("gaze_angle_y"));
+    bool has_pose = (col("pose_Rx") >= 0 && col("pose_Ry") >= 0 && col("pose_Rz") >= 0);
+
+    int gaze_x_col = col("gaze_angle_x");
+    int gaze_y_col = col("gaze_angle_y");
+    double gaze_x = (gaze_x_col >= 0 && gaze_y_col >= 0) ? valf(gaze_x_col) : 0.0;
+    double gaze_y = (gaze_x_col >= 0 && gaze_y_col >= 0) ? valf(gaze_y_col) : 0.0;
+
     int success = static_cast<int>(valf(col("success")));
 
     double face_min_x = 1e9, face_max_x = -1e9;
@@ -578,53 +583,67 @@ void DetailPage::onDetailFrameSync(qint64 positionMs) {
     else
         quality = QStringLiteral("<span style='color:#e53935;'>\u8f83\u5dee</span>");
 
+    // ---- head pose (CSV values in degrees, camera coords: +X=right +Y=down +Z=forward) ----
+    // Rx = pitch: positive = head nodding DOWN, negative = head tilting UP
+    // Ry = yaw: positive = head turned RIGHT in image, negative = LEFT
+    // Rz = roll: positive = head tilted RIGHT, negative = LEFT
     QStringList pose_parts;
-    if (pitch > 15.0) pose_parts << QStringLiteral("\u660e\u663e\u62ac\u5934");
-    else if (pitch > 5.0) pose_parts << QStringLiteral("\u7565\u5fae\u62ac\u5934");
-    else if (pitch < -15.0) pose_parts << QStringLiteral("\u660e\u663e\u4f4e\u5934");
-    else if (pitch < -5.0) pose_parts << QStringLiteral("\u7565\u5fae\u4f4e\u5934");
-    if (yaw > 15.0) pose_parts << QStringLiteral("\u660e\u663e\u53f3\u8f6c");
-    else if (yaw > 5.0) pose_parts << QStringLiteral("\u5fae\u5fae\u53f3\u8f6c");
-    else if (yaw < -15.0) pose_parts << QStringLiteral("\u660e\u663e\u5de6\u8f6c");
-    else if (yaw < -5.0) pose_parts << QStringLiteral("\u5fae\u5fae\u5de6\u8f6c");
-    if (roll > 10.0) pose_parts << QStringLiteral("\u5934\u90e8\u53f3\u503e");
-    else if (roll < -10.0) pose_parts << QStringLiteral("\u5934\u90e8\u5de6\u503e");
+    if (has_pose) {
+        if (pitch > 18.0) pose_parts << QStringLiteral("\u4f4e\u5934");
+        else if (pitch > 7.0) pose_parts << QStringLiteral("\u5fae\u4f4e\u5934");
+        else if (pitch < -18.0) pose_parts << QStringLiteral("\u62ac\u5934");
+        else if (pitch < -7.0) pose_parts << QStringLiteral("\u5fae\u62ac\u5934");
+        if (yaw > 18.0) pose_parts << QStringLiteral("\u53f3\u8f6c");
+        else if (yaw > 7.0) pose_parts << QStringLiteral("\u5fae\u53f3\u8f6c");
+        else if (yaw < -18.0) pose_parts << QStringLiteral("\u5de6\u8f6c");
+        else if (yaw < -7.0) pose_parts << QStringLiteral("\u5fae\u5de6\u8f6c");
+        if (roll > 12.0) pose_parts << QStringLiteral("\u53f3\u503e");
+        else if (roll < -12.0) pose_parts << QStringLiteral("\u5de6\u503e");
+    }
 
-    QString pose_desc = pose_parts.isEmpty()
-        ? QStringLiteral("\u6b63\u5bf9\u955c\u5934")
-        : pose_parts.join(QStringLiteral("\u3001"));
+    QString pose_desc;
+    if (!has_pose)
+        pose_desc = QStringLiteral("<span style='color:#999;'>\u65e0\u59ff\u6001\u6570\u636e</span>");
+    else if (pose_parts.isEmpty())
+        pose_desc = QStringLiteral("\u6b63\u5bf9\u955c\u5934");
+    else
+        pose_desc = pose_parts.join(QStringLiteral("\u3001"));
 
+    // ---- gaze (CSV values in RADIANS, camera coords: +X=right +Y=down) ----
+    // gaze_angle_x = atan2(gaze.x, -gaze.z): positive = right, negative = left
+    // gaze_angle_y = atan2(gaze.y, -gaze.z): positive = DOWN, negative = UP
     QString h_dir, v_dir;
-    if (gaze_x > 0.3) h_dir = QStringLiteral("\u5411\u53f3");
-    else if (gaze_x < -0.3) h_dir = QStringLiteral("\u5411\u5de6");
-    if (gaze_y > 0.3) v_dir = QStringLiteral("\u5411\u4e0a");
-    else if (gaze_y < -0.3) v_dir = QStringLiteral("\u5411\u4e0b");
+    if (gaze_x > 0.3) h_dir = QStringLiteral("\u53f3");
+    else if (gaze_x < -0.3) h_dir = QStringLiteral("\u5de6");
+    if (gaze_y > 0.3) v_dir = QStringLiteral("\u4e0b");
+    else if (gaze_y < -0.3) v_dir = QStringLiteral("\u4e0a");
     QString gaze_desc;
     if (h_dir.isEmpty() && v_dir.isEmpty())
         gaze_desc = QStringLiteral("\u6b63\u89c6\u524d\u65b9");
     else if (h_dir.isEmpty())
-        gaze_desc = QStringLiteral("\u770b%1\u65b9").arg(v_dir);
+        gaze_desc = QStringLiteral("\u770b\u5411%1\u65b9").arg(v_dir);
     else if (v_dir.isEmpty())
-        gaze_desc = QStringLiteral("\u770b%1\u65b9").arg(h_dir);
+        gaze_desc = QStringLiteral("\u770b\u5411%1\u65b9").arg(h_dir);
     else
-        gaze_desc = QStringLiteral("\u770b%1%2\u65b9").arg(v_dir, h_dir);
+        gaze_desc = QStringLiteral("\u770b\u5411%1%2\u65b9").arg(h_dir, v_dir);
 
+    // ---- Action Units (regression intensity, range approx [0, 5]) ----
     static const std::unordered_map<std::string, QString> kAuNames = {
-        {"AU01", QStringLiteral("\u7709\u6bdb\u4e0a\u626c")},
-        {"AU02", QStringLiteral("\u7709\u6bdb\u5916\u4fa7\u4e0a\u626c")},
-        {"AU04", QStringLiteral("\u76b1\u7709")},
-        {"AU05", QStringLiteral("\u7741\u5927\u773c")},
+        {"AU01", QStringLiteral("\u5185\u4fa7\u7709\u6bdb\u62ac\u8d77")},
+        {"AU02", QStringLiteral("\u5916\u4fa7\u7709\u6bdb\u62ac\u8d77")},
+        {"AU04", QStringLiteral("\u7709\u5934\u7d27\u9501")},
+        {"AU05", QStringLiteral("\u773c\u775b\u7741\u5927")},
         {"AU06", QStringLiteral("\u8138\u988a\u63d0\u5347")},
         {"AU07", QStringLiteral("\u772f\u773c")},
-        {"AU09", QStringLiteral("\u76b1\u9f3b")},
+        {"AU09", QStringLiteral("\u9f3b\u5b50\u76b1\u8d77")},
         {"AU10", QStringLiteral("\u4e0a\u5507\u4e0a\u63d0")},
         {"AU12", QStringLiteral("\u5634\u89d2\u4e0a\u626c")},
-        {"AU14", QStringLiteral("\u62bf\u5634")},
+        {"AU14", QStringLiteral("\u5634\u89d2\u7d27\u7f29")},
         {"AU15", QStringLiteral("\u5634\u89d2\u4e0b\u6487")},
-        {"AU17", QStringLiteral("\u4e0b\u5df4\u6536\u7d27")},
+        {"AU17", QStringLiteral("\u4e0b\u5df4\u4e0a\u63d0")},
         {"AU20", QStringLiteral("\u5634\u89d2\u62c9\u4f38")},
-        {"AU23", QStringLiteral("\u5634\u5507\u6536\u7d27")},
-        {"AU25", QStringLiteral("\u5f20\u5634")},
+        {"AU23", QStringLiteral("\u5634\u5507\u7d27\u7f29")},
+        {"AU25", QStringLiteral("\u5634\u5df4\u5f20\u5f00")},
         {"AU26", QStringLiteral("\u4e0b\u5df4\u4e0b\u5760")},
         {"AU28", QStringLiteral("\u5438\u5507")},
         {"AU45", QStringLiteral("\u7728\u773c")},
@@ -639,7 +658,8 @@ void DetailPage::onDetailFrameSync(qint64 positionMs) {
             if (intensity > 0.3) {
                 std::string au_code = hdr.substr(0, hdr.size() - 2);
                 auto au_it = kAuNames.find(au_code);
-                if (au_it != kAuNames.end()) au_parts << au_it->second;
+                if (au_it != kAuNames.end())
+                    au_parts << QStringLiteral("%1(%2)").arg(au_it->second).arg(intensity, 0, 'f', 1);
                 if (au_parts.size() >= 6) break;
             }
         }

@@ -22,7 +22,7 @@ public:
     OpenFaceWriter& operator=(const OpenFaceWriter&) = delete;
 
     void Initialize(const std::string& input_path, const std::string& output_dir,
-                    double fps);
+                    double fps, bool output_aligned = true);
     void WriteObservation(const FaceAnalysisResult& analysis, int frame_index,
                           double fps, const cv::Mat& aligned_face);
     void Close();

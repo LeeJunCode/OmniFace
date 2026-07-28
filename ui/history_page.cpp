@@ -12,8 +12,11 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QMenu>
+#include <QMessageBox>
 #include <QPushButton>
 #include <QUrl>
+
+#include "omniface/ui/stylesheet.h"
 
 namespace omniface::ui {
 
@@ -32,6 +35,37 @@ HistoryPage::HistoryPage(QWidget* parent) : QWidget(parent) {
     top->addStretch();
     hl->addLayout(top);
 
+    // Batch action bar (hidden when empty)
+    batch_bar_ = new QWidget;
+    batch_bar_->setStyleSheet("background-color: #ffffff; border: 1px solid #e0e0e0; border-radius: 6px;");
+    auto* batch_layout = new QHBoxLayout(batch_bar_);
+    batch_layout->setContentsMargins(12, 6, 12, 6);
+    batch_layout->setSpacing(12);
+
+    select_all_cb_ = new QCheckBox(QStringLiteral("\u5168\u9009"));
+    select_all_cb_->setStyleSheet(
+        "QCheckBox { font-size: 13px; color: #333; border: none; spacing: 6px; }"
+        "QCheckBox::indicator { width: 18px; height: 18px; border: 2px solid #bdbdbd; "
+        "border-radius: 3px; background-color: #fafafa; }"
+        "QCheckBox::indicator:hover { border-color: #1565c0; }"
+        "QCheckBox::indicator:checked { background-color: #1565c0; border-color: #1565c0; }");
+    connect(select_all_cb_, &QCheckBox::clicked, this, &HistoryPage::onSelectAll);
+    batch_layout->addWidget(select_all_cb_);
+
+    batch_del_btn_ = new QPushButton(QStringLiteral("\u6279\u91cf\u5220\u9664"));
+    batch_del_btn_->setFixedHeight(30);
+    batch_del_btn_->setStyleSheet(
+        "QPushButton { background-color: #e53935; color: white; border: none; "
+        "border-radius: 4px; padding: 4px 16px; font-size: 12px; font-weight: bold; }"
+        "QPushButton:hover { background-color: #c62828; }"
+        "QPushButton:disabled { background-color: #ccc; }");
+    connect(batch_del_btn_, &QPushButton::clicked, this, &HistoryPage::onBatchDelete);
+    batch_layout->addWidget(batch_del_btn_);
+    batch_layout->addStretch();
+
+    batch_bar_->hide();
+    hl->addWidget(batch_bar_);
+
     scroll_ = new QScrollArea;
     scroll_->setWidgetResizable(true);
     scroll_->setStyleSheet("QScrollArea { border: none; background: transparent; }");
@@ -42,6 +76,62 @@ HistoryPage::HistoryPage(QWidget* parent) : QWidget(parent) {
     hc_layout->setSpacing(8);
     scroll_->setWidget(content_);
     hl->addWidget(scroll_, 1);
+}
+
+void HistoryPage::onSelectAll() {
+    bool checked = select_all_cb_->isChecked();
+    if (checked) {
+        selected_.clear();
+        auto* hc_layout = static_cast<QVBoxLayout*>(content_->layout());
+        for (int i = 0; i < hc_layout->count(); ++i) {
+            auto* frame = qobject_cast<QFrame*>(hc_layout->itemAt(i)->widget());
+            if (!frame) continue;
+            auto* cb = frame->findChild<QCheckBox*>("taskCb");
+            if (cb) {
+                cb->setChecked(true);
+                selected_.insert(cb->property("dir_path").toString().toStdString());
+            }
+        }
+    } else {
+        auto* hc_layout = static_cast<QVBoxLayout*>(content_->layout());
+        for (int i = 0; i < hc_layout->count(); ++i) {
+            auto* frame = qobject_cast<QFrame*>(hc_layout->itemAt(i)->widget());
+            if (!frame) continue;
+            auto* cb = frame->findChild<QCheckBox*>("taskCb");
+            if (cb) cb->setChecked(false);
+        }
+        selected_.clear();
+    }
+    updateBatchButtons();
+}
+
+void HistoryPage::onBatchDelete() {
+    if (selected_.empty()) return;
+    QMessageBox msgBox(this);
+    msgBox.setWindowTitle(QStringLiteral("\u786e\u8ba4\u6279\u91cf\u5220\u9664"));
+    msgBox.setText(QStringLiteral("\u786e\u5b9a\u8981\u5220\u9664\u6240\u9009 %1 \u4e2a\u4efb\u52a1\u5417\uff1f\n\u6b64\u64cd\u4f5c\u4e0d\u53ef\u64a4\u9500\u3002").arg(static_cast<int>(selected_.size())));
+    msgBox.setIcon(QMessageBox::Warning);
+    msgBox.setStandardButtons(QMessageBox::Yes | QMessageBox::No);
+    msgBox.setDefaultButton(QMessageBox::No);
+    msgBox.setStyleSheet(ConfirmDialogStyleSheet());
+    if (msgBox.exec() != QMessageBox::Yes) return;
+
+    namespace fs = std::filesystem;
+    for (const auto& dir_path : selected_) {
+        std::error_code ec;
+        fs::remove_all(dir_path, ec);
+    }
+    selected_.clear();
+    refresh();
+}
+
+void HistoryPage::updateBatchButtons() {
+    int n = static_cast<int>(selected_.size());
+    batch_del_btn_->setEnabled(n > 0);
+    if (n > 0)
+        batch_del_btn_->setText(QStringLiteral("\u6279\u91cf\u5220\u9664 (%1)").arg(n));
+    else
+        batch_del_btn_->setText(QStringLiteral("\u6279\u91cf\u5220\u9664"));
 }
 
 void HistoryPage::refresh() {
@@ -58,12 +148,16 @@ void HistoryPage::refresh() {
     }
     auto* hc_layout = static_cast<QVBoxLayout*>(content_->layout());
 
+    selected_.clear();
+    total_items_ = 0;
+
     if (!fs::is_directory(output_dir)) {
         auto* empty_label = new QLabel(QStringLiteral("\u6682\u65e0\u5904\u7406\u8bb0\u5f55"));
         empty_label->setAlignment(Qt::AlignCenter);
         empty_label->setStyleSheet("color: #999; font-size: 14px; padding: 60px 0;");
         hc_layout->addWidget(empty_label);
         hc_layout->addStretch();
+        batch_bar_->hide();
         return;
     }
 
@@ -113,8 +207,14 @@ void HistoryPage::refresh() {
         empty_label->setStyleSheet("color: #999; font-size: 14px; padding: 60px 0;");
         hc_layout->addWidget(empty_label);
         hc_layout->addStretch();
+        batch_bar_->hide();
         return;
     }
+
+    total_items_ = static_cast<int>(tasks.size());
+    batch_bar_->show();
+    select_all_cb_->setChecked(false);
+    updateBatchButtons();
 
     std::sort(tasks.begin(), tasks.end(),
               [](const TaskInfo& a, const TaskInfo& b) { return a.time_str > b.time_str; });
@@ -137,8 +237,28 @@ void HistoryPage::refresh() {
                     menu.exec(QCursor::pos());
                 });
         auto* card_layout = new QHBoxLayout(card);
-        card_layout->setContentsMargins(16, 12, 16, 12);
-        card_layout->setSpacing(12);
+        card_layout->setContentsMargins(12, 12, 16, 12);
+        card_layout->setSpacing(10);
+
+        // Checkbox
+        auto* cb = new QCheckBox;
+        cb->setObjectName("taskCb");
+        cb->setProperty("dir_path", QString::fromStdString(t.dir_path));
+        cb->setStyleSheet(
+            "QCheckBox { border: none; spacing: 0px; }"
+            "QCheckBox::indicator { width: 18px; height: 18px; border: 2px solid #bdbdbd; "
+            "border-radius: 3px; background-color: #fafafa; }"
+            "QCheckBox::indicator:hover { border-color: #1565c0; }"
+            "QCheckBox::indicator:checked { background-color: #1565c0; "
+            "border-color: #1565c0; }");
+        connect(cb, &QCheckBox::toggled, this, [this, dir_path = t.dir_path](bool checked) {
+            if (checked)
+                selected_.insert(dir_path);
+            else
+                selected_.erase(dir_path);
+            updateBatchButtons();
+        });
+        card_layout->addWidget(cb);
 
         auto* info_widget = new QWidget;
         auto* info_layout = new QVBoxLayout(info_widget);
