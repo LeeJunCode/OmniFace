@@ -79,11 +79,9 @@ PipelineModules CreateModules(const PipelineConfig& config) {
     if (config.analysis_backend == AnalysisBackend::kOnnx) {
         analysis::onnx::OnnxAnalyzerConfig onnx_cfg;
         onnx_cfg.enable_pose = config.onnx.enable_pose;
-        onnx_cfg.enable_gaze = config.onnx.enable_gaze;
         onnx_cfg.enable_au   = config.onnx.enable_au;
         onnx_cfg.landmark_model = config.onnx.landmark_model;
         onnx_cfg.canonical_model = config.onnx.canonical_model;
-        onnx_cfg.gaze_model = config.onnx.gaze_model;
         onnx_cfg.au_model   = config.onnx.au_model;
         onnx_cfg.analysis_threads = config.onnx.analysis_threads;
         onnx_cfg.margin           = config.onnx.margin;
@@ -91,6 +89,20 @@ PipelineModules CreateModules(const PipelineConfig& config) {
 
         mods.onnx_analyzer = std::make_unique<analysis::onnx::OnnxFaceAnalyzer>(onnx_cfg);
         spdlog::info("ONNX analysis backend activated (pose={})", config.onnx.enable_pose);
+    }
+
+    if (config.analysis_backend == AnalysisBackend::kGaze) {
+        std::string model_path = "models/l2cs-net/" + config.gaze.model;
+        analysis::onnx::GazeEstimator::Config gaze_cfg;
+        gaze_cfg.model_path = model_path;
+        gaze_cfg.intra_threads = 1;
+
+        try {
+            mods.gaze_estimator = std::make_unique<analysis::onnx::GazeEstimator>(gaze_cfg);
+            spdlog::info("Gaze backend activated (model={})", config.gaze.model);
+        } catch (const std::exception& e) {
+            spdlog::error("Failed to load GazeEstimator: {}", e.what());
+        }
     }
 
     return mods;

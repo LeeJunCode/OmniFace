@@ -289,6 +289,10 @@ void DetailPage::showTask(const std::string& output_dir, bool from_history) {
     aligned_paths_.clear();
     tracked_fps_ = 0.0;
     is_onnx_csv_ = false;
+    is_gaze_csv_ = false;
+    gaze_csv_headers_.clear();
+    gaze_csv_rows_.clear();
+    gaze_frame_to_row_.clear();
 
     loadCSV(output_dir);
 
@@ -503,6 +507,12 @@ void DetailPage::loadCSV(const std::string& output_dir) {
     for (const auto& h : csv_headers_) {
         if (h == "pitch") { is_onnx_csv_ = true; break; }
     }
+    // Detect gaze CSV format (has "gaze_yaw" column)
+    if (!is_onnx_csv_) {
+        for (const auto& h : csv_headers_) {
+            if (h == "gaze_yaw") { is_gaze_csv_ = true; break; }
+        }
+    }
     if (frame_col >= 0) {
         for (size_t r = 0; r < csv_rows_.size(); ++r) {
             try {
@@ -511,6 +521,39 @@ void DetailPage::loadCSV(const std::string& output_dir) {
             } catch (...) {}
         }
     }
+
+    // Load separate gaze CSV if present (skip if primary CSV is already gaze)
+    if (!is_gaze_csv_) {
+    std::string gaze_csv_path;
+    for (const auto& entry : fs::directory_iterator(output_dir)) {
+        auto fname = entry.path().filename().string();
+        if (fname == "gaze_analysis.csv") { gaze_csv_path = entry.path().string(); break; }
+    }
+    if (!gaze_csv_path.empty()) {
+        std::ifstream gfile(gaze_csv_path);
+        if (gfile.is_open()) {
+            std::string gline;
+            bool gfirst = true;
+            while (std::getline(gfile, gline)) {
+                if (gline.empty()) continue;
+                if (gfirst) { gaze_csv_headers_ = parseRow(gline); gfirst = false; }
+                else { gaze_csv_rows_.push_back(parseRow(gline)); }
+            }
+            int gframe_col = -1;
+            for (size_t i = 0; i < gaze_csv_headers_.size(); ++i) {
+                if (gaze_csv_headers_[i] == "frame") { gframe_col = static_cast<int>(i); break; }
+            }
+            if (gframe_col >= 0) {
+                for (size_t r = 0; r < gaze_csv_rows_.size(); ++r) {
+                    try {
+                        int fnum = std::stoi(gaze_csv_rows_[r][gframe_col]);
+                        gaze_frame_to_row_[fnum] = static_cast<int>(r);
+                    } catch (...) {}
+                }
+            }
+        }
+    }
+    }  // if (!is_gaze_csv_)
 }
 
 void DetailPage::onDetailFrameSync(qint64 positionMs) {
@@ -543,6 +586,123 @@ void DetailPage::onDetailFrameSync(qint64 positionMs) {
     auto valf = [&val](int idx) -> double {
         try { return std::stod(val(idx)); } catch (...) { return 0.0; }
     };
+
+    // Gaze CSV lookup helper (separate from main CSV)
+    auto gaze_col = [this](const std::string& name) -> int {
+        for (size_t i = 0; i < gaze_csv_headers_.size(); ++i)
+            if (gaze_csv_headers_[i] == name) return static_cast<int>(i);
+        return -1;
+    };
+    auto buildGazeHtml = [&](int csv_frame_num) -> QString {
+        auto git = gaze_frame_to_row_.find(csv_frame_num);
+        if (git == gaze_frame_to_row_.end()) return {};
+        const auto& grow = gaze_csv_rows_[git->second];
+        auto gv = [&grow](int idx) -> std::string {
+            if (idx < 0 || idx >= static_cast<int>(grow.size())) return "0";
+            return grow[idx];
+        };
+        auto gvf = [&gv](int idx) -> double {
+            try { return std::stod(gv(idx)); } catch (...) { return 0.0; }
+        };
+        int gy_col = gaze_col("gaze_yaw");
+        int gp_col = gaze_col("gaze_pitch");
+        if (gy_col < 0 || gp_col < 0) return {};
+        double gy = gvf(gy_col);
+        double gp = gvf(gp_col);
+        double gx = gvf(gaze_col("gaze_x"));
+        double gy2 = gvf(gaze_col("gaze_y"));
+        double gz = gvf(gaze_col("gaze_z"));
+
+        QString h_dir, v_dir;
+        if (gy > 10.0) h_dir = QStringLiteral("\u53f3");
+        else if (gy < -10.0) h_dir = QStringLiteral("\u5de6");
+        if (gp > 10.0) v_dir = QStringLiteral("\u4e0a");
+        else if (gp < -10.0) v_dir = QStringLiteral("\u4e0b");
+        QString gdesc;
+        if (h_dir.isEmpty() && v_dir.isEmpty())
+            gdesc = QStringLiteral("\u6b63\u89c6\u524d\u65b9");
+        else if (h_dir.isEmpty())
+            gdesc = QStringLiteral("\u770b\u5411%1\u65b9").arg(v_dir);
+        else if (v_dir.isEmpty())
+            gdesc = QStringLiteral("\u770b\u5411%1\u65b9").arg(h_dir);
+        else
+            gdesc = QStringLiteral("\u770b\u5411%1%2\u65b9").arg(h_dir, v_dir);
+
+        QString ghtml;
+        ghtml += QStringLiteral(
+            "<div style='margin-top:4px;'>"
+            "<span style='color:#888;'>\u89c6\u7ebf\u65b9\u5411 (L2CS-Net)\uff1a</span><b>%1</b>"
+            "</div>").arg(gdesc);
+        ghtml += QStringLiteral(
+            "<div>"
+            "<span style='color:#888;'>\u89c6\u7ebf\u89d2\u5ea6\uff1a</span>"
+            "<b>yaw=%1\u00b0</b>&nbsp;&nbsp;<b>pitch=%2\u00b0</b>"
+            "</div>").arg(gy, 0, 'f', 1).arg(gp, 0, 'f', 1);
+        ghtml += QStringLiteral(
+            "<div>"
+            "<span style='color:#888;'>3D\u89c6\u7ebf\u5411\u91cf\uff1a</span>"
+            "<b>(%1, %2, %3)</b>"
+            "</div>").arg(gx, 0, 'f', 3).arg(gy2, 0, 'f', 3).arg(gz, 0, 'f', 3);
+        return ghtml;
+    };
+
+    if (is_gaze_csv_) {
+        double gy = valf(col("gaze_yaw"));
+        double gp = valf(col("gaze_pitch"));
+        double gx = valf(col("gaze_x"));
+        double gy2 = valf(col("gaze_y"));
+        double gz = valf(col("gaze_z"));
+        bool has_gaze = (col("gaze_yaw") >= 0 && col("gaze_pitch") >= 0);
+
+        QString h_dir, v_dir;
+        if (gy > 10.0) h_dir = QStringLiteral("\u53f3");
+        else if (gy < -10.0) h_dir = QStringLiteral("\u5de6");
+        if (gp > 10.0) v_dir = QStringLiteral("\u4e0a");
+        else if (gp < -10.0) v_dir = QStringLiteral("\u4e0b");
+        QString gdesc;
+        if (h_dir.isEmpty() && v_dir.isEmpty())
+            gdesc = QStringLiteral("\u6b63\u89c6\u524d\u65b9");
+        else if (h_dir.isEmpty())
+            gdesc = QStringLiteral("\u770b\u5411%1\u65b9").arg(v_dir);
+        else if (v_dir.isEmpty())
+            gdesc = QStringLiteral("\u770b\u5411%1\u65b9").arg(h_dir);
+        else
+            gdesc = QStringLiteral("\u770b\u5411%1%2\u65b9").arg(h_dir, v_dir);
+
+        QString html;
+        html += "<div style='font-size:13px; line-height:1.8; color:#333;'>";
+        html += QStringLiteral(
+            "<div>"
+            "<span style='color:#888;'>\u7b2c </span><b>%1</b>"
+            "<span style='color:#888;'> \u5e27 &nbsp;|&nbsp; \u65f6\u95f4 </span><b>%2 \u79d2</b>"
+            "</div>")
+            .arg(QString::fromStdString(val(col("frame"))).toHtmlEscaped())
+            .arg(QString::fromStdString(val(col("timestamp"))).toHtmlEscaped());
+        html += QStringLiteral(
+            "<div style='margin-top:4px;'>"
+            "<span style='color:#888;'>\u89c6\u7ebf\u65b9\u5411 (L2CS-Net)\uff1a</span><b>%1</b>"
+            "</div>").arg(gdesc);
+        html += QStringLiteral(
+            "<div>"
+            "<span style='color:#888;'>\u89c6\u7ebf\u89d2\u5ea6\uff1a</span>"
+            "<b>yaw=%1\u00b0</b>&nbsp;&nbsp;<b>pitch=%2\u00b0</b>"
+            "</div>").arg(gy, 0, 'f', 1).arg(gp, 0, 'f', 1);
+        html += QStringLiteral(
+            "<div>"
+            "<span style='color:#888;'>3D\u89c6\u7ebf\u5411\u91cf\uff1a</span>"
+            "<b>(%1, %2, %3)</b>"
+            "</div>").arg(gx, 0, 'f', 3).arg(gy2, 0, 'f', 3).arg(gz, 0, 'f', 3);
+        html += QStringLiteral(
+            "<div style='margin-top:6px;'>"
+            "<span style='color:#888;'>\u6a21\u578b\uff1a</span><b>L2CS-Net</b>"
+            "</div>");
+        html += "</div>";
+        detail_data_label_->setText(html);
+
+        detail_face_thumb_->setVisible(false);
+        align_caption_->setVisible(false);
+        return;
+    }
 
     if (is_onnx_csv_) {
         double pitch = valf(col("pitch"));
@@ -632,6 +792,7 @@ void DetailPage::onDetailFrameSync(qint64 positionMs) {
             "<span style='color:#888;'>\u5173\u952e\u70b9\uff1a</span><b>468 \u4e2a</b>"
             "&nbsp;&nbsp;<span style='color:#888;'>\u6a21\u578b\uff1a</span><b>MediaPipe FaceMesh</b>"
             "</div>");
+        html += buildGazeHtml(csv_frame_num);
         html += "</div>";
         detail_data_label_->setText(html);
 
@@ -715,12 +876,12 @@ void DetailPage::onDetailFrameSync(qint64 positionMs) {
     else
         pose_desc = pose_parts.join(QStringLiteral("\u3001"));
 
-    // ---- gaze (CSV values in RADIANS, camera coords: +X=right +Y=down) ----
-    // gaze_angle_x = atan2(gaze.x, -gaze.z): positive = right, negative = left
+    // ---- gaze (CSV values in RADIANS, OpenFace convention) ----
+    // gaze_angle_x = atan2(gaze.x, -gaze.z): OpenFace positive = LEFT in image
     // gaze_angle_y = atan2(gaze.y, -gaze.z): positive = DOWN, negative = UP
     QString h_dir, v_dir;
-    if (gaze_x > 0.3) h_dir = QStringLiteral("\u53f3");
-    else if (gaze_x < -0.3) h_dir = QStringLiteral("\u5de6");
+    if (gaze_x > 0.3) h_dir = QStringLiteral("\u5de6");
+    else if (gaze_x < -0.3) h_dir = QStringLiteral("\u53f3");
     if (gaze_y > 0.3) v_dir = QStringLiteral("\u4e0b");
     else if (gaze_y < -0.3) v_dir = QStringLiteral("\u4e0a");
     QString gaze_desc;
@@ -797,6 +958,7 @@ void DetailPage::onDetailFrameSync(qint64 positionMs) {
         "<div>"
         "<span style='color:#888;'>\u9762\u90e8\u8868\u60c5\uff1a</span><b>%1</b>"
         "</div>").arg(au_desc);
+    html += buildGazeHtml(csv_frame_num);
     html += "</div>";
     detail_data_label_->setText(html);
 

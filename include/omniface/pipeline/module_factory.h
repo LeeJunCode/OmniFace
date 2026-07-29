@@ -3,6 +3,7 @@
 #include <memory>
 
 #include "omniface/core/analysis/face_analyzer.h"
+#include "omniface/core/analysis/onnx/gaze_estimator.h"
 #include "omniface/core/analysis/onnx/onnx_face_analyzer.h"
 #include "omniface/core/detection/face_detector.h"
 #include "omniface/core/recognition/face_matcher.h"
@@ -19,6 +20,7 @@ struct PipelineModules {
     std::unique_ptr<recognition::FaceMatcher> matcher;
     std::unique_ptr<analysis::FaceAnalyzer> face_analyzer;
     std::unique_ptr<analysis::onnx::OnnxFaceAnalyzer> onnx_analyzer;
+    std::unique_ptr<analysis::onnx::GazeEstimator> gaze_estimator;
 };
 
 PipelineModules CreateModules(const PipelineConfig& config);

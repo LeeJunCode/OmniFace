@@ -7,6 +7,7 @@
 
 #include <opencv2/core/mat.hpp>
 
+#include "omniface/core/analysis/onnx/gaze_estimator.h"
 #include "omniface/core/analysis/onnx/onnx_face_analyzer.h"
 #include "omniface/pipeline/config.h"
 #include "omniface/types.h"
@@ -24,6 +25,7 @@ struct FrameResult {
     std::vector<MatchResult> match_results;
     FaceAnalysisResult analysis;
     std::vector<analysis::onnx::OnnxAnalysisResult> onnx_results;
+    std::vector<analysis::onnx::GazeEstimationResult> gaze_results;
 };
 
 using FrameCallback = std::function<void(const FrameResult&)>;

@@ -121,6 +121,7 @@ target_compile_features(omniface_analysis PUBLIC cxx_std_20)
 add_library(omniface_analysis_onnx STATIC
     core/analysis/onnx/pose_estimator.cc
     core/analysis/onnx/pose_visualizer.cc
+    core/analysis/onnx/gaze_estimator.cc
     core/analysis/onnx/onnx_face_analyzer.cc
 )
 

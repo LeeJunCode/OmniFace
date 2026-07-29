@@ -15,7 +15,7 @@ OnnxAnalysisPanel::OnnxAnalysisPanel(QWidget* parent)
     layout->setContentsMargins(12, 10, 12, 10);
     layout->setSpacing(6);
 
-    title_label_ = new QLabel(QStringLiteral("\u9762\u90e8\u59ff\u6001\u5206\u6790"));
+    title_label_ = new QLabel(QStringLiteral("\u5206\u6790\u7ed3\u679c"));
     title_label_->setStyleSheet(
         "color: #333333; font-size: 14px; font-weight: bold; background: transparent;");
     layout->addWidget(title_label_);
@@ -29,6 +29,10 @@ OnnxAnalysisPanel::OnnxAnalysisPanel(QWidget* parent)
     layout->addWidget(data_label_);
 
     layout->addStretch();
+}
+
+void OnnxAnalysisPanel::setAnalysisLabel(const QString& label) {
+    title_label_->setText(label);
 }
 
 void OnnxAnalysisPanel::updateResults(
@@ -87,6 +91,47 @@ void OnnxAnalysisPanel::updateResults(
     } else {
         data_label_->setText(text);
     }
+}
+
+void OnnxAnalysisPanel::updateGazeResults(
+    const std::vector<analysis::onnx::GazeEstimationResult>& results) {
+    if (results.empty()) {
+        data_label_->setText(QStringLiteral("\u672a\u68c0\u6d4b\u5230\u4eba\u8138"));
+        return;
+    }
+
+    QString text;
+    for (size_t i = 0; i < results.size(); ++i) {
+        const auto& r = results[i];
+        if (!r.valid) continue;
+
+        float y = r.yaw;
+        float p = r.pitch;
+
+        QString h_dir, v_dir;
+        if (y > 10.0f) h_dir = QStringLiteral("\u53f3");
+        else if (y < -10.0f) h_dir = QStringLiteral("\u5de6");
+        else h_dir = QStringLiteral("\u6b63\u89c6");
+
+        if (p > 10.0f) v_dir = QStringLiteral("\u4e0a");
+        else if (p < -10.0f) v_dir = QStringLiteral("\u4e0b");
+        else v_dir = QStringLiteral("\u6b63\u89c6");
+
+        if (i > 0) text += "\n";
+        text += QStringLiteral(
+            "\u76ee\u6807\u4eba\u7269\n"
+            "  \u89c6\u7ebf\u65b9\u5411: \u6c34\u5e73%1\u3001\u5782\u76f4%2\n"
+            "  \u504f\u822a\u89d2: %3\u00b0  \u4fef\u4ef0\u89d2: %4\u00b0\n"
+            "  \u89c6\u7ebf\u5411\u91cf: (%5, %6, %7)")
+            .arg(h_dir, v_dir)
+            .arg(y, 0, 'f', 1)
+            .arg(p, 0, 'f', 1)
+            .arg(r.gaze_vector[0], 0, 'f', 2)
+            .arg(r.gaze_vector[1], 0, 'f', 2)
+            .arg(r.gaze_vector[2], 0, 'f', 2);
+    }
+
+    data_label_->setText(text.isEmpty() ? QStringLiteral("\u6682\u65e0\u6570\u636e") : text);
 }
 
 void OnnxAnalysisPanel::clear() {

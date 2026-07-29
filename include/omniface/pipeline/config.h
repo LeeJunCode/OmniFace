@@ -6,12 +6,13 @@
 
 namespace omniface {
 
-enum class AnalysisBackend { kOpenFace, kOnnx, kNone };
+enum class AnalysisBackend { kOpenFace, kOnnx, kGaze, kNone };
 
 inline const char* AnalysisBackendToString(AnalysisBackend b) {
     switch (b) {
     case AnalysisBackend::kOpenFace: return "openface";
     case AnalysisBackend::kOnnx:     return "onnx";
+    case AnalysisBackend::kGaze:     return "gaze";
     case AnalysisBackend::kNone:     return "none";
     }
     return "openface";
@@ -19,6 +20,7 @@ inline const char* AnalysisBackendToString(AnalysisBackend b) {
 
 inline AnalysisBackend AnalysisBackendFromString(const std::string& s) {
     if (s == "onnx")     return AnalysisBackend::kOnnx;
+    if (s == "gaze")     return AnalysisBackend::kGaze;
     if (s == "none")     return AnalysisBackend::kNone;
     return AnalysisBackend::kOpenFace;
 }
@@ -53,6 +55,11 @@ struct PipelineBehavior {
     int target_recheck_interval = 0;
     bool skip_analysis = false;
     bool headless = false;
+};
+
+struct GazeConfig {
+    std::string model = "mobilenetv2_gaze.onnx";
+    bool draw_gaze = true;
 };
 
 struct VideoSourceConfig {
@@ -90,11 +97,9 @@ struct OpenFaceConfig {
 // ---- ONNX analysis configuration (MediaPipe FaceMesh + more) ------------------
 struct OnnxAnalysisConfig {
     bool enable_pose = true;
-    bool enable_gaze = false;
     bool enable_au = false;
     std::string landmark_model = "models/mediapipe/face_mesh_Nx3x192x192_post.onnx";
     std::string canonical_model = "models/mediapipe/canonical_face_model.obj";
-    std::string gaze_model;
     std::string au_model;
     int analysis_threads = 1;
     float margin = 0.25f;
@@ -113,6 +118,7 @@ struct PipelineConfig {
     LogConfig log;
     OpenFaceConfig openface;
     OnnxAnalysisConfig onnx;
+    GazeConfig gaze;
     AnalysisBackend analysis_backend = AnalysisBackend::kOpenFace;
     std::string output_base_dir;
 };

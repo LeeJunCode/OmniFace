@@ -10,24 +10,25 @@ OnnxFaceAnalyzer::OnnxFaceAnalyzer(const OnnxAnalyzerConfig& config)
         if (config_.landmark_model.empty() || config_.canonical_model.empty()) {
             spdlog::warn("OnnxFaceAnalyzer: pose enabled but model paths empty, disabling pose");
             config_.enable_pose = false;
-            return;
-        }
-        PoseEstimator::Config pose_cfg;
-        pose_cfg.margin = config_.margin;
-        pose_cfg.score_threshold = config_.score_threshold;
-        pose_cfg.canonical_model_path = config_.canonical_model;
-        pose_cfg.intra_threads = config_.analysis_threads;
+        } else {
+            PoseEstimator::Config pose_cfg;
+            pose_cfg.margin = config_.margin;
+            pose_cfg.score_threshold = config_.score_threshold;
+            pose_cfg.canonical_model_path = config_.canonical_model;
+            pose_cfg.intra_threads = config_.analysis_threads;
 
-        try {
-            pose_estimator_ = std::make_unique<PoseEstimator>(
-                config_.landmark_model, pose_cfg);
-            spdlog::info("OnnxFaceAnalyzer: PoseEstimator loaded ({})",
-                         config_.landmark_model);
-        } catch (const std::exception& e) {
-            spdlog::error("OnnxFaceAnalyzer: failed to load PoseEstimator: {}", e.what());
-            config_.enable_pose = false;
+            try {
+                pose_estimator_ = std::make_unique<PoseEstimator>(
+                    config_.landmark_model, pose_cfg);
+                spdlog::info("OnnxFaceAnalyzer: PoseEstimator loaded ({})",
+                             config_.landmark_model);
+            } catch (const std::exception& e) {
+                spdlog::error("OnnxFaceAnalyzer: failed to load PoseEstimator: {}", e.what());
+                config_.enable_pose = false;
+            }
         }
     }
+
 }
 
 OnnxFaceAnalyzer::~OnnxFaceAnalyzer() = default;
@@ -44,8 +45,8 @@ OnnxAnalysisResult OnnxFaceAnalyzer::Analyze(const cv::Mat& frame,
 
     if (pose_estimator_) {
         auto pose_result = pose_estimator_->EstimatePose(frame, bbox);
+        result.pose_valid = pose_result.valid;
         result.pose = std::move(pose_result);
-        result.pose_valid = result.pose.valid;
     }
 
     return result;

@@ -55,6 +55,10 @@ private:
     QComboBox* onnx_draw_landmarks_ = nullptr;
     QComboBox* onnx_draw_wireframe_ = nullptr;
     QComboBox* onnx_draw_normal_ = nullptr;
+
+    // Gaze
+    QComboBox* gaze_model_combo_ = nullptr;
+    QComboBox* gaze_draw_ = nullptr;
 };
 
 }  // namespace omniface::ui

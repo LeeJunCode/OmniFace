@@ -56,10 +56,9 @@ video:
   input_path: ""
   output_path: ""
 
-# ---- ONNX analysis configuration (MediaPipe FaceMesh + more) -------------------
+# ---- ONNX analysis configuration (MediaPipe FaceMesh) ---------------------------
 onnx:
   enable_pose: true
-  enable_gaze: false       # reserved for L2CS-Net
   enable_au: false         # reserved for OpenGprahAU
   landmark_model: "models/mediapipe/face_mesh_Nx3x192x192_post.onnx"
   canonical_model: "models/mediapipe/canonical_face_model.obj"
@@ -70,6 +69,11 @@ onnx:
   draw_landmarks: true
   draw_face_wireframe: true
   draw_face_normal: true
+
+# ---- L2CS-Net gaze estimation (select "gaze" backend to use) --------------------
+gaze:
+  model: "mobilenetv2_gaze.onnx"
+  draw_gaze: true
 
 log:
   level: "debug"

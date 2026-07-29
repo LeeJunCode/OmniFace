@@ -143,16 +143,12 @@ PipelineConfig LoadPipelineConfig(const std::string& yaml_path) {
     if (auto onx = SafeSub(root, "onnx")) {
         cfg.onnx.enable_pose =
             SafeGet<bool>(onx, "enable_pose", cfg.onnx.enable_pose);
-        cfg.onnx.enable_gaze =
-            SafeGet<bool>(onx, "enable_gaze", cfg.onnx.enable_gaze);
         cfg.onnx.enable_au =
             SafeGet<bool>(onx, "enable_au", cfg.onnx.enable_au);
         cfg.onnx.landmark_model =
             SafeGet<std::string>(onx, "landmark_model", cfg.onnx.landmark_model);
         cfg.onnx.canonical_model =
             SafeGet<std::string>(onx, "canonical_model", cfg.onnx.canonical_model);
-        cfg.onnx.gaze_model =
-            SafeGet<std::string>(onx, "gaze_model", cfg.onnx.gaze_model);
         cfg.onnx.au_model =
             SafeGet<std::string>(onx, "au_model", cfg.onnx.au_model);
         cfg.onnx.analysis_threads =
@@ -169,6 +165,13 @@ PipelineConfig LoadPipelineConfig(const std::string& yaml_path) {
             SafeGet<bool>(onx, "draw_face_wireframe", cfg.onnx.draw_face_wireframe);
         cfg.onnx.draw_face_normal =
             SafeGet<bool>(onx, "draw_face_normal", cfg.onnx.draw_face_normal);
+    }
+
+    if (auto g = SafeSub(root, "gaze")) {
+        cfg.gaze.model =
+            SafeGet<std::string>(g, "model", cfg.gaze.model);
+        cfg.gaze.draw_gaze =
+            SafeGet<bool>(g, "draw_gaze", cfg.gaze.draw_gaze);
     }
 
     // Sanitize: clamp values to valid ranges
@@ -274,11 +277,9 @@ void SavePipelineConfig(const std::string& yaml_path, const PipelineConfig& cfg)
     {
         const auto& onx = cfg.onnx;
         root["onnx"]["enable_pose"] = onx.enable_pose;
-        root["onnx"]["enable_gaze"] = onx.enable_gaze;
         root["onnx"]["enable_au"] = onx.enable_au;
         root["onnx"]["landmark_model"] = onx.landmark_model;
         root["onnx"]["canonical_model"] = onx.canonical_model;
-        root["onnx"]["gaze_model"] = onx.gaze_model;
         root["onnx"]["au_model"] = onx.au_model;
         root["onnx"]["analysis_threads"] = onx.analysis_threads;
         root["onnx"]["margin"] = onx.margin;
@@ -287,6 +288,12 @@ void SavePipelineConfig(const std::string& yaml_path, const PipelineConfig& cfg)
         root["onnx"]["draw_landmarks"] = onx.draw_landmarks;
         root["onnx"]["draw_face_wireframe"] = onx.draw_face_wireframe;
         root["onnx"]["draw_face_normal"] = onx.draw_face_normal;
+    }
+
+    {
+        const auto& gz = cfg.gaze;
+        root["gaze"]["model"] = gz.model;
+        root["gaze"]["draw_gaze"] = gz.draw_gaze;
     }
 
     std::ofstream fout(yaml_path);

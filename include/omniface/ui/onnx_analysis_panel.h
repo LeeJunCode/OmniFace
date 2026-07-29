@@ -4,6 +4,7 @@
 
 #include <QWidget>
 
+#include "omniface/core/analysis/onnx/gaze_estimator.h"
 #include "omniface/core/analysis/onnx/onnx_face_analyzer.h"
 
 class QLabel;
@@ -18,9 +19,9 @@ public:
     explicit OnnxAnalysisPanel(QWidget* parent = nullptr);
 
     void updateResults(const std::vector<analysis::onnx::OnnxAnalysisResult>& results);
+    void updateGazeResults(const std::vector<analysis::onnx::GazeEstimationResult>& results);
+    void setAnalysisLabel(const QString& label);
     void clear();
-
-protected:
     void paintEvent(QPaintEvent* event) override;
     QSize minimumSizeHint() const override;
 

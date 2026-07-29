@@ -68,6 +68,18 @@ public:
     std::atomic<bool> stop_requested_{false};
     std::ofstream onnx_csv_;
     bool onnx_csv_initialized_ = false;
+    std::ofstream gaze_csv_;
+    bool gaze_csv_initialized_ = false;
+
+    // EMA smoothing for gaze angles and bbox to reduce frame-to-frame jitter
+    float smooth_yaw_ = 0.0f;
+    float smooth_pitch_ = 0.0f;
+    float smooth_bbox_x_ = 0.0f;
+    float smooth_bbox_y_ = 0.0f;
+    float smooth_bbox_w_ = 0.0f;
+    float smooth_bbox_h_ = 0.0f;
+    bool gaze_smooth_init_ = false;
+    int prev_target_id_ = -1;
 
     Impl(const PipelineConfig& cfg, FrameCallback callback)
         : config_(cfg)
@@ -170,6 +182,89 @@ public:
             }
         }
 
+        // Gaze estimation — independent of analysis backend
+        if (!config_.behavior.skip_analysis && modules_.gaze_estimator
+            && modules_.gaze_estimator->IsValid()
+            && target_tracker_.HasTarget()) {
+            int cur_target_id = target_tracker_.GetTargetTrackId();
+            bool target_id_changed = (cur_target_id != prev_target_id_);
+            if (target_id_changed) prev_target_id_ = cur_target_id;
+            cv::Rect_<float> target_bbox_gaze = target_tracker_.GetTargetBbox();
+            if (target_bbox_gaze.width > 0 && target_bbox_gaze.height > 0) {
+                // EMA-smooth the bbox to reduce crop jitter (root cause of gaze jitter)
+                if (!gaze_smooth_init_ || target_id_changed) {
+                    smooth_bbox_x_ = target_bbox_gaze.x;
+                    smooth_bbox_y_ = target_bbox_gaze.y;
+                    smooth_bbox_w_ = target_bbox_gaze.width;
+                    smooth_bbox_h_ = target_bbox_gaze.height;
+                } else {
+                    constexpr float kBboxAlpha = 0.25f;
+                    smooth_bbox_x_ = kBboxAlpha * target_bbox_gaze.x
+                                   + (1.0f - kBboxAlpha) * smooth_bbox_x_;
+                    smooth_bbox_y_ = kBboxAlpha * target_bbox_gaze.y
+                                   + (1.0f - kBboxAlpha) * smooth_bbox_y_;
+                    smooth_bbox_w_ = kBboxAlpha * target_bbox_gaze.width
+                                   + (1.0f - kBboxAlpha) * smooth_bbox_w_;
+                    smooth_bbox_h_ = kBboxAlpha * target_bbox_gaze.height
+                                   + (1.0f - kBboxAlpha) * smooth_bbox_h_;
+                }
+                cv::Rect_<float> smooth_bbox(smooth_bbox_x_, smooth_bbox_y_,
+                                             smooth_bbox_w_, smooth_bbox_h_);
+
+                BoundingBox bbox;
+                bbox.x1 = smooth_bbox.x;
+                bbox.y1 = smooth_bbox.y;
+                bbox.x2 = smooth_bbox.x + smooth_bbox.width;
+                bbox.y2 = smooth_bbox.y + smooth_bbox.height;
+                bbox.confidence = 1.0f;
+
+                auto gaze_result = modules_.gaze_estimator->Estimate(frame, bbox);
+
+                if (gaze_result.valid) {
+                    if (!gaze_smooth_init_ || target_id_changed) {
+                        smooth_yaw_ = gaze_result.yaw;
+                        smooth_pitch_ = gaze_result.pitch;
+                        gaze_smooth_init_ = true;
+                    } else {
+                        constexpr float kGazeAlpha = 0.2f;
+                        smooth_yaw_ = kGazeAlpha * gaze_result.yaw
+                                    + (1.0f - kGazeAlpha) * smooth_yaw_;
+                        smooth_pitch_ = kGazeAlpha * gaze_result.pitch
+                                      + (1.0f - kGazeAlpha) * smooth_pitch_;
+                    }
+                    gaze_result.yaw = smooth_yaw_;
+                    gaze_result.pitch = smooth_pitch_;
+                    float yaw_r = smooth_yaw_ * static_cast<float>(CV_PI) / 180.0f;
+                    float pitch_r = smooth_pitch_ * static_cast<float>(CV_PI) / 180.0f;
+                    gaze_result.gaze_vector = cv::Vec3f(
+                        -std::cos(pitch_r) * std::sin(yaw_r),
+                        -std::sin(pitch_r),
+                        -std::cos(pitch_r) * std::cos(yaw_r));
+                    if (!gaze_csv_initialized_) {
+                        std::string csv_path = output_mgr_.GetOutputDir() +
+                                               "/gaze_analysis.csv";
+                        gaze_csv_.open(csv_path);
+                        if (gaze_csv_.is_open()) {
+                            gaze_csv_ << "frame,timestamp,gaze_yaw,gaze_pitch,gaze_x,gaze_y,gaze_z\n";
+                            gaze_csv_initialized_ = true;
+                            spdlog::info("Gaze CSV output: {}", csv_path);
+                        }
+                    }
+                    if (gaze_csv_.is_open()) {
+                        double ts = (decoder_.GetFps() > 0.0)
+                            ? (frame_index - 1) / decoder_.GetFps() : 0.0;
+                        gaze_csv_ << frame_index << "," << ts << ","
+                                  << gaze_result.yaw << "," << gaze_result.pitch << ","
+                                  << gaze_result.gaze_vector[0] << ","
+                                  << gaze_result.gaze_vector[1] << ","
+                                  << gaze_result.gaze_vector[2] << "\n";
+                    }
+                }
+
+                result.gaze_results.push_back(std::move(gaze_result));
+            }
+        }
+
         // OpenFace analysis for confirmed target
         if (modules_.face_analyzer && modules_.face_analyzer->IsValid()
             && target_tracker_.HasTarget()) {
@@ -222,6 +317,36 @@ public:
             }
         }
 
+        // Draw gaze results (independent of analysis backend)
+        // Matches official draw_gaze: length = bbox_width, dx = -length*sin(yaw)*cos(pitch),
+        // dy = -length*sin(pitch). Our GazeTo3D produces the same direction via its x,y components.
+        // Arrow origin uses current (unsmoothed) bbox to track face movement in real time;
+        // direction uses smoothed angles to reduce jitter.
+        if (config_.gaze.draw_gaze && !result.gaze_results.empty()
+            && target_tracker_.HasTarget() && gaze_smooth_init_) {
+            cv::Rect_<float> cur_bbox = target_tracker_.GetTargetBbox();
+            float cx = cur_bbox.x + cur_bbox.width / 2.0f;
+            float cy = cur_bbox.y + cur_bbox.height / 2.0f;
+            cv::Point2f start(cx, cy);
+            float arrow_len = cur_bbox.width;
+            for (const auto& gr : result.gaze_results) {
+                if (!gr.valid) continue;
+                cv::Point2f end(start.x + gr.gaze_vector[0] * arrow_len,
+                                start.y + gr.gaze_vector[1] * arrow_len);
+                cv::circle(frame, start, 4, cv::Scalar(255, 0, 255), -1, cv::LINE_AA);
+                cv::arrowedLine(frame, start, end, cv::Scalar(255, 0, 255), 2,
+                                cv::LINE_AA, 0, 0.25);
+                char gaze_text[48];
+                std::snprintf(gaze_text, sizeof(gaze_text),
+                              "gaze:%.1f,%.1f", gr.yaw, gr.pitch);
+                cv::putText(frame, gaze_text,
+                            cv::Point(static_cast<int>(end.x),
+                                      static_cast<int>(end.y) - 5),
+                            cv::FONT_HERSHEY_SIMPLEX, 0.4,
+                            cv::Scalar(255, 0, 255), 1, cv::LINE_AA);
+            }
+        }
+
         DrawFaceResults(frame, tracked_faces, matches, target_tracker_.GetTargetTrackId());
 
         output_mgr_.WriteFrame(frame);
@@ -231,7 +356,8 @@ public:
             std::chrono::duration<double, std::milli>(t_end - t_start).count();
         result.recognition_latency_ms =
             std::chrono::duration<double, std::milli>(t_recognition_done - t_start).count();
-        bool any_analysis = result.analysis.valid || !result.onnx_results.empty();
+        bool any_analysis = result.analysis.valid || !result.onnx_results.empty()
+                          || !result.gaze_results.empty();
         result.analysis_latency_ms = any_analysis
             ? std::chrono::duration<double, std::milli>(t_analysis_done - t_recognition_done).count()
             : 0.0;
