@@ -121,7 +121,7 @@ void MainWindow::setupMenus() {
 }
 
 void MainWindow::onViewDetails() {
-    // Handled by ProcessPage signal
+    // 由 ProcessPage 信号处理
 }
 
 void MainWindow::onTaskHistory() {

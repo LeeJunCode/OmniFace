@@ -316,7 +316,7 @@ void ProcessPage::onOpenVideo() {
         return;
     }
 
-    // Validate extension against allowlist
+    // 校验文件扩展名
     QString ext = file_info.suffix().toLower();
     if (ext != "mp4" && ext != "avi" && ext != "mkv" && ext != "mov") {
         QMessageBox::warning(this, QStringLiteral("\u683c\u5f0f\u9519\u8bef"),
@@ -362,7 +362,7 @@ void ProcessPage::onOpenReference() {
         return;
     }
 
-    // Validate extension against allowlist
+    // 校验文件扩展名
     QString ext = file_info.suffix().toLower();
     if (ext != "jpg" && ext != "jpeg" && ext != "png" && ext != "bmp") {
         QMessageBox::warning(this, QStringLiteral("\u683c\u5f0f\u9519\u8bef"),

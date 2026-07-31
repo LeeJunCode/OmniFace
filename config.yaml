@@ -1,6 +1,6 @@
-# OmniFace default configuration
+# OmniFace 默认配置
 
-# Analysis backend: openface | onnx | none
+# 分析后端：openface | onnx | gaze | none
 analysis_backend: openface
 
 model:
@@ -30,11 +30,11 @@ behavior:
   max_frame_width: 0
   target_recheck_interval: 0
 
-# ---- OpenFace analysis configuration ----------------------------------------
+# ---- OpenFace 分析配置 ----------------------------------------
 openface:
   profile: standard          # standard | max_quality
 
-  # Optional per-field overrides (comment out to use profile default):
+  # 可选逐字段覆盖（注释掉则使用 profile 默认值）：
   # model_file: main_ceclm_general.txt
   # sigma: 1.25
   # reg_factor: 35.0
@@ -56,10 +56,10 @@ video:
   input_path: ""
   output_path: ""
 
-# ---- ONNX analysis configuration (MediaPipe FaceMesh) ---------------------------
+# ---- ONNX 分析配置（MediaPipe FaceMesh） ---------------------------
 onnx:
   enable_pose: true
-  enable_au: false         # reserved for OpenGprahAU
+  enable_au: false         # 预留给 OpenGprahAU
   landmark_model: "models/mediapipe/face_mesh_Nx3x192x192_post.onnx"
   canonical_model: "models/mediapipe/canonical_face_model.obj"
   analysis_threads: 1
@@ -70,7 +70,7 @@ onnx:
   draw_face_wireframe: true
   draw_face_normal: true
 
-# ---- L2CS-Net gaze estimation (select "gaze" backend to use) --------------------
+# ---- L2CS-Net 视线估计（选择 "gaze" 后端启用） --------------------
 gaze:
   model: "mobilenetv2_gaze.onnx"
   draw_gaze: true

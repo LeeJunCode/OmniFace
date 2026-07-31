@@ -65,7 +65,7 @@ private:
     bool is_gaze_csv_ = false;
     std::string current_dir_;
 
-    // Separate gaze CSV
+    // 独立的视线 CSV 数据
     std::vector<std::string> gaze_csv_headers_;
     std::vector<std::vector<std::string>> gaze_csv_rows_;
     std::unordered_map<int, int> gaze_frame_to_row_;

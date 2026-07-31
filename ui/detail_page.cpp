@@ -100,7 +100,7 @@ void DetailPage::setupUI() {
     auto panelTitleStyle = QStringLiteral(
         "font-weight: bold; font-size: 13px; color: #333; border: none;");
 
-    // Panel 1: Video info
+    // 面板 1：视频信息
     auto* panel1 = new QFrame;
     panel1->setStyleSheet(panelStyle);
     auto* p1l = new QVBoxLayout(panel1);
@@ -144,7 +144,7 @@ void DetailPage::setupUI() {
     p1l->addLayout(del_row);
     right_split->addWidget(panel1);
 
-    // Panel 2: Reference face
+    // 面板 2：目标人脸
     auto* panel2 = new QFrame;
     panel2->setStyleSheet(panelStyle);
     auto* p2l = new QVBoxLayout(panel2);
@@ -187,7 +187,7 @@ void DetailPage::setupUI() {
     p2l->addStretch();
     right_split->addWidget(panel2);
 
-    // Panel 3: Analysis results
+    // 面板 3：分析结果
     auto* panel3 = new QFrame;
     panel3->setStyleSheet(panelStyle);
     auto* p3l = new QVBoxLayout(panel3);
@@ -238,7 +238,7 @@ void DetailPage::setupUI() {
     split->setStretchFactor(1, 1);
     detail_stack_->addWidget(split);
 
-    // Page 1: CSV data view
+    // 页面 1：CSV 数据视图
     auto* csv_page = new QWidget;
     auto* csv_page_layout = new QVBoxLayout(csv_page);
     csv_page_layout->setContentsMargins(0, 0, 0, 0);
@@ -296,7 +296,7 @@ void DetailPage::showTask(const std::string& output_dir, bool from_history) {
 
     loadCSV(output_dir);
 
-    // Find aligned face images
+    // 查找对齐后的人脸图像
     for (const auto& entry : fs::directory_iterator(out_dir)) {
         if (entry.is_directory() && entry.path().filename().string().find("_aligned") != std::string::npos) {
             for (const auto& f : fs::directory_iterator(entry.path())) {
@@ -309,7 +309,7 @@ void DetailPage::showTask(const std::string& output_dir, bool from_history) {
         }
     }
 
-    // Find tracked video
+    // 查找跟踪视频
     std::string tracked_path;
     for (const auto& entry : fs::directory_iterator(out_dir)) {
         if (entry.path().extension() == ".avi") { tracked_path = entry.path().string(); break; }
@@ -326,7 +326,7 @@ void DetailPage::showTask(const std::string& output_dir, bool from_history) {
         detail_video_->setVideoPath(tracked_path);
     }
 
-    // Parse directory name
+    // 解析目录名称
     std::string dirname = out_dir.filename().string();
     std::string video_name = dirname;
     std::string time_display;
@@ -345,7 +345,7 @@ void DetailPage::showTask(const std::string& output_dir, bool from_history) {
         }
     }
 
-    // Find original video
+    // 查找原始视频
     std::string orig_video_path;
     for (const auto& entry : fs::directory_iterator(out_dir)) {
         auto fname = entry.path().filename().string();
@@ -360,7 +360,7 @@ void DetailPage::showTask(const std::string& output_dir, bool from_history) {
     if (orig_video_path.empty()) orig_video_path = tracked_path;
     detail_orig_video_->setVideoPath(orig_video_path);
 
-    // Load reference images
+    // 加载参考图像
     detail_ref_thumb_->setText(QStringLiteral("\u76ee\u6807\u4eba\u7269"));
     detail_ref_detected_->setText(QStringLiteral("\u68c0\u6d4b\u4eba\u8138"));
     for (const auto& entry : fs::directory_iterator(out_dir)) {
@@ -381,7 +381,7 @@ void DetailPage::showTask(const std::string& output_dir, bool from_history) {
             detail_ref_thumb_->setPixmap(scaled);
     }
 
-    // Build info HTML
+    // 构建信息 HTML
     int64_t file_size = 0;
     int total_frames = 0;
     if (!orig_video_path.empty()) {
@@ -502,12 +502,12 @@ void DetailPage::loadCSV(const std::string& output_dir) {
         if (csv_headers_[i] == "frame") { frame_col = static_cast<int>(i); break; }
     }
 
-    // Detect ONNX CSV format (has "pitch" column vs OpenFace's "pose_Rx")
+    // 检测 ONNX CSV 格式（有 "pitch" 列而非 OpenFace 的 "pose_Rx"）
     is_onnx_csv_ = false;
     for (const auto& h : csv_headers_) {
         if (h == "pitch") { is_onnx_csv_ = true; break; }
     }
-    // Detect gaze CSV format (has "gaze_yaw" column)
+    // 检测视线 CSV 格式（有 "gaze_yaw" 列）
     if (!is_onnx_csv_) {
         for (const auto& h : csv_headers_) {
             if (h == "gaze_yaw") { is_gaze_csv_ = true; break; }
@@ -522,7 +522,7 @@ void DetailPage::loadCSV(const std::string& output_dir) {
         }
     }
 
-    // Load separate gaze CSV if present (skip if primary CSV is already gaze)
+    // 加载独立的视线 CSV（如果主 CSV 已是视线数据则跳过）
     if (!is_gaze_csv_) {
     std::string gaze_csv_path;
     for (const auto& entry : fs::directory_iterator(output_dir)) {
@@ -587,7 +587,7 @@ void DetailPage::onDetailFrameSync(qint64 positionMs) {
         try { return std::stod(val(idx)); } catch (...) { return 0.0; }
     };
 
-    // Gaze CSV lookup helper (separate from main CSV)
+    // 视线 CSV 查找辅助（独立于主 CSV）
     auto gaze_col = [this](const std::string& name) -> int {
         for (size_t i = 0; i < gaze_csv_headers_.size(); ++i)
             if (gaze_csv_headers_[i] == name) return static_cast<int>(i);
@@ -713,7 +713,7 @@ void DetailPage::onDetailFrameSync(qint64 positionMs) {
         double pose_dev = std::sqrt(pitch * pitch + yaw * yaw);
         double frontal_score = std::max(0.0, 1.0 - pose_dev / 45.0);
 
-        // Compute face size from landmark bounding box for size score
+        // 从关键点包围框计算人脸尺寸，用于尺寸评分
         double face_min_x = 1e9, face_max_x = -1e9;
         double face_min_y = 1e9, face_max_y = -1e9;
         int lm_found = 0;
@@ -850,10 +850,10 @@ void DetailPage::onDetailFrameSync(qint64 positionMs) {
     else
         quality = QStringLiteral("<span style='color:#e53935;'>\u8f83\u5dee</span>");
 
-    // ---- head pose (CSV values in degrees, camera coords: +X=right +Y=down +Z=forward) ----
-    // Rx = pitch: positive = head nodding DOWN, negative = head tilting UP
-    // Ry = yaw: positive = head turned RIGHT in image, negative = LEFT
-    // Rz = roll: positive = head tilted RIGHT, negative = LEFT
+    // ---- 头部姿态（CSV 值为角度，相机坐标系：+X=右 +Y=下 +Z=前）----
+    // Rx = pitch：正 = 低头，负 = 抬头
+    // Ry = yaw：正 = 头右转，负 = 头左转
+    // Rz = roll：正 = 右倾，负 = 左倾
     QStringList pose_parts;
     if (has_pose) {
         if (pitch > 18.0) pose_parts << QStringLiteral("\u4f4e\u5934");
@@ -876,9 +876,9 @@ void DetailPage::onDetailFrameSync(qint64 positionMs) {
     else
         pose_desc = pose_parts.join(QStringLiteral("\u3001"));
 
-    // ---- gaze (CSV values in RADIANS, OpenFace convention) ----
-    // gaze_angle_x = atan2(gaze.x, -gaze.z): OpenFace positive = LEFT in image
-    // gaze_angle_y = atan2(gaze.y, -gaze.z): positive = DOWN, negative = UP
+    // ---- 视线（CSV 值为弧度，OpenFace 约定）----
+    // gaze_angle_x = atan2(gaze.x, -gaze.z)：正 = 看向图像左侧
+    // gaze_angle_y = atan2(gaze.y, -gaze.z)：正 = 向下看，负 = 向上看
     QString h_dir, v_dir;
     if (gaze_x > 0.3) h_dir = QStringLiteral("\u5de6");
     else if (gaze_x < -0.3) h_dir = QStringLiteral("\u53f3");

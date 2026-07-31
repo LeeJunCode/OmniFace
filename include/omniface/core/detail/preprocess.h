@@ -8,6 +8,11 @@
 
 namespace omniface::detail {
 
+// 归一化模式：
+//   kInsightFaceDet — (pixel-127.5)/128.0 → ~[-1,1]，用于 SCRFD 检测
+//   kInsightFaceRec — (pixel-127.5)/127.5 → [-1,1]，用于 ArcFace 识别
+//   kSimple         — pixel/255.0 → [0,1]，通用模式，用于 MediaPipe
+//   kImageNet       — 先 /255.0 再按通道减均值除标准差，用于 L2CS-Net
 enum class NormKind {
     kInsightFaceDet,
     kInsightFaceRec,

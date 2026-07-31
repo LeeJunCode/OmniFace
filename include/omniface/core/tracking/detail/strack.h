@@ -30,6 +30,7 @@ public:
     const KalMean& Mean() const { return mean_; }
     const KalCova& Covariance() const { return covariance_; }
 
+    // tlwh (左上xy + 宽高) → xyah (中心xy + 宽高比 + 高度)，卡尔曼滤波使用 xyah 坐标系
     static std::array<float, 4> TlwhToXyah(const std::array<float, 4>& tlwh);
     std::array<float, 4> ToXyah() const;
 

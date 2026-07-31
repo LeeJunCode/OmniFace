@@ -71,11 +71,11 @@ struct LogConfig {
     std::string level = "debug";
 };
 
-// ---- OpenFace configuration (profile + per-field overrides) ------------------
+// ---- OpenFace 配置（profile + 逐字段覆盖） ------------------
 struct OpenFaceConfig {
     std::string profile = "standard";  // "standard" | "max_quality"
 
-    // Per-field overrides — sentinel values mean "use profile default"
+    // 逐字段覆盖 — 哨兵值（-1 / -1.0f）表示使用 profile 默认值
     std::string model_file;
     std::vector<int> window_sizes_small;
     std::vector<int> window_sizes_init;
@@ -94,7 +94,7 @@ struct OpenFaceConfig {
     int    limit_pose             = -1;
 };
 
-// ---- ONNX analysis configuration (MediaPipe FaceMesh + more) ------------------
+// ---- ONNX 分析配置（MediaPipe FaceMesh 关键点 + 头部姿态） ------------------
 struct OnnxAnalysisConfig {
     bool enable_pose = true;
     bool enable_au = false;

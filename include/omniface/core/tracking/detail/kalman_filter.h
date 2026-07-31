@@ -7,6 +7,9 @@
 
 namespace omniface::tracking {
 
+// 8 维状态向量：[x, y, a, h, vx, vy, va, vh]
+// x,y=边界框中心坐标，a=宽高比，h=高度，后四位为对应速度分量
+// 观测为 4 维：[x, y, a, h]，采用匀速运动模型
 using KalMean = Eigen::Matrix<float, 1, 8, Eigen::RowMajor>;
 using KalCova = Eigen::Matrix<float, 8, 8, Eigen::RowMajor>;
 using KalHmean = Eigen::Matrix<float, 1, 4, Eigen::RowMajor>;

@@ -50,7 +50,7 @@ SavedMediaPage::SavedMediaPage(MediaType type, QWidget* parent)
         vl->addWidget(video_preview_);
     }
 
-    // Batch action bar (hidden when empty)
+    // 批量操作栏（无选中项时隐藏）
     batch_bar_ = new QWidget;
     batch_bar_->setStyleSheet("background-color: #ffffff; border: 1px solid #e0e0e0; border-radius: 6px;");
     auto* batch_layout = new QHBoxLayout(batch_bar_);

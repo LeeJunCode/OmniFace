@@ -25,12 +25,12 @@ if (!$version) {
 }
 Write-Host "Version: $version" -ForegroundColor Cyan
 
-# 2. Verify build output exists
+# 2. 验证构建产物存在
 if (!(Test-Path "$buildDir\$AppName.exe")) {
     Write-Error "Build output not found: $buildDir\$AppName.exe. Build first: cmake --build build --config $Config --target $AppName"
 }
 
-# 3. Clean and create staging dir
+# 3. 清理并创建暂存目录
 if (Test-Path $stagingDir) {
     Remove-Item -Recurse -Force $stagingDir
 }
@@ -38,7 +38,7 @@ New-Item -ItemType Directory -Force -Path "$stagingDir\data\output" | Out-Null
 New-Item -ItemType Directory -Force -Path "$stagingDir\data\upload\video" | Out-Null
 New-Item -ItemType Directory -Force -Path "$stagingDir\data\upload\img" | Out-Null
 
-# 4. Copy runtime files (exclude debug symbols and build artifacts)
+# 4. 复制运行时文件（排除调试符号和构建产物）
 Write-Host "Copying files..."
 $exclude = @("*.pdb", "*.ilk", "*.exp", "*.lib", "test_*", "vc_red*")
 Get-ChildItem $buildDir -File | Where-Object {
@@ -48,7 +48,7 @@ Get-ChildItem $buildDir -File | Where-Object {
     return $true
 } | Copy-Item -Destination $stagingDir -Force
 
-# Copy subdirectories (Qt plugins, models, etc.)
+# 复制子目录（Qt 插件、模型等）
 $copyDirs = @("models", "openface_model", "AU_predictors", "platforms", "styles", "imageformats", "iconengines", "generic", "tls", "translations", "multimedia", "networkinformation")
 $copied = 0
 $missing = 0
@@ -65,7 +65,7 @@ foreach ($dir in $copyDirs) {
 }
 Write-Host "Subdirs copied: $copied, missing: $missing"
 
-# Verify critical directories
+# 验证关键目录存在
 foreach ($d in @("platforms", "models")) {
     $checkPath = Join-Path $stagingDir $d
     if (!(Test-Path $checkPath)) {
@@ -73,10 +73,10 @@ foreach ($d in @("platforms", "models")) {
     }
 }
 
-# 5. Copy launcher script
+# 5. 复制启动脚本
 Copy-Item -Force "$repoRoot\scripts\OmniFace.bat" "$stagingDir\"
 
-# 6. Copy config.yaml
+# 6. 复制配置文件
 $configSrc = "$repoRoot\config.yaml"
 if (Test-Path $configSrc) {
     Copy-Item -Force $configSrc "$stagingDir\"
@@ -87,7 +87,7 @@ if (Test-Path $configSrc) {
 $totalSize = "{0:N0} MB" -f ((Get-ChildItem $stagingDir -Recurse | Measure-Object -Property Length -Sum).Sum / 1MB)
 Write-Host "Copy done, total size: $totalSize" -ForegroundColor Green
 
-# 7. Create zip package
+# 7. 创建 zip 压缩包
 Write-Host "Creating zip..."
 $zipName = "${AppName}_v${version}.zip"
 $zipPath = "$OutputDir\$zipName"
@@ -97,7 +97,7 @@ Compress-Archive -Path $stagingDir -DestinationPath $zipPath -CompressionLevel O
 $zipSize = "{0:N0} MB" -f ((Get-Item $zipPath).Length / 1MB)
 Write-Host "Zip created: $zipPath ($zipSize)" -ForegroundColor Green
 
-# 8. Print deployment instructions
+# 8. 打印部署说明
 Write-Host ""
 Write-Host "=== Deployment ===" -ForegroundColor Yellow
 Write-Host "Portable: extract $zipName, double-click OmniFace.bat"

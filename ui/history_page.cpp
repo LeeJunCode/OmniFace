@@ -35,7 +35,7 @@ HistoryPage::HistoryPage(QWidget* parent) : QWidget(parent) {
     top->addStretch();
     hl->addLayout(top);
 
-    // Batch action bar (hidden when empty)
+    // 批量操作栏（无选中项时隐藏）
     batch_bar_ = new QWidget;
     batch_bar_->setStyleSheet("background-color: #ffffff; border: 1px solid #e0e0e0; border-radius: 6px;");
     auto* batch_layout = new QHBoxLayout(batch_bar_);
@@ -240,7 +240,7 @@ void HistoryPage::refresh() {
         card_layout->setContentsMargins(12, 12, 16, 12);
         card_layout->setSpacing(10);
 
-        // Checkbox
+        // 复选框
         auto* cb = new QCheckBox;
         cb->setObjectName("taskCb");
         cb->setProperty("dir_path", QString::fromStdString(t.dir_path));

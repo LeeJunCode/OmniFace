@@ -173,7 +173,7 @@ void SettingsDialog::setupUI() {
     backend_container->addWidget(analysis_backend_);
     backend_container->addStretch();
 
-    // Analysis config stack
+    // 分析配置堆栈（根据后端切换显示不同页面）
     auto* config_stack = new QStackedWidget;
 
     auto syncAnalysisPage = [config_stack, this]() {
@@ -290,7 +290,7 @@ void SettingsDialog::setupUI() {
     addOfRow(QStringLiteral("\u9884\u8bbe\u65b9\u6848"), of_profile_,
              QStringLiteral("\u63a7\u5236\u7b97\u6cd5\u901f\u5ea6\u4e0e\u7cbe\u5ea6\u5e73\u8861"));
 
-    // Profile description hint
+    // Profile 描述提示
     auto updateOfHint = [this, of_form]() {
         auto* old = of_form->parentWidget()->findChild<QLabel*>("ofHint");
         if (old) old->deleteLater();
@@ -435,19 +435,19 @@ void SettingsDialog::setupUI() {
         log_level_->setCurrentText(
             QString::fromStdString(defaults.log.level));
 
-        // OpenFace defaults
+        // OpenFace 默认值
         int of_prof_idx = of_profile_->findData(
             QString::fromStdString(defaults.openface.profile));
         of_profile_->setCurrentIndex(std::max(0, of_prof_idx));
 
-        // ONNX defaults
+        // ONNX 默认值
         onnx_threads_->setValue(defaults.onnx.analysis_threads);
         onnx_margin_->setValue(defaults.onnx.margin);
         onnx_score_threshold_->setValue(defaults.onnx.score_threshold);
         onnx_draw_landmarks_->setCurrentIndex(defaults.onnx.draw_landmarks ? 1 : 0);
         onnx_draw_wireframe_->setCurrentIndex(defaults.onnx.draw_face_wireframe ? 1 : 0);
         onnx_draw_normal_->setCurrentIndex(defaults.onnx.draw_face_normal ? 1 : 0);
-        // Gaze defaults
+        // 视线估计默认值
         int gmodel_idx = gaze_model_combo_->findData(
             QString::fromStdString(defaults.gaze.model));
         gaze_model_combo_->setCurrentIndex(gmodel_idx >= 0 ? gmodel_idx : 0);
@@ -503,10 +503,10 @@ void SettingsDialog::saveTo(PipelineConfig& cfg) const {
     cfg.behavior.max_frame_width = max_frame_width_->value();
     cfg.log.level = log_level_->currentText().toStdString();
 
-    // OpenFace
+    // OpenFace 配置
     cfg.openface.profile = of_profile_->currentData().toString().toStdString();
 
-    // Backend
+    // 分析后端
     cfg.analysis_backend = AnalysisBackendFromString(
         analysis_backend_->currentData().toString().toStdString());
 
@@ -517,7 +517,7 @@ void SettingsDialog::saveTo(PipelineConfig& cfg) const {
     cfg.onnx.draw_landmarks = onnx_draw_landmarks_->currentData().toBool();
     cfg.onnx.draw_face_wireframe = onnx_draw_wireframe_->currentData().toBool();
     cfg.onnx.draw_face_normal = onnx_draw_normal_->currentData().toBool();
-    // Gaze
+    // 视线估计
     cfg.gaze.model = gaze_model_combo_->currentData().toString().toStdString();
     cfg.gaze.draw_gaze = gaze_draw_->currentData().toBool();
 }

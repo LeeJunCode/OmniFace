@@ -21,7 +21,7 @@ struct PoseEstimationResult {
     bool valid = false;
 };
 
-// MediaPipe FaceMesh + PnP head pose estimator
+// MediaPipe FaceMesh 关键点 + PnP 解算头部姿态
 class PoseEstimator {
 public:
     struct Config {

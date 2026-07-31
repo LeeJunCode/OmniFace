@@ -71,7 +71,7 @@ public:
     std::ofstream gaze_csv_;
     bool gaze_csv_initialized_ = false;
 
-    // EMA smoothing for gaze angles and bbox to reduce frame-to-frame jitter
+    // 对视线角度和边界框做 EMA 平滑，减少帧间抖动
     float smooth_yaw_ = 0.0f;
     float smooth_pitch_ = 0.0f;
     float smooth_bbox_x_ = 0.0f;
@@ -98,7 +98,7 @@ public:
 
         auto t_start = std::chrono::steady_clock::now();
 
-        // Downsample wide frames for detection
+        // 对宽帧降采样后再检测，减少计算量
         float ds_scale = 1.0f;
         cv::Mat detect_frame;
         if (config_.behavior.max_frame_width > 0 &&
@@ -137,7 +137,7 @@ public:
 
         auto t_recognition_done = std::chrono::steady_clock::now();
 
-        // ONNX analysis — only process the target face (skipped in recognize-only mode)
+        // ONNX 分析 — 仅处理目标人脸（纯识别模式下跳过）
         if (!config_.behavior.skip_analysis && modules_.onnx_analyzer
             && target_tracker_.HasTarget()) {
             cv::Rect_<float> target_bbox_onnx = target_tracker_.GetTargetBbox();
@@ -182,7 +182,7 @@ public:
             }
         }
 
-        // Gaze estimation — independent of analysis backend
+        // 视线估计 — 独立于分析后端运行
         if (!config_.behavior.skip_analysis && modules_.gaze_estimator
             && modules_.gaze_estimator->IsValid()
             && target_tracker_.HasTarget()) {
@@ -191,7 +191,7 @@ public:
             if (target_id_changed) prev_target_id_ = cur_target_id;
             cv::Rect_<float> target_bbox_gaze = target_tracker_.GetTargetBbox();
             if (target_bbox_gaze.width > 0 && target_bbox_gaze.height > 0) {
-                // EMA-smooth the bbox to reduce crop jitter (root cause of gaze jitter)
+                // EMA 平滑边界框，减少裁剪抖动（这是视线抖动的根本原因）
                 if (!gaze_smooth_init_ || target_id_changed) {
                     smooth_bbox_x_ = target_bbox_gaze.x;
                     smooth_bbox_y_ = target_bbox_gaze.y;
@@ -265,7 +265,7 @@ public:
             }
         }
 
-        // OpenFace analysis for confirmed target
+        // OpenFace 分析：仅对已确认的目标人脸执行
         if (modules_.face_analyzer && modules_.face_analyzer->IsValid()
             && target_tracker_.HasTarget()) {
             cv::Rect_<float> target_bbox = target_tracker_.GetTargetBbox();
@@ -287,7 +287,7 @@ public:
 
         auto t_analysis_done = std::chrono::steady_clock::now();
 
-        // Draw ONNX analysis results on frame
+        // 在帧上绘制 ONNX 分析结果（关键点、线框、法线、姿态角度）
         if (config_.analysis_backend == AnalysisBackend::kOnnx
             && config_.onnx.realtime_display
             && modules_.onnx_analyzer && modules_.onnx_analyzer->has_pose()) {
@@ -317,11 +317,10 @@ public:
             }
         }
 
-        // Draw gaze results (independent of analysis backend)
-        // Matches official draw_gaze: length = bbox_width, dx = -length*sin(yaw)*cos(pitch),
-        // dy = -length*sin(pitch). Our GazeTo3D produces the same direction via its x,y components.
-        // Arrow origin uses current (unsmoothed) bbox to track face movement in real time;
-        // direction uses smoothed angles to reduce jitter.
+        // 绘制视线结果（独立于分析后端）
+        // 与官方 draw_gaze 一致：箭头长度 = bbox 宽度，
+        // dx = -length*sin(yaw)*cos(pitch), dy = -length*sin(pitch)
+        // 箭头起点使用当前（未平滑）bbox 实时跟踪人脸移动，方向使用平滑后的角度减少抖动
         if (config_.gaze.draw_gaze && !result.gaze_results.empty()
             && target_tracker_.HasTarget() && gaze_smooth_init_) {
             cv::Rect_<float> cur_bbox = target_tracker_.GetTargetBbox();

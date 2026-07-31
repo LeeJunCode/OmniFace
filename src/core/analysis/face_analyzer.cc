@@ -48,8 +48,8 @@ OpenFaceParams MakeProfileParams(OpenFaceProfile profile,
     OpenFaceParams p;
     switch (profile) {
         case OpenFaceProfile::kMaxQuality: {
-            // Higher accuracy: more iterations, larger search windows, NU-RLMS,
-            // multi-view first frame, no pose limit.
+            // 高精度模式：更多迭代次数、更大的搜索窗口、NU-RLMS 优化、
+            // 多视角首帧、不限制姿态角度
             p.window_sizes_small        = {0, 11, 9, 0};
             p.window_sizes_init         = {15, 13, 11, 11};
             p.num_optimisation_iteration = 10;
@@ -69,7 +69,7 @@ OpenFaceParams MakeProfileParams(OpenFaceProfile profile,
         }
         case OpenFaceProfile::kStandard:
         default: {
-            // CE-CLM with standard parameters — good balance of speed and accuracy.
+            // CE-CLM 标准参数，速度与精度均衡
             p.window_sizes_small        = {0, 9, 7, 0};
             p.window_sizes_init         = {11, 9, 7, 5};
             p.num_optimisation_iteration = 5;

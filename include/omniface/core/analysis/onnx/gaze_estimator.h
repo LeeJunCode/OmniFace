@@ -11,15 +11,15 @@
 namespace omniface::analysis::onnx {
 
 struct GazeEstimationResult {
-    float yaw = 0.0f;          // degrees, positive = subject looking right
-    float pitch = 0.0f;        // degrees, positive = subject looking up
-    cv::Vec3f gaze_vector;     // 3D unit vector (camera coords: +X right, +Y down, +Z forward)
+    float yaw = 0.0f;          // 偏航角（度），正值 = 目标看向右侧
+    float pitch = 0.0f;        // 俯仰角（度），正值 = 目标看向上方
+    cv::Vec3f gaze_vector;     // 3D 单位向量（相机坐标系：+X 右，+Y 下，+Z 前）
     bool valid = false;
 };
 
-// L2CS-Net gaze estimation using MobileOne-S0 backbone
-// Input: face crop RGB 448x448 with ImageNet normalization
-// Output: yaw/pitch angles (degrees) + 3D gaze direction vector
+// L2CS-Net 视线估计（MobileOne-S0 骨干）
+// 输入：人脸裁剪 RGB 448x448，ImageNet 归一化
+// 输出：偏航/俯仰角（度）+ 3D 视线方向向量
 class GazeEstimator {
 public:
     struct Config {

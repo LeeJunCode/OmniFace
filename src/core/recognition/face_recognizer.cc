@@ -42,7 +42,7 @@ std::vector<float> Preprocess(const cv::Mat& bgr_image, const FaceRecognizer::Co
     float* G_plane = blob.data() + static_cast<size_t>(H) * W;
     float* B_plane = blob.data() + static_cast<size_t>(H) * W * 2;
 
-    // InsightFace识别归一化: 将[0,255] uint8线性映射到[-1,1]范围
+    // InsightFace 识别归一化：(pixel - 127.5) / 127.5 → [-1, 1]（注意除数与检测模型不同）
     constexpr float kScale = 1.0f / 127.5f;
     constexpr float kOffset = -1.0f;
 

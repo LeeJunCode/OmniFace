@@ -9,20 +9,19 @@ namespace omniface::analysis::onnx {
 
 struct PoseEstimationResult;
 
-// Static visualization utilities for head pose estimation results.
-// Decoupled from the estimator — operates purely on result structs.
+// 头部姿态可视化工具（纯静态方法，与估计器解耦）
 class PoseVisualizer {
 public:
-    // Draw 468 face mesh landmarks as green dots
+    // 绘制 468 个人脸网格关键点（绿色圆点）
     static void DrawLandmarks(cv::Mat& image,
                               const std::vector<cv::Point2f>& landmarks);
 
-    // Draw projected 3D face wireframe (face oval, eyes, eyebrows, nose, lips)
+    // 绘制投影后的 3D 人脸线框（脸型轮廓、眼、眉、鼻、唇）
     static void DrawProjectedModel(cv::Mat& image,
                                    const PoseEstimationResult& result,
                                    const std::vector<cv::Point3f>& canonical_model);
 
-    // Draw face normal arrow (magenta) from nose tip
+    // 从鼻尖位置绘制面部法线箭头（品红色）
     static void DrawFaceNormal(cv::Mat& image,
                                const PoseEstimationResult& result,
                                float face_size,

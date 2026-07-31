@@ -1,4 +1,4 @@
-"""生成 OmniFace 应用图标 — 极简设计：O 形环 + 双眼 = 人脸"""
+"""生成 OmniFace 应用图标 — 极简设计：O 形环 + 双眼 = 人脸符号"""
 import struct
 import zlib
 import math

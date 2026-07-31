@@ -27,7 +27,7 @@ void TargetTracker::ProcessMatches(const cv::Mat& frame,
 
     if (!matcher || !recognizer || tracked_faces.empty()) return;
 
-    // ===== Phase 1: Collect pending items =====
+    // ===== 第一阶段：收集待处理项 =====
     struct PendingItem {
         size_t tracked_idx;
         int track_id;
@@ -147,7 +147,7 @@ void TargetTracker::ProcessMatches(const cv::Mat& frame,
             continue;
         }
 
-        // Quality gating
+        // 质量把关：过滤宽高比异常、关键点越界、置信度不足的检测
         bool quality_fail = false;
         float face_w = tracked_faces[i].box.x2 - tracked_faces[i].box.x1;
         float face_h = tracked_faces[i].box.y2 - tracked_faces[i].box.y1;
@@ -207,7 +207,7 @@ void TargetTracker::ProcessMatches(const cv::Mat& frame,
         pending.push_back(std::move(item));
     }
 
-    // ===== Phase 2: Batch recognition =====
+    // ===== 第二阶段：批量识别 =====
     if (pending.empty()) {
         PruneTrackCache(tracked_faces);
         return;
@@ -224,7 +224,7 @@ void TargetTracker::ProcessMatches(const cv::Mat& frame,
             pending_new.push_back(std::move(p));
     }
 
-    // New tracks: sync recognition
+    // 新轨道：同步识别
     if (!pending_new.empty()) {
         std::vector<cv::Mat> new_batch;
         new_batch.reserve(pending_new.size());
@@ -262,7 +262,7 @@ void TargetTracker::ProcessMatches(const cv::Mat& frame,
         }
     }
 
-    // Cached tracks: sync recognition (with recheck handling)
+    // 已缓存轨道：同步识别（含复查处理）
     if (!pending_recheck.empty()) {
         std::vector<cv::Mat> recheck_batch;
         recheck_batch.reserve(pending_recheck.size());

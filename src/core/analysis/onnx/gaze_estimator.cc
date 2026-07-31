@@ -16,7 +16,7 @@ namespace omniface::analysis::onnx {
 
 namespace {
 
-// Softmax over a 1D vector in-place
+// 对 1D 向量做 Softmax（原地操作）
 void Softmax(std::vector<float>& v) {
     float max_val = v[0];
     for (float x : v) max_val = std::max(max_val, x);
@@ -28,8 +28,8 @@ void Softmax(std::vector<float>& v) {
     for (float& x : v) x /= sum;
 }
 
-// Decode 90-class logits to angle in degrees
-// bins=90, binwidth=4°, range [-180, +180]
+// 将 90 类 logits 解码为角度（度）
+// 90 个 bin，每个 bin 宽度 4°，范围 [-180°, +180°]
 float DecodeAngle(const float* logits, int num_bins) {
     std::vector<float> probs(logits, logits + num_bins);
     Softmax(probs);
@@ -39,10 +39,10 @@ float DecodeAngle(const float* logits, int num_bins) {
     return expected * 4.0f - 180.0f;
 }
 
-// Compute 3D gaze unit vector from yaw/pitch (radians)
-// Matches official yakhyo/gaze-estimation gaze_to_3d():
+// 由偏航/俯仰角（弧度）计算 3D 视线单位向量
+// 与官方 yakhyo/gaze-estimation 的 gaze_to_3d() 一致：
 //   x = -cos(pitch) * sin(yaw), y = -sin(pitch), z = -cos(pitch) * cos(yaw)
-// Corresponding 2D draw_gaze formula:
+// 对应 2D 绘制公式：
 //   dx = -length * sin(yaw) * cos(pitch), dy = -length * sin(pitch)
 cv::Vec3f GazeTo3D(float yaw_rad, float pitch_rad) {
     float cos_p = std::cos(pitch_rad);

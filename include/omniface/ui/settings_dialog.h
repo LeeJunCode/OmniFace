@@ -23,13 +23,13 @@ private:
     void saveTo(PipelineConfig& cfg) const;
     PipelineConfig config_;
 
-    // Core
+    // 核心参数
     QDoubleSpinBox* match_threshold_ = nullptr;
     QDoubleSpinBox* detection_confidence_ = nullptr;
     QSpinBox* detection_threads_ = nullptr;
     QSpinBox* recognition_threads_ = nullptr;
 
-    // Advanced
+    // 高级参数
     QDoubleSpinBox* detection_nms_ = nullptr;
     QDoubleSpinBox* min_face_area_ = nullptr;
     QDoubleSpinBox* recognition_confidence_threshold_ = nullptr;
@@ -42,13 +42,13 @@ private:
     QSpinBox* max_frame_width_ = nullptr;
     QComboBox* log_level_ = nullptr;
 
-    // OpenFace
+    // OpenFace 配置
     QComboBox* of_profile_ = nullptr;
 
-    // Backend
+    // 分析后端
     QComboBox* analysis_backend_ = nullptr;
 
-    // ONNX
+    // ONNX 参数
     QSpinBox* onnx_threads_ = nullptr;
     QDoubleSpinBox* onnx_margin_ = nullptr;
     QDoubleSpinBox* onnx_score_threshold_ = nullptr;
@@ -56,7 +56,7 @@ private:
     QComboBox* onnx_draw_wireframe_ = nullptr;
     QComboBox* onnx_draw_normal_ = nullptr;
 
-    // Gaze
+    // 视线估计
     QComboBox* gaze_model_combo_ = nullptr;
     QComboBox* gaze_draw_ = nullptr;
 };

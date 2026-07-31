@@ -6,6 +6,7 @@ KalmanFilter::KalmanFilter() {
     int ndim = 4;
     float dt = 1.0f;
 
+    // 匀速运动模型：x_new = x + vx*dt, y_new = y + vy*dt, ...
     motion_mat_ = Eigen::Matrix<float, 8, 8>::Identity();
     for (int i = 0; i < ndim; i++) {
         motion_mat_(i, ndim + i) = dt;

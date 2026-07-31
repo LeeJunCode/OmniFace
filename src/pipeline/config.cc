@@ -174,7 +174,7 @@ PipelineConfig LoadPipelineConfig(const std::string& yaml_path) {
             SafeGet<bool>(g, "draw_gaze", cfg.gaze.draw_gaze);
     }
 
-    // Sanitize: clamp values to valid ranges
+    // 值域裁剪，确保配置值在合法范围内
     cfg.model.detection_threads = std::clamp(cfg.model.detection_threads, 1, 32);
     cfg.model.recognition_threads = std::clamp(cfg.model.recognition_threads, 1, 32);
     cfg.model.detection_input_width = std::max(cfg.model.detection_input_width, 64);

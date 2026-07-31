@@ -56,7 +56,7 @@ public:
         float* G_plane = blob.data() + static_cast<size_t>(H) * W;
         float* B_plane = blob.data() + static_cast<size_t>(H) * W * 2;
 
-        // InsightFace检测归一化: 将[0,255] uint8映射到约[-1,1]范围
+        // InsightFace 检测归一化：(pixel - 127.5) / 128.0 → ~[-1, 1]
         constexpr float kAlpha = 1.0f / 128.0f;
         constexpr float kBeta = -127.5f / 128.0f;
 

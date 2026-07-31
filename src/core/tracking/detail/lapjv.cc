@@ -8,6 +8,11 @@
 namespace omniface::tracking {
 namespace {
 
+// LAPJV 算法分四个阶段：
+//   CcrrtDense — 列约简 + 初始可行解（每列取最小值所在行）
+//   CarrDense  — 增广路径缩减（最多两轮）
+//   CaDense    — 通过 FindPathDense 找增广路径，扩展匹配
+//   FindPathDense 内部：ScanDense 在缩减代价矩阵上做 Dijkstra 最短路径搜索
 constexpr float kLarge = 1000000.0f;
 
 int CcrrtDense(int n, const float* cost, std::vector<int>& free_rows,

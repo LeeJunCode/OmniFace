@@ -38,10 +38,10 @@ public:
     OnnxFaceAnalyzer(OnnxFaceAnalyzer&&) noexcept;
     OnnxFaceAnalyzer& operator=(OnnxFaceAnalyzer&&) noexcept;
 
-    // Analyze a single face, returns result with pose estimation
+    // 分析单张人脸，返回包含姿态估计的结果
     OnnxAnalysisResult Analyze(const cv::Mat& frame, const BoundingBox& bbox, int track_id = -1);
 
-    // Analyze all tracked faces
+    // 批量分析所有已跟踪的人脸
     std::vector<OnnxAnalysisResult> AnalyzeBatch(
         const cv::Mat& frame, const std::vector<TrackedFace>& faces);
 
