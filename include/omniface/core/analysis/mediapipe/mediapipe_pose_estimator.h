@@ -9,20 +9,19 @@
 
 #include "omniface/types.h"
 
-namespace omniface::analysis::onnx {
+namespace omniface::analysis::mediapipe {
 
 struct PoseEstimationResult {
     HeadPose pose;
     cv::Point2f nose_tip;
-    std::vector<cv::Point2f> landmarks;     // 468 2D keypoints in original image coords
-    cv::Mat rvec;                           // rotation vector (3x1 CV_64F)
-    cv::Mat tvec;                           // translation vector (3x1 CV_64F)
-    cv::Mat camera_matrix;                  // camera intrinsics (3x3 CV_64F)
+    std::vector<cv::Point2f> landmarks;
+    cv::Mat rvec;
+    cv::Mat tvec;
+    cv::Mat camera_matrix;
     bool valid = false;
 };
 
-// MediaPipe FaceMesh 关键点 + PnP 解算头部姿态
-class PoseEstimator {
+class MediaPipePoseEstimator {
 public:
     struct Config {
         float margin = 0.25f;
@@ -31,10 +30,10 @@ public:
         int intra_threads = 1;
     };
 
-    explicit PoseEstimator(const std::string& landmark_model_path, Config config);
-    ~PoseEstimator();
-    PoseEstimator(PoseEstimator&&) noexcept;
-    PoseEstimator& operator=(PoseEstimator&&) noexcept;
+    explicit MediaPipePoseEstimator(const std::string& landmark_model_path, Config config);
+    ~MediaPipePoseEstimator();
+    MediaPipePoseEstimator(MediaPipePoseEstimator&&) noexcept;
+    MediaPipePoseEstimator& operator=(MediaPipePoseEstimator&&) noexcept;
 
     PoseEstimationResult EstimatePose(const cv::Mat& bgr_image,
                                       const BoundingBox& face_bbox);
@@ -44,17 +43,17 @@ public:
                                               int original_img_w = 0,
                                               int original_img_h = 0);
 
-    PoseEstimator Clone() const;
+    MediaPipePoseEstimator Clone() const;
 
     const std::vector<cv::Point3f>& canonical_model() const;
     float face_size() const;
 
 private:
-    PoseEstimator(const PoseEstimator&) = delete;
-    PoseEstimator& operator=(const PoseEstimator&) = delete;
+    MediaPipePoseEstimator(const MediaPipePoseEstimator&) = delete;
+    MediaPipePoseEstimator& operator=(const MediaPipePoseEstimator&) = delete;
 
     class Impl;
     std::unique_ptr<Impl> impl_;
 };
 
-}  // namespace omniface::analysis::onnx
+}  // namespace omniface::analysis::mediapipe

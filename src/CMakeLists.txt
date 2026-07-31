@@ -96,7 +96,8 @@ target_compile_features(omniface_recognition PUBLIC cxx_std_20)
 # Analysis module — OpenFace wrapper (landmarks, gaze, AUs)
 # ============================================================
 add_library(omniface_analysis STATIC
-    core/analysis/face_analyzer.cc
+    core/analysis/openface/openface_analyzer.cc
+    core/analysis/openface/openface_writer.cc
 )
 
 target_include_directories(omniface_analysis PUBLIC
@@ -116,20 +117,19 @@ target_link_libraries(omniface_analysis PUBLIC
 target_compile_features(omniface_analysis PUBLIC cxx_std_20)
 
 # ============================================================
-# ONNX Analysis module — PoseEstimator + PoseVisualizer + OnnxFaceAnalyzer
+# MediaPipe Analysis module — PoseEstimator + Visualizer + Analyzer
 # ============================================================
-add_library(omniface_analysis_onnx STATIC
-    core/analysis/onnx/pose_estimator.cc
-    core/analysis/onnx/pose_visualizer.cc
-    core/analysis/onnx/gaze_estimator.cc
-    core/analysis/onnx/onnx_face_analyzer.cc
+add_library(omniface_analysis_mediapipe STATIC
+    core/analysis/mediapipe/mediapipe_pose_estimator.cc
+    core/analysis/mediapipe/mediapipe_visualizer.cc
+    core/analysis/mediapipe/mediapipe_analyzer.cc
 )
 
-target_include_directories(omniface_analysis_onnx PUBLIC
+target_include_directories(omniface_analysis_mediapipe PUBLIC
     ${PROJECT_SOURCE_DIR}/include
 )
 
-target_link_libraries(omniface_analysis_onnx PUBLIC
+target_link_libraries(omniface_analysis_mediapipe PUBLIC
     omniface_detail
     spdlog::spdlog
     opencv_core
@@ -137,7 +137,27 @@ target_link_libraries(omniface_analysis_onnx PUBLIC
     opencv_calib3d
 )
 
-target_compile_features(omniface_analysis_onnx PUBLIC cxx_std_20)
+target_compile_features(omniface_analysis_mediapipe PUBLIC cxx_std_20)
+
+# ============================================================
+# Gaze Analysis module — L2CS-Net GazeEstimator
+# ============================================================
+add_library(omniface_analysis_l2cs STATIC
+    core/analysis/l2cs/l2cs_estimator.cc
+)
+
+target_include_directories(omniface_analysis_l2cs PUBLIC
+    ${PROJECT_SOURCE_DIR}/include
+)
+
+target_link_libraries(omniface_analysis_l2cs PUBLIC
+    omniface_detail
+    spdlog::spdlog
+    opencv_core
+    opencv_imgproc
+)
+
+target_compile_features(omniface_analysis_l2cs PUBLIC cxx_std_20)
 
 # ============================================================
 # Pipeline module — config + orchestration
@@ -146,7 +166,6 @@ add_library(omniface_pipeline STATIC
     pipeline/config.cc
     pipeline/decode_worker.cc
     pipeline/module_factory.cc
-    pipeline/openface_writer.cc
     pipeline/output_manager.cc
     pipeline/target_tracker.cc
     pipeline/pipeline.cc
@@ -161,7 +180,8 @@ target_link_libraries(omniface_pipeline PUBLIC
     omniface_tracking
     omniface_recognition
     omniface_analysis
-    omniface_analysis_onnx
+    omniface_analysis_mediapipe
+    omniface_analysis_l2cs
     yaml-cpp::yaml-cpp
     spdlog::spdlog
     opencv_core

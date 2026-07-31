@@ -515,7 +515,7 @@ void ProcessPage::onPlay() {
     state_.total_matches_ = 0;
     state_.total_openface_analyses_ = 0;
     state_.total_onnx_analyses_ = 0;
-    state_.total_gaze_analyses_ = 0;
+    state_.total_l2cs_analyses_ = 0;
     state_.run_start_time_ = state_.last_fps_time;
 
     DashboardData dd;
@@ -526,9 +526,9 @@ void ProcessPage::onPlay() {
     setUiEnabled(true);
     emit statusMessage(QStringLiteral("\u6b63\u5728\u5904\u7406..."));
     completion_panel_->hide();
-    onnx_panel_->setVisible(config_.analysis_backend == AnalysisBackend::kOnnx
-                            || config_.analysis_backend == AnalysisBackend::kGaze);
-    if (config_.analysis_backend == AnalysisBackend::kGaze) {
+    onnx_panel_->setVisible(config_.analysis_backend == AnalysisBackend::kMediaPipe
+                            || config_.analysis_backend == AnalysisBackend::kL2cs);
+    if (config_.analysis_backend == AnalysisBackend::kL2cs) {
         onnx_panel_->setAnalysisLabel(QStringLiteral("\u89c6\u7ebf\u5206\u6790"));
     } else {
         onnx_panel_->setAnalysisLabel(QStringLiteral("\u9762\u90e8\u59ff\u6001\u5206\u6790"));
@@ -647,7 +647,7 @@ void ProcessPage::onRecognizeOnly() {
     state_.total_matches_ = 0;
     state_.total_openface_analyses_ = 0;
     state_.total_onnx_analyses_ = 0;
-    state_.total_gaze_analyses_ = 0;
+    state_.total_l2cs_analyses_ = 0;
     state_.run_start_time_ = state_.last_fps_time;
 
     DashboardData dd;
@@ -658,9 +658,9 @@ void ProcessPage::onRecognizeOnly() {
     setUiEnabled(true);
     emit statusMessage(QStringLiteral("\u6b63\u5728\u8bc6\u522b\u76ee\u6807..."));
     completion_panel_->hide();
-    onnx_panel_->setVisible(config_.analysis_backend == AnalysisBackend::kOnnx
-                            || config_.analysis_backend == AnalysisBackend::kGaze);
-    if (config_.analysis_backend == AnalysisBackend::kGaze) {
+    onnx_panel_->setVisible(config_.analysis_backend == AnalysisBackend::kMediaPipe
+                            || config_.analysis_backend == AnalysisBackend::kL2cs);
+    if (config_.analysis_backend == AnalysisBackend::kL2cs) {
         onnx_panel_->setAnalysisLabel(QStringLiteral("\u89c6\u7ebf\u5206\u6790"));
     } else {
         onnx_panel_->setAnalysisLabel(QStringLiteral("\u9762\u90e8\u59ff\u6001\u5206\u6790"));
@@ -732,16 +732,16 @@ void ProcessPage::processNextFrame() {
     if (has_onnx) state_.total_onnx_analyses_++;
 
     bool has_gaze = false;
-    for (const auto& r : result.gaze_results) {
+    for (const auto& r : result.l2cs_results) {
         if (r.valid) { has_gaze = true; break; }
     }
-    if (has_gaze) state_.total_gaze_analyses_++;
+    if (has_gaze) state_.total_l2cs_analyses_++;
 
     if (!result.onnx_results.empty()) {
         onnx_panel_->updateResults(result.onnx_results);
     }
-    if (!result.gaze_results.empty()) {
-        onnx_panel_->updateGazeResults(result.gaze_results);
+    if (!result.l2cs_results.empty()) {
+        onnx_panel_->updateGazeResults(result.l2cs_results);
     }
 
     double dash_elapsed = std::chrono::duration<double>(now - state_.last_dashboard_time).count();
@@ -759,12 +759,12 @@ void ProcessPage::processNextFrame() {
         dd.pipeline_fps = state_.current_fps;
         dd.recognition_fps = rec_fps;
         dd.analysis_fps = ana_fps;
-        if (config_.analysis_backend == AnalysisBackend::kOnnx) {
-            dd.analysis_label = "ONNX";
+        if (config_.analysis_backend == AnalysisBackend::kMediaPipe) {
+            dd.analysis_label = "MediaPipe";
             dd.analysis_running = (state_.total_onnx_analyses_ > 0 && has_onnx);
-        } else if (config_.analysis_backend == AnalysisBackend::kGaze) {
-            dd.analysis_label = "Gaze";
-            dd.analysis_running = (state_.total_gaze_analyses_ > 0 && has_gaze);
+        } else if (config_.analysis_backend == AnalysisBackend::kL2cs) {
+            dd.analysis_label = "L2CS";
+            dd.analysis_running = (state_.total_l2cs_analyses_ > 0 && has_gaze);
         } else {
             dd.analysis_running = (state_.total_openface_analyses_ > 0 && result.analysis.valid);
         }
@@ -773,7 +773,7 @@ void ProcessPage::processNextFrame() {
         dd.target_matches = state_.total_matches_;
         dd.openface_analyses = state_.total_openface_analyses_;
         dd.onnx_analyses = state_.total_onnx_analyses_;
-        dd.gaze_analyses = state_.total_gaze_analyses_;
+        dd.l2cs_analyses = state_.total_l2cs_analyses_;
         dd.elapsed_seconds = static_cast<int64_t>(run_elapsed);
         fps_panel_->updateData(dd);
 
@@ -788,12 +788,12 @@ void ProcessPage::processNextFrame() {
 
         const char* analysis_label = "OpenFace\u5206\u6790";
         int64_t analysis_count = state_.total_openface_analyses_;
-        if (config_.analysis_backend == AnalysisBackend::kOnnx) {
-            analysis_label = "ONNX\u5206\u6790";
+        if (config_.analysis_backend == AnalysisBackend::kMediaPipe) {
+            analysis_label = "MediaPipe\u5206\u6790";
             analysis_count = state_.total_onnx_analyses_;
-        } else if (config_.analysis_backend == AnalysisBackend::kGaze) {
-            analysis_label = "Gaze\u5206\u6790";
-            analysis_count = state_.total_gaze_analyses_;
+        } else if (config_.analysis_backend == AnalysisBackend::kL2cs) {
+            analysis_label = "L2CS\u5206\u6790";
+            analysis_count = state_.total_l2cs_analyses_;
         }
 
         counter_summary_->setText(QStringLiteral(

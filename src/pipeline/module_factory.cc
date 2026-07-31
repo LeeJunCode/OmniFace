@@ -64,20 +64,20 @@ PipelineModules CreateModules(const PipelineConfig& config) {
     if (!config.model.openface_model_dir.empty()
         && !config.behavior.skip_analysis
         && config.analysis_backend == AnalysisBackend::kOpenFace) {
-        analysis::OpenFaceProfile profile = analysis::ParseProfile(config.openface.profile);
-        analysis::OpenFaceParams of_params = analysis::MakeProfileParams(
+        analysis::openface::OpenFaceProfile profile = analysis::openface::ParseProfile(config.openface.profile);
+        analysis::openface::OpenFaceParams of_params = analysis::openface::MakeProfileParams(
             profile, config.model.openface_model_dir);
-        analysis::ApplyOverrides(of_params, config.openface,
+        analysis::openface::ApplyOverrides(of_params, config.openface,
                                  config.model.openface_model_dir);
 
-        analysis::FaceAnalyzer::Config fa_cfg;
+        analysis::openface::OpenFaceAnalyzer::Config fa_cfg;
         fa_cfg.model_dir = config.model.openface_model_dir;
         fa_cfg.openface  = std::move(of_params);
-        mods.face_analyzer = std::make_unique<analysis::FaceAnalyzer>(fa_cfg);
+        mods.face_analyzer = std::make_unique<analysis::openface::OpenFaceAnalyzer>(fa_cfg);
     }
 
-    if (config.analysis_backend == AnalysisBackend::kOnnx) {
-        analysis::onnx::OnnxAnalyzerConfig onnx_cfg;
+    if (config.analysis_backend == AnalysisBackend::kMediaPipe) {
+        analysis::mediapipe::MediaPipeAnalyzerConfig onnx_cfg;
         onnx_cfg.enable_pose = config.onnx.enable_pose;
         onnx_cfg.enable_au   = config.onnx.enable_au;
         onnx_cfg.landmark_model = config.onnx.landmark_model;
@@ -87,21 +87,21 @@ PipelineModules CreateModules(const PipelineConfig& config) {
         onnx_cfg.margin           = config.onnx.margin;
         onnx_cfg.score_threshold  = config.onnx.score_threshold;
 
-        mods.onnx_analyzer = std::make_unique<analysis::onnx::OnnxFaceAnalyzer>(onnx_cfg);
+        mods.onnx_analyzer = std::make_unique<analysis::mediapipe::MediaPipeAnalyzer>(onnx_cfg);
         spdlog::info("ONNX analysis backend activated (pose={})", config.onnx.enable_pose);
     }
 
-    if (config.analysis_backend == AnalysisBackend::kGaze) {
-        std::string model_path = "models/l2cs-net/" + config.gaze.model;
-        analysis::onnx::GazeEstimator::Config gaze_cfg;
-        gaze_cfg.model_path = model_path;
-        gaze_cfg.intra_threads = 1;
+    if (config.analysis_backend == AnalysisBackend::kL2cs) {
+        std::string model_path = "models/l2cs-net/" + config.l2cs.model;
+        analysis::l2cs::L2csEstimator::Config l2cs_cfg;
+        l2cs_cfg.model_path = model_path;
+        l2cs_cfg.intra_threads = 1;
 
         try {
-            mods.gaze_estimator = std::make_unique<analysis::onnx::GazeEstimator>(gaze_cfg);
-            spdlog::info("Gaze backend activated (model={})", config.gaze.model);
+            mods.l2cs_estimator = std::make_unique<analysis::l2cs::L2csEstimator>(l2cs_cfg);
+            spdlog::info("L2CS backend activated (model={})", config.l2cs.model);
         } catch (const std::exception& e) {
-            spdlog::error("Failed to load GazeEstimator: {}", e.what());
+            spdlog::error("Failed to load L2csEstimator: {}", e.what());
         }
     }
 

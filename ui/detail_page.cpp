@@ -527,7 +527,7 @@ void DetailPage::loadCSV(const std::string& output_dir) {
     std::string gaze_csv_path;
     for (const auto& entry : fs::directory_iterator(output_dir)) {
         auto fname = entry.path().filename().string();
-        if (fname == "gaze_analysis.csv") { gaze_csv_path = entry.path().string(); break; }
+        if (fname == "l2cs_analysis.csv" || fname == "gaze_analysis.csv") { gaze_csv_path = entry.path().string(); break; }
     }
     if (!gaze_csv_path.empty()) {
         std::ifstream gfile(gaze_csv_path);

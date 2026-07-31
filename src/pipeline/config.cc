@@ -167,11 +167,18 @@ PipelineConfig LoadPipelineConfig(const std::string& yaml_path) {
             SafeGet<bool>(onx, "draw_face_normal", cfg.onnx.draw_face_normal);
     }
 
+    if (auto g = SafeSub(root, "l2cs")) {
+        cfg.l2cs.model =
+            SafeGet<std::string>(g, "model", cfg.l2cs.model);
+        cfg.l2cs.draw_gaze =
+            SafeGet<bool>(g, "draw_gaze", cfg.l2cs.draw_gaze);
+    }
+    // 向后兼容旧配置键名 "gaze"
     if (auto g = SafeSub(root, "gaze")) {
-        cfg.gaze.model =
-            SafeGet<std::string>(g, "model", cfg.gaze.model);
-        cfg.gaze.draw_gaze =
-            SafeGet<bool>(g, "draw_gaze", cfg.gaze.draw_gaze);
+        cfg.l2cs.model =
+            SafeGet<std::string>(g, "model", cfg.l2cs.model);
+        cfg.l2cs.draw_gaze =
+            SafeGet<bool>(g, "draw_gaze", cfg.l2cs.draw_gaze);
     }
 
     // 值域裁剪，确保配置值在合法范围内
@@ -291,9 +298,9 @@ void SavePipelineConfig(const std::string& yaml_path, const PipelineConfig& cfg)
     }
 
     {
-        const auto& gz = cfg.gaze;
-        root["gaze"]["model"] = gz.model;
-        root["gaze"]["draw_gaze"] = gz.draw_gaze;
+        const auto& l2 = cfg.l2cs;
+        root["l2cs"]["model"] = l2.model;
+        root["l2cs"]["draw_gaze"] = l2.draw_gaze;
     }
 
     std::ofstream fout(yaml_path);

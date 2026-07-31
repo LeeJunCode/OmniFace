@@ -1,4 +1,4 @@
-#include "omniface/core/analysis/face_analyzer.h"
+#include "omniface/core/analysis/openface/openface_analyzer.h"
 #include "omniface/pipeline/config.h"
 
 #include <algorithm>
@@ -17,7 +17,7 @@
 
 #include <spdlog/spdlog.h>
 
-namespace omniface::analysis {
+namespace omniface::analysis::openface {
 
 namespace {
 
@@ -41,15 +41,11 @@ std::string ResolveModelFile(const std::string& model_dir,
 
 }  // namespace
 
-// ---- Profile resolution ------------------------------------------------------
-
 OpenFaceParams MakeProfileParams(OpenFaceProfile profile,
                                  const std::string& model_dir) {
     OpenFaceParams p;
     switch (profile) {
         case OpenFaceProfile::kMaxQuality: {
-            // 高精度模式：更多迭代次数、更大的搜索窗口、NU-RLMS 优化、
-            // 多视角首帧、不限制姿态角度
             p.window_sizes_small        = {0, 11, 9, 0};
             p.window_sizes_init         = {15, 13, 11, 11};
             p.num_optimisation_iteration = 10;
@@ -69,7 +65,6 @@ OpenFaceParams MakeProfileParams(OpenFaceProfile profile,
         }
         case OpenFaceProfile::kStandard:
         default: {
-            // CE-CLM 标准参数，速度与精度均衡
             p.window_sizes_small        = {0, 9, 7, 0};
             p.window_sizes_init         = {11, 9, 7, 5};
             p.num_optimisation_iteration = 5;
@@ -96,7 +91,7 @@ OpenFaceParams MakeProfileParams(OpenFaceProfile profile,
 }
 
 void ApplyOverrides(OpenFaceParams& p, const omniface::OpenFaceConfig& cfg,
-                     const std::string& model_dir) {
+                    const std::string& model_dir) {
     if (!cfg.model_file.empty())
         p.model_file = ResolveModelFile(model_dir, cfg.model_file);
     if (!cfg.window_sizes_small.empty()) {
@@ -133,7 +128,7 @@ OpenFaceProfile ParseProfile(const std::string& name) {
     return OpenFaceProfile::kStandard;
 }
 
-class FaceAnalyzer::Impl {
+class OpenFaceAnalyzer::Impl {
 public:
     explicit Impl(const Config& cfg)
         : cfg_(cfg),
@@ -219,7 +214,6 @@ public:
         else
             gray = frame;
 
-        // bbox correction: SCRFD box (forehead+chin) → OpenFace expected region
         cv::Rect_<float> cb = bbox;
         cb.x += cb.width * -0.0075f;
         cb.y += cb.height * 0.2459f;
@@ -386,41 +380,112 @@ public:
         }
     }
 
+    void EnsureWriterInitialized(const std::string& input_path,
+                                 const std::string& output_dir,
+                                 double fps, bool output_aligned) {
+        writer_.Initialize(input_path, output_dir, fps, output_aligned);
+    }
+
+    void WriteObservation(const FaceAnalysisResult& analysis,
+                          int frame_index, double fps,
+                          const cv::Mat& aligned_face) {
+        writer_.WriteObservation(analysis, frame_index, fps, aligned_face);
+    }
+
+    void CloseWriter() { writer_.Close(); }
+
 private:
     const Config cfg_;
     LandmarkDetector::FaceModelParameters det_params_;
     std::unique_ptr<LandmarkDetector::CLNF> clnf_;
     std::unique_ptr<FaceAnalysis::FaceAnalyser> face_analyser_;
     Utilities::Visualizer visualizer_;
+    OpenFaceWriter writer_;
 };
 
-FaceAnalyzer::FaceAnalyzer(const Config& cfg)
+OpenFaceAnalyzer::OpenFaceAnalyzer(const Config& cfg)
     : impl_(std::make_unique<Impl>(cfg)) {}
 
-FaceAnalyzer::~FaceAnalyzer() = default;
+OpenFaceAnalyzer::~OpenFaceAnalyzer() = default;
 
-bool FaceAnalyzer::IsValid() const {
+bool OpenFaceAnalyzer::IsValid() const {
     return impl_->IsValid();
 }
 
-bool FaceAnalyzer::CanAlignFace() const {
+bool OpenFaceAnalyzer::CanAlignFace() const {
     return impl_->CanAlignFace();
 }
 
-FaceAnalysisResult FaceAnalyzer::Analyze(cv::Mat& frame,
+FaceAnalysisResult OpenFaceAnalyzer::Analyze(cv::Mat& frame,
                                          const cv::Rect_<float>& bbox) {
     return impl_->Analyze(frame, bbox);
 }
 
-void FaceAnalyzer::Reset() { impl_->Reset(); }
+FrameAnalysisResult OpenFaceAnalyzer::Analyze(const cv::Mat& frame,
+                                               const BoundingBox& bbox,
+                                               int track_id) {
+    cv::Mat frame_copy = frame.clone();
+    cv::Rect_<float> rect(bbox.x1, bbox.y1, bbox.x2 - bbox.x1, bbox.y2 - bbox.y1);
+    auto native = impl_->Analyze(frame_copy, rect);
 
-cv::Mat FaceAnalyzer::GetAlignedFace() const {
+    FrameAnalysisResult result;
+    result.backend = AnalyzerKind::kOpenFace;
+    result.track_id = track_id;
+    result.valid = native.valid;
+    if (native.valid) {
+        result.head_pose = native.head_pose;
+        result.gaze_angle_x = native.gaze_angle_x;
+        result.gaze_angle_y = native.gaze_angle_y;
+        result.landmarks_2d = native.landmarks_2d;
+        result.action_units = native.action_units;
+        result.quality_score = native.quality_score;
+        result.visible_landmarks = native.visible_landmarks;
+        result.detection_certainty = native.detection_certainty;
+        result.detection_success = native.detection_success;
+        result.gaze_0_x = native.gaze_0_x;
+        result.gaze_0_y = native.gaze_0_y;
+        result.gaze_0_z = native.gaze_0_z;
+        result.gaze_1_x = native.gaze_1_x;
+        result.gaze_1_y = native.gaze_1_y;
+        result.gaze_1_z = native.gaze_1_z;
+        result.pose_Tx = native.pose_Tx;
+        result.pose_Ty = native.pose_Ty;
+        result.pose_Tz = native.pose_Tz;
+        result.pdm_rigid = native.pdm_rigid;
+        result.pdm_nonrigid = native.pdm_nonrigid;
+        result.eye_landmarks_2d = native.eye_landmarks_2d;
+        result.eye_landmarks_3d = native.eye_landmarks_3d;
+        result.landmarks_3d = native.landmarks_3d;
+    }
+    return result;
+}
+
+void OpenFaceAnalyzer::Reset() { impl_->Reset(); }
+
+cv::Mat OpenFaceAnalyzer::GetAlignedFace() const {
     return impl_->GetAlignedFace();
 }
 
-void FaceAnalyzer::GetHOG(cv::Mat_<double>& hog, int& num_rows,
+void OpenFaceAnalyzer::GetHOG(cv::Mat_<double>& hog, int& num_rows,
                           int& num_cols) const {
     impl_->GetHOG(hog, num_rows, num_cols);
 }
 
-}  // namespace omniface::analysis
+void OpenFaceAnalyzer::EnsureWriterInitialized(const std::string& input_path,
+                                                const std::string& output_dir,
+                                                double fps,
+                                                bool output_aligned) {
+    impl_->EnsureWriterInitialized(input_path, output_dir, fps, output_aligned);
+}
+
+void OpenFaceAnalyzer::WriteObservation(const FaceAnalysisResult& analysis,
+                                         int frame_index, double fps,
+                                         const cv::Mat& aligned_face) {
+    impl_->WriteObservation(analysis, frame_index, fps, aligned_face);
+}
+
+void OpenFaceAnalyzer::CloseWriter() {
+    impl_->CloseWriter();
+}
+
+}  // namespace omniface::analysis::openface

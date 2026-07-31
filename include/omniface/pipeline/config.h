@@ -6,22 +6,22 @@
 
 namespace omniface {
 
-enum class AnalysisBackend { kOpenFace, kOnnx, kGaze, kNone };
+enum class AnalysisBackend { kOpenFace, kMediaPipe, kL2cs, kNone };
 
 inline const char* AnalysisBackendToString(AnalysisBackend b) {
     switch (b) {
-    case AnalysisBackend::kOpenFace: return "openface";
-    case AnalysisBackend::kOnnx:     return "onnx";
-    case AnalysisBackend::kGaze:     return "gaze";
-    case AnalysisBackend::kNone:     return "none";
+    case AnalysisBackend::kOpenFace:  return "openface";
+    case AnalysisBackend::kMediaPipe: return "mediapipe";
+    case AnalysisBackend::kL2cs:      return "l2cs";
+    case AnalysisBackend::kNone:      return "none";
     }
     return "openface";
 }
 
 inline AnalysisBackend AnalysisBackendFromString(const std::string& s) {
-    if (s == "onnx")     return AnalysisBackend::kOnnx;
-    if (s == "gaze")     return AnalysisBackend::kGaze;
-    if (s == "none")     return AnalysisBackend::kNone;
+    if (s == "mediapipe" || s == "onnx") return AnalysisBackend::kMediaPipe;
+    if (s == "l2cs" || s == "gaze")     return AnalysisBackend::kL2cs;
+    if (s == "none")                    return AnalysisBackend::kNone;
     return AnalysisBackend::kOpenFace;
 }
 
@@ -57,7 +57,7 @@ struct PipelineBehavior {
     bool headless = false;
 };
 
-struct GazeConfig {
+struct L2csConfig {
     std::string model = "mobilenetv2_gaze.onnx";
     bool draw_gaze = true;
 };
@@ -94,8 +94,8 @@ struct OpenFaceConfig {
     int    limit_pose             = -1;
 };
 
-// ---- ONNX 分析配置（MediaPipe FaceMesh 关键点 + 头部姿态） ------------------
-struct OnnxAnalysisConfig {
+// ---- MediaPipe 分析配置（FaceMesh 关键点 + 头部姿态） ------------------
+struct MediaPipeConfig {
     bool enable_pose = true;
     bool enable_au = false;
     std::string landmark_model = "models/mediapipe/face_mesh_Nx3x192x192_post.onnx";
@@ -117,8 +117,8 @@ struct PipelineConfig {
     VideoSourceConfig video;
     LogConfig log;
     OpenFaceConfig openface;
-    OnnxAnalysisConfig onnx;
-    GazeConfig gaze;
+    MediaPipeConfig onnx;
+    L2csConfig l2cs;
     AnalysisBackend analysis_backend = AnalysisBackend::kOpenFace;
     std::string output_base_dir;
 };

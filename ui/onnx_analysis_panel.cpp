@@ -36,7 +36,7 @@ void OnnxAnalysisPanel::setAnalysisLabel(const QString& label) {
 }
 
 void OnnxAnalysisPanel::updateResults(
-    const std::vector<analysis::onnx::OnnxAnalysisResult>& results) {
+    const std::vector<analysis::mediapipe::MediaPipeAnalysisResult>& results) {
     results_ = results;
 
     if (results.empty()) {
@@ -94,7 +94,7 @@ void OnnxAnalysisPanel::updateResults(
 }
 
 void OnnxAnalysisPanel::updateGazeResults(
-    const std::vector<analysis::onnx::GazeEstimationResult>& results) {
+    const std::vector<analysis::l2cs::L2csEstimationResult>& results) {
     if (results.empty()) {
         data_label_->setText(QStringLiteral("\u672a\u68c0\u6d4b\u5230\u4eba\u8138"));
         return;

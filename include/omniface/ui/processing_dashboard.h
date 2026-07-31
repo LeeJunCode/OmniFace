@@ -19,7 +19,7 @@ struct DashboardData {
     int64_t target_matches = 0;
     int64_t openface_analyses = 0;
     int64_t onnx_analyses = 0;
-    int64_t gaze_analyses = 0;
+    int64_t l2cs_analyses = 0;
     int64_t elapsed_seconds = 0;
     std::string analysis_label;
 };

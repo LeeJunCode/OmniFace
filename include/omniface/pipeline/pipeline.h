@@ -7,8 +7,9 @@
 
 #include <opencv2/core/mat.hpp>
 
-#include "omniface/core/analysis/onnx/gaze_estimator.h"
-#include "omniface/core/analysis/onnx/onnx_face_analyzer.h"
+#include "omniface/core/analysis/analyzer_interface.h"
+#include "omniface/core/analysis/l2cs/l2cs_estimator.h"
+#include "omniface/core/analysis/mediapipe/mediapipe_analyzer.h"
 #include "omniface/pipeline/config.h"
 #include "omniface/types.h"
 
@@ -23,9 +24,12 @@ struct FrameResult {
     int face_count = 0;
     std::vector<TrackedFace> tracked_faces;
     std::vector<MatchResult> match_results;
+    // 统一分析结果（各后端通过 IAnalyzer 接口产出）
+    std::vector<analysis::FrameAnalysisResult> analysis_results;
+    // 保留原生结果以兼容现有可视化/导出代码（Phase 5-6 清理）
     FaceAnalysisResult analysis;
-    std::vector<analysis::onnx::OnnxAnalysisResult> onnx_results;
-    std::vector<analysis::onnx::GazeEstimationResult> gaze_results;
+    std::vector<analysis::mediapipe::MediaPipeAnalysisResult> onnx_results;
+    std::vector<analysis::l2cs::L2csEstimationResult> l2cs_results;
 };
 
 using FrameCallback = std::function<void(const FrameResult&)>;

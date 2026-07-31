@@ -1,13 +1,13 @@
-#include "omniface/core/analysis/onnx/pose_visualizer.h"
+#include "omniface/core/analysis/mediapipe/mediapipe_visualizer.h"
 
 #include <cstdio>
 
 #include <opencv2/calib3d.hpp>
 #include <opencv2/imgproc.hpp>
 
-#include "omniface/core/analysis/onnx/pose_estimator.h"
+#include "omniface/core/analysis/mediapipe/mediapipe_pose_estimator.h"
 
-namespace omniface::analysis::onnx {
+namespace omniface::analysis::mediapipe {
 
 namespace {
 
@@ -59,7 +59,7 @@ void DrawPoseText(cv::Mat& image, const HeadPose& pose, const cv::Point& offset)
 
 }  // namespace
 
-void PoseVisualizer::DrawLandmarks(cv::Mat& image,
+void MediaPipeVisualizer::DrawLandmarks(cv::Mat& image,
                                     const std::vector<cv::Point2f>& landmarks) {
     if (image.empty() || landmarks.empty()) return;
 
@@ -73,7 +73,7 @@ void PoseVisualizer::DrawLandmarks(cv::Mat& image,
     }
 }
 
-void PoseVisualizer::DrawProjectedModel(cv::Mat& image,
+void MediaPipeVisualizer::DrawProjectedModel(cv::Mat& image,
                                          const PoseEstimationResult& result,
                                          const std::vector<cv::Point3f>& canonical_model) {
     if (!result.valid || image.empty()) return;
@@ -96,7 +96,7 @@ void PoseVisualizer::DrawProjectedModel(cv::Mat& image,
     }
 }
 
-void PoseVisualizer::DrawFaceNormal(cv::Mat& image,
+void MediaPipeVisualizer::DrawFaceNormal(cv::Mat& image,
                                      const PoseEstimationResult& result,
                                      float face_size,
                                      const cv::Point3f& nose_canonical) {
@@ -138,4 +138,4 @@ void PoseVisualizer::DrawFaceNormal(cv::Mat& image,
     cv::arrowedLine(image, start, end, cv::Scalar(255, 0, 255), 3, cv::LINE_AA, 0, 0.18);
 }
 
-}  // namespace omniface::analysis::onnx
+}  // namespace omniface::analysis::mediapipe

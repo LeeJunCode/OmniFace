@@ -162,8 +162,8 @@ void SettingsDialog::setupUI() {
 
     analysis_backend_ = new QComboBox;
     analysis_backend_->addItem(QStringLiteral("\u9762\u90e8\u8868\u60c5\u5206\u6790 (OpenFace)"), "openface");
-    analysis_backend_->addItem(QStringLiteral("\u5934\u90e8\u59ff\u6001\u63d0\u53d6 (MediaPipe)"), "onnx");
-    analysis_backend_->addItem(QStringLiteral("\u89c6\u7ebf\u63d0\u53d6 (L2CS-Net)"), "gaze");
+    analysis_backend_->addItem(QStringLiteral("\u5934\u90e8\u59ff\u6001\u63d0\u53d6 (MediaPipe)"), "mediapipe");
+    analysis_backend_->addItem(QStringLiteral("\u89c6\u7ebf\u63d0\u53d6 (L2CS-Net)"), "l2cs");
     analysis_backend_->addItem(QStringLiteral("\u65e0"), "none");
     analysis_backend_->setCurrentIndex(
         analysis_backend_->findData(
@@ -178,8 +178,8 @@ void SettingsDialog::setupUI() {
 
     auto syncAnalysisPage = [config_stack, this]() {
         QString backend = analysis_backend_->currentData().toString();
-        if (backend == "onnx") config_stack->setCurrentIndex(1);
-        else if (backend == "gaze") config_stack->setCurrentIndex(2);
+        if (backend == "mediapipe") config_stack->setCurrentIndex(1);
+        else if (backend == "l2cs") config_stack->setCurrentIndex(2);
         else if (backend == "none") config_stack->setCurrentIndex(3);
         else config_stack->setCurrentIndex(0);
     };
@@ -372,13 +372,13 @@ void SettingsDialog::setupUI() {
     gaze_model_combo_->addItem(QStringLiteral("MobileOne-S0"), "mobileone_s0_gaze.onnx");
     gaze_model_combo_->addItem(QStringLiteral("MobileNetV2"), "mobilenetv2_gaze.onnx");
     gaze_model_combo_->addItem(QStringLiteral("ResNet50"), "resnet50_gaze.onnx");
-    int model_idx = gaze_model_combo_->findData(QString::fromStdString(config_.gaze.model));
+    int model_idx = gaze_model_combo_->findData(QString::fromStdString(config_.l2cs.model));
     gaze_model_combo_->setCurrentIndex(model_idx >= 0 ? model_idx : 0);
     gaze_model_combo_->setMinimumWidth(200);
     addGazeRow(QStringLiteral("\u6a21\u578b\u9009\u62e9"), gaze_model_combo_,
                QStringLiteral("MobileOne-S0 \u8f83\u5c0f\u8f83\u5feb\uff0cMobileNetV2 \u5747\u8861\uff0cResNet50 \u7cbe\u5ea6\u6700\u9ad8"));
 
-    gaze_draw_ = makeBoolCombo(config_.gaze.draw_gaze);
+    gaze_draw_ = makeBoolCombo(config_.l2cs.draw_gaze);
     addGazeRow(QStringLiteral("\u663e\u793a\u89c6\u7ebf\u7bad\u5934"), gaze_draw_,
                QStringLiteral("\u5728\u89c6\u9891\u5e27\u4e0a\u7ed8\u5236\u89c6\u7ebf\u65b9\u5411\u7bad\u5934"));
 
@@ -449,9 +449,9 @@ void SettingsDialog::setupUI() {
         onnx_draw_normal_->setCurrentIndex(defaults.onnx.draw_face_normal ? 1 : 0);
         // 视线估计默认值
         int gmodel_idx = gaze_model_combo_->findData(
-            QString::fromStdString(defaults.gaze.model));
+            QString::fromStdString(defaults.l2cs.model));
         gaze_model_combo_->setCurrentIndex(gmodel_idx >= 0 ? gmodel_idx : 0);
-        gaze_draw_->setCurrentIndex(defaults.gaze.draw_gaze ? 1 : 0);
+        gaze_draw_->setCurrentIndex(defaults.l2cs.draw_gaze ? 1 : 0);
 
         analysis_backend_->setCurrentIndex(
             analysis_backend_->findData(
@@ -518,8 +518,8 @@ void SettingsDialog::saveTo(PipelineConfig& cfg) const {
     cfg.onnx.draw_face_wireframe = onnx_draw_wireframe_->currentData().toBool();
     cfg.onnx.draw_face_normal = onnx_draw_normal_->currentData().toBool();
     // 视线估计
-    cfg.gaze.model = gaze_model_combo_->currentData().toString().toStdString();
-    cfg.gaze.draw_gaze = gaze_draw_->currentData().toBool();
+    cfg.l2cs.model = gaze_model_combo_->currentData().toString().toStdString();
+    cfg.l2cs.draw_gaze = gaze_draw_->currentData().toBool();
 }
 
 PipelineConfig SettingsDialog::getConfig() const {

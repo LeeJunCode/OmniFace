@@ -1,4 +1,4 @@
-#include "omniface/pipeline/openface_writer.h"
+#include "omniface/core/analysis/openface/openface_writer.h"
 
 #include <string>
 #include <vector>

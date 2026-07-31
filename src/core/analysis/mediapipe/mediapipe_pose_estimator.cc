@@ -1,4 +1,4 @@
-#include "omniface/core/analysis/onnx/pose_estimator.h"
+#include "omniface/core/analysis/mediapipe/mediapipe_pose_estimator.h"
 
 #include <algorithm>
 #include <cstdio>
@@ -11,7 +11,7 @@
 #include "omniface/core/detail/onnx_session.h"
 #include "omniface/core/detail/preprocess.h"
 
-namespace omniface::analysis::onnx {
+namespace omniface::analysis::mediapipe {
 
 namespace {
 
@@ -21,7 +21,7 @@ std::vector<cv::Point3f> ParseCanonicalModel(const std::string& path) {
 
     std::ifstream file(path);
     if (!file.is_open()) {
-        throw std::runtime_error("PoseEstimator: cannot open canonical model: " + path);
+        throw std::runtime_error("MediaPipePoseEstimator: cannot open canonical model: " + path);
     }
 
     std::string line;
@@ -35,7 +35,7 @@ std::vector<cv::Point3f> ParseCanonicalModel(const std::string& path) {
 
     if (vertices.size() != 468) {
         throw std::runtime_error(
-            "PoseEstimator: canonical model has " + std::to_string(vertices.size()) +
+            "MediaPipePoseEstimator: canonical model has " + std::to_string(vertices.size()) +
             " vertices, expected 468");
     }
     return vertices;
@@ -75,7 +75,7 @@ cv::Mat EstimateCameraMatrix(int img_w, int img_h) {
 
 }  // namespace
 
-class PoseEstimator::Impl {
+class MediaPipePoseEstimator::Impl {
 public:
     detail::OnnxSession session_;
     detail::FaceCropPreprocessor preproc_;
@@ -85,7 +85,7 @@ public:
     std::string landmark_model_path_;
 
     Impl(const std::string& landmark_model_path, Config cfg)
-        : session_(landmark_model_path, "PoseEstimator", cfg.intra_threads)
+        : session_(landmark_model_path, "MediaPipePoseEstimator", cfg.intra_threads)
         , preproc_(detail::PreprocessConfig{
               .target_size = 192,
               .norm = detail::NormKind::kSimple,
@@ -105,25 +105,25 @@ public:
     }
 };
 
-PoseEstimator::PoseEstimator(const std::string& landmark_model_path, Config config) {
+MediaPipePoseEstimator::MediaPipePoseEstimator(const std::string& landmark_model_path, Config config) {
     if (landmark_model_path.empty()) {
-        throw std::invalid_argument("PoseEstimator: landmark_model_path is empty");
+        throw std::invalid_argument("MediaPipePoseEstimator: landmark_model_path is empty");
     }
     if (config.canonical_model_path.empty()) {
-        throw std::invalid_argument("PoseEstimator: canonical_model_path is empty");
+        throw std::invalid_argument("MediaPipePoseEstimator: canonical_model_path is empty");
     }
     impl_ = std::make_unique<Impl>(landmark_model_path, std::move(config));
 }
 
-PoseEstimator::~PoseEstimator() = default;
-PoseEstimator::PoseEstimator(PoseEstimator&&) noexcept = default;
-PoseEstimator& PoseEstimator::operator=(PoseEstimator&&) noexcept = default;
+MediaPipePoseEstimator::~MediaPipePoseEstimator() = default;
+MediaPipePoseEstimator::MediaPipePoseEstimator(MediaPipePoseEstimator&&) noexcept = default;
+MediaPipePoseEstimator& MediaPipePoseEstimator::operator=(MediaPipePoseEstimator&&) noexcept = default;
 
-PoseEstimator PoseEstimator::Clone() const {
-    return PoseEstimator(impl_->landmark_model_path_, impl_->config_);
+MediaPipePoseEstimator MediaPipePoseEstimator::Clone() const {
+    return MediaPipePoseEstimator(impl_->landmark_model_path_, impl_->config_);
 }
 
-PoseEstimationResult PoseEstimator::EstimatePose(const cv::Mat& bgr_image,
+PoseEstimationResult MediaPipePoseEstimator::EstimatePose(const cv::Mat& bgr_image,
                                                   const BoundingBox& face_bbox) {
     PoseEstimationResult result;
 
@@ -237,7 +237,7 @@ PoseEstimationResult PoseEstimator::EstimatePose(const cv::Mat& bgr_image,
     return result;
 }
 
-PoseEstimationResult PoseEstimator::EstimatePoseFromCrop(const cv::Mat& face_roi,
+PoseEstimationResult MediaPipePoseEstimator::EstimatePoseFromCrop(const cv::Mat& face_roi,
                                                          const cv::Rect& crop_rect,
                                                          int original_img_w,
                                                          int original_img_h) {
@@ -351,10 +351,10 @@ PoseEstimationResult PoseEstimator::EstimatePoseFromCrop(const cv::Mat& face_roi
     return result;
 }
 
-const std::vector<cv::Point3f>& PoseEstimator::canonical_model() const {
+const std::vector<cv::Point3f>& MediaPipePoseEstimator::canonical_model() const {
     return impl_->canonical_model_;
 }
 
-float PoseEstimator::face_size() const { return impl_->face_size_; }
+float MediaPipePoseEstimator::face_size() const { return impl_->face_size_; }
 
-}  // namespace omniface::analysis::onnx
+}  // namespace omniface::analysis::mediapipe

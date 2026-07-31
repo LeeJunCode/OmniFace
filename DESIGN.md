@@ -13,14 +13,16 @@ OmniFace — 基于 C++20 的实时人脸检测、识别与分析系统，支持
 
 ## 分析后端
 
-系统支持三种分析后端，通过 `analysis_backend` 配置切换：
+系统支持三种分析后端，通过 `analysis_backend` 配置切换。每种后端实现 `IAnalyzer` 统一接口，产出 `FrameAnalysisResult`：
 
-| 后端 | 枚举值 | 用途 |
-|------|--------|------|
-| OpenFace | `openface` | CE-CLM 关键点 + 头部姿态 + 视线 + AU（OpenFace 2.0 管线） |
-| ONNX | `onnx` | MediaPipe FaceMesh 468 关键点 + PnP 头部姿态 |
-| Gaze | `gaze` | L2CS-Net 视线估计（可与 ONNX 后端组合使用） |
-| None | `none` | 仅检测 + 识别 + 跟踪，不做面部分析 |
+| 后端 | 枚举值 | 命名空间 | 用途 |
+|------|--------|---------|------|
+| OpenFace | `openface` | `analysis::openface` | CE-CLM 关键点 + 头部姿态 + 视线 + AU（OpenFace 2.0 管线） |
+| MediaPipe | `mediapipe` | `analysis::mediapipe` | FaceMesh 468 关键点 + PnP 头部姿态 |
+| L2CS-Net | `l2cs` | `analysis::l2cs` | 视线估计（90-bin softmax 分类回归） |
+| None | `none` | — | 仅检测 + 识别 + 跟踪，不做面部分析 |
+
+配置键兼容旧值：`"onnx"` 自动映射为 `"mediapipe"`，`"gaze"` 自动映射为 `"l2cs"`。
 
 ---
 
@@ -96,12 +98,15 @@ kp_y[k] = anchor_y + kps_offset[2k+1]
                                (embedding 缓存 +
                                 复查机制)
                                          │
-                               ┌─────────┴─────────┐
-                               │                   │
-                          [ONNX 分析]          [Gaze 估计]
-                      (MediaPipe + PnP)      (L2CS-Net)
-                               │                   │
-                               └─────────┬─────────┘
+                               ┌─────────┼─────────┐
+                               │         │         │
+                          [MediaPipe]  [L2CS]   [OpenFace]
+                             头部姿态    视线      完整分析
+                               │         │         │
+                               └─────────┼─────────┘
+                                         │
+                                FrameAnalysisResult
+                                  (IAnalyzer 统一接口)
                                          │
                                     [OutputManager]
                                    (视频/图像输出)
@@ -193,7 +198,6 @@ kp_y[k] = anchor_y + kps_offset[2k+1]
 | `decode_worker.h/cc` | 视频解码工作线程（有界队列） |
 | `target_tracker.h/cc` | 目标跟踪：embedding 缓存 + 复查机制 |
 | `output_manager.h/cc` | 视频/图像输出管理 |
-| `openface_writer.h/cc` | OpenFace CSV + 对齐人脸输出 |
 | `bounded_queue.h` | 线程安全有界队列模板 |
 
 **TargetTracker 设计**：
@@ -210,13 +214,49 @@ kp_y[k] = anchor_y + kps_offset[2k+1]
 
 ### 模块 5：面部分析（`core/analysis/`）
 
-#### 5.1 头部姿态估计（ONNX 后端）
+三种后端各自独立，实现 `IAnalyzer` 统一接口。
+
+#### 5.0 统一接口
 
 | 文件 | 职责 |
 |------|------|
-| `onnx/pose_estimator.h/cc` | MediaPipe FaceMesh 推理 + PnP 几何法姿态解算 |
-| `onnx/pose_visualizer.h/cc` | 静态可视化：关键点、3D 线框、面部法线 |
-| `onnx/onnx_face_analyzer.h/cc` | 封装 PoseEstimator，提供统一分析接口 |
+| `analyzer_interface.h` | `IAnalyzer` 抽象接口 + `FrameAnalysisResult` 统一结果 + `AnalyzerKind` 枚举 |
+
+```cpp
+enum class AnalyzerKind { kOpenFace, kMediaPipe, kL2cs };
+
+struct FrameAnalysisResult {
+    std::optional<HeadPose> head_pose;
+    std::optional<float> gaze_yaw, gaze_pitch;
+    std::optional<cv::Vec3f> gaze_vector;
+    std::vector<cv::Point2f> landmarks;          // 468 点（MediaPipe）
+    std::array<float, 136> landmarks_2d{};       // 68 点（OpenFace）
+    std::vector<std::pair<std::string, double>> action_units; // AU（OpenFace）
+    // ... 各后端特有字段
+    AnalyzerKind backend = AnalyzerKind::kOpenFace;
+    bool valid = false;
+    int track_id = -1;
+};
+
+class IAnalyzer {
+public:
+    virtual ~IAnalyzer() = default;
+    virtual AnalyzerKind Kind() const = 0;
+    virtual FrameAnalysisResult Analyze(const cv::Mat& frame,
+                                         const BoundingBox& bbox,
+                                         int track_id = -1) = 0;
+    virtual bool IsValid() const = 0;
+    virtual void Reset() {}
+};
+```
+
+#### 5.1 头部姿态估计（MediaPipe 后端）
+
+| 文件 | 职责 |
+|------|------|
+| `mediapipe/mediapipe_pose_estimator.h/cc` | FaceMesh ONNX 推理 + EPNP 姿态解算 |
+| `mediapipe/mediapipe_visualizer.h/cc` | 静态可视化：关键点、3D 线框、面部法线 |
+| `mediapipe/mediapipe_analyzer.h/cc` | 封装 PoseEstimator，实现 IAnalyzer 接口 |
 
 **预处理**：
 ```
@@ -236,11 +276,11 @@ bbox 四边扩展 25% margin → crop → resize 192×192
 
 **相机内参**：`f = max(img_w, img_h)`，主点在图像中心。
 
-#### 5.2 视线估计（Gaze 后端）
+#### 5.2 视线估计（L2CS 后端）
 
 | 文件 | 职责 |
 |------|------|
-| `onnx/gaze_estimator.h/cc` | L2CS-Net MobileNetV2 推理，90-bin 分类回归 |
+| `l2cs/l2cs_estimator.h/cc` | L2CS-Net ONNX 推理，实现 IAnalyzer 接口 |
 
 **模型架构**：
 ```
@@ -272,7 +312,8 @@ bbox → crop 人脸区域（无 margin，与训练条件一致）
 
 | 文件 | 职责 |
 |------|------|
-| `face_analyzer.h/cc` | 封装 OpenFace 2.0 CE-CLM 管线 |
+| `openface/openface_analyzer.h/cc` | 封装 OpenFace 2.0 CE-CLM 管线，实现 IAnalyzer 接口 |
+| `openface/openface_writer.h/cc` | OpenFace 格式 CSV + 对齐人脸图像输出 |
 
 支持 standard 和 max_quality 两种 profile，通过 CLNF 关键点 + PDM 模型联合估计姿态和表情参数，SVR/SVM 分类器做 AU 回归。
 
@@ -367,7 +408,6 @@ OmniFace/
 │   │   ├── decode_worker.h     # 视频解码器
 │   │   ├── target_tracker.h    # 目标跟踪 + embedding 缓存
 │   │   ├── output_manager.h    # 输出管理
-│   │   ├── openface_writer.h   # OpenFace 输出写入
 │   │   └── bounded_queue.h     # 有界队列
 │   ├── core/
 │   │   ├── detection/
@@ -384,12 +424,16 @@ OmniFace/
 │   │   │   ├── face_matcher.h
 │   │   │   └── align.h
 │   │   ├── analysis/
-│   │   │   ├── face_analyzer.h     # OpenFace 后端封装
-│   │   │   └── onnx/
-│   │   │       ├── onnx_face_analyzer.h
-│   │   │       ├── pose_estimator.h
-│   │   │       ├── pose_visualizer.h
-│   │   │       └── gaze_estimator.h
+│   │   │   ├── analyzer_interface.h     # IAnalyzer 统一接口
+│   │   │   ├── openface/
+│   │   │   │   ├── openface_analyzer.h
+│   │   │   │   └── openface_writer.h
+│   │   │   ├── mediapipe/
+│   │   │   │   ├── mediapipe_analyzer.h
+│   │   │   │   ├── mediapipe_pose_estimator.h
+│   │   │   │   └── mediapipe_visualizer.h
+│   │   │   └── l2cs/
+│   │   │       └── l2cs_estimator.h
 │   │   └── detail/
 │   │       ├── onnx_session.h      # ONNX Runtime 会话封装
 │   │       └── preprocess.h        # 人脸裁剪预处理器
@@ -483,9 +527,13 @@ struct FrameResult {
     double recognition_latency_ms = 0.0;
     double analysis_latency_ms = 0.0;
 
-    FaceAnalysisResult analysis;                          // OpenFace 分析结果
-    std::vector<analysis::onnx::OnnxAnalysisResult> onnx_results;  // ONNX 分析结果
-    std::vector<analysis::onnx::GazeEstimationResult> gaze_results; // 视线结果
+    // 统一分析结果（各后端通过 IAnalyzer 接口产出）
+    std::vector<analysis::FrameAnalysisResult> analysis_results;
+
+    // 各后端原生结果（保留用于可视化/导出）
+    FaceAnalysisResult analysis;                                          // OpenFace
+    std::vector<analysis::mediapipe::MediaPipeAnalysisResult> onnx_results; // MediaPipe
+    std::vector<analysis::l2cs::L2csEstimationResult> l2cs_results;        // L2CS-Net
 
     std::vector<TrackedFace> tracked_faces;
     std::vector<MatchResult> match_results;
@@ -500,5 +548,5 @@ struct FrameResult {
 - **侧脸视线不稳定**：L2CS-Net 在 Gaze360 数据集训练，侧脸样本稀少，极端角度误差增大
 - **帧间视线抖动**：通过 EMA 平滑（α=0.2）和边界框平滑（α=0.25）缓解
 - **AU 分析未实现**：`onnx.enable_au` 配置项预留给 OpenGraphAU，尚未集成
-- **仅处理目标人脸**：ONNX 和 Gaze 分析仅对匹配到的目标人脸执行，非全部检测人脸
+- **仅处理目标人脸**：MediaPipe、L2CS 和 OpenFace 分析仅对匹配到的目标人脸执行，非全部检测人脸
 - **OpenFace 后端性能**：CE-CLM 首次初始化需 20-30ms（cold start），后续跟踪帧降至 ~10ms（warm start）

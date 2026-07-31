@@ -4,8 +4,8 @@
 
 #include <QWidget>
 
-#include "omniface/core/analysis/onnx/gaze_estimator.h"
-#include "omniface/core/analysis/onnx/onnx_face_analyzer.h"
+#include "omniface/core/analysis/l2cs/l2cs_estimator.h"
+#include "omniface/core/analysis/mediapipe/mediapipe_analyzer.h"
 
 class QLabel;
 class QVBoxLayout;
@@ -18,15 +18,15 @@ class OnnxAnalysisPanel : public QWidget {
 public:
     explicit OnnxAnalysisPanel(QWidget* parent = nullptr);
 
-    void updateResults(const std::vector<analysis::onnx::OnnxAnalysisResult>& results);
-    void updateGazeResults(const std::vector<analysis::onnx::GazeEstimationResult>& results);
+    void updateResults(const std::vector<analysis::mediapipe::MediaPipeAnalysisResult>& results);
+    void updateGazeResults(const std::vector<analysis::l2cs::L2csEstimationResult>& results);
     void setAnalysisLabel(const QString& label);
     void clear();
     void paintEvent(QPaintEvent* event) override;
     QSize minimumSizeHint() const override;
 
 private:
-    std::vector<analysis::onnx::OnnxAnalysisResult> results_;
+    std::vector<analysis::mediapipe::MediaPipeAnalysisResult> results_;
     QLabel* title_label_;
     QLabel* data_label_;
 };
