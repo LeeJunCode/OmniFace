@@ -28,6 +28,7 @@ private:
     QDoubleSpinBox* detection_confidence_ = nullptr;
     QSpinBox* detection_threads_ = nullptr;
     QSpinBox* recognition_threads_ = nullptr;
+    QComboBox* model_device_ = nullptr;
 
     // 高级参数
     QDoubleSpinBox* detection_nms_ = nullptr;
@@ -55,10 +56,12 @@ private:
     QComboBox* onnx_draw_landmarks_ = nullptr;
     QComboBox* onnx_draw_wireframe_ = nullptr;
     QComboBox* onnx_draw_normal_ = nullptr;
+    QComboBox* onnx_device_ = nullptr;
 
     // 视线估计
     QComboBox* gaze_model_combo_ = nullptr;
     QComboBox* gaze_draw_ = nullptr;
+    QComboBox* gaze_device_ = nullptr;
 };
 
 }  // namespace omniface::ui

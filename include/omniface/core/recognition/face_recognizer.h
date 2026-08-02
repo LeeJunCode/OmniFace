@@ -5,6 +5,7 @@
 
 #include <opencv2/core/mat.hpp>
 
+#include "omniface/core/detail/onnx_session.h"
 #include "omniface/types.h"
 
 namespace omniface::recognition {
@@ -15,6 +16,7 @@ public:
         int input_width = 112;
         int input_height = 112;
         int intra_threads = 1;
+        InferenceDevice device = InferenceDevice::kCPU;
     };
 
     explicit FaceRecognizer(const std::string& model_path, Config config);

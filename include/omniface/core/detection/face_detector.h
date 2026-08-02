@@ -6,6 +6,7 @@
 
 #include <opencv2/core/mat.hpp>
 
+#include "omniface/core/detail/onnx_session.h"
 #include "omniface/types.h"
 
 namespace omniface::detection {
@@ -18,6 +19,7 @@ public:
         int input_width = 640;
         int input_height = 640;
         int intra_threads = 2;
+        InferenceDevice device = InferenceDevice::kCPU;
     };
 
     explicit FaceDetector(const std::string& model_path, Config config);

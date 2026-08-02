@@ -15,6 +15,7 @@ model:
   recognition_confidence_threshold: 0.0
   recognition_iou: 0.3
   openface_model_dir: "openface_model"
+  device: cpu
 
 thresholds:
   match_threshold: 0.30
@@ -69,11 +70,13 @@ onnx:
   draw_landmarks: true
   draw_face_wireframe: true
   draw_face_normal: true
+  device: cpu
 
 # ---- L2CS-Net 视线估计（选择 "gaze" 后端启用） --------------------
 gaze:
   model: "mobilenetv2_gaze.onnx"
   draw_gaze: true
+  device: cpu
 
 log:
   level: "debug"

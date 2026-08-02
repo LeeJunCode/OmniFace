@@ -29,6 +29,7 @@ PipelineModules CreateModules(const PipelineConfig& config) {
     det_cfg.input_height = config.model.detection_input_height;
     det_cfg.confidence_threshold = config.thresholds.detection_confidence;
     det_cfg.nms_threshold = config.thresholds.detection_nms;
+    det_cfg.device = config.model.device;
     mods.detector = std::make_unique<detection::FaceDetector>(
         config.model.detector_model, det_cfg);
 
@@ -44,6 +45,7 @@ PipelineModules CreateModules(const PipelineConfig& config) {
         spdlog::info("Loading recognition model: {}", config.model.recognizer_model);
         recognition::FaceRecognizer::Config rec_cfg;
         rec_cfg.intra_threads = config.model.recognition_threads;
+        rec_cfg.device = config.model.device;
         mods.recognizer = std::make_unique<recognition::FaceRecognizer>(
             config.model.recognizer_model, rec_cfg);
         mods.matcher = std::make_unique<recognition::FaceMatcher>();
@@ -86,6 +88,7 @@ PipelineModules CreateModules(const PipelineConfig& config) {
         onnx_cfg.analysis_threads = config.onnx.analysis_threads;
         onnx_cfg.margin           = config.onnx.margin;
         onnx_cfg.score_threshold  = config.onnx.score_threshold;
+        onnx_cfg.device           = config.onnx.device;
 
         mods.onnx_analyzer = std::make_unique<analysis::mediapipe::MediaPipeAnalyzer>(onnx_cfg);
         spdlog::info("ONNX analysis backend activated (pose={})", config.onnx.enable_pose);
@@ -96,6 +99,7 @@ PipelineModules CreateModules(const PipelineConfig& config) {
         analysis::l2cs::L2csEstimator::Config l2cs_cfg;
         l2cs_cfg.model_path = model_path;
         l2cs_cfg.intra_threads = 1;
+        l2cs_cfg.device = config.l2cs.device;
 
         try {
             mods.l2cs_estimator = std::make_unique<analysis::l2cs::L2csEstimator>(l2cs_cfg);

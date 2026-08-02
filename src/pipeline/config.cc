@@ -60,6 +60,8 @@ PipelineConfig LoadPipelineConfig(const std::string& yaml_path) {
                            cfg.model.recognition_confidence_threshold);
         cfg.model.recognition_iou =
             SafeGet<float>(m, "recognition_iou", cfg.model.recognition_iou);
+        cfg.model.device = InferenceDeviceFromString(
+            SafeGet<std::string>(m, "device", "cpu"));
         cfg.model.openface_model_dir =
             SafeGet<std::string>(m, "openface_model_dir", cfg.model.openface_model_dir);
     }
@@ -165,6 +167,8 @@ PipelineConfig LoadPipelineConfig(const std::string& yaml_path) {
             SafeGet<bool>(onx, "draw_face_wireframe", cfg.onnx.draw_face_wireframe);
         cfg.onnx.draw_face_normal =
             SafeGet<bool>(onx, "draw_face_normal", cfg.onnx.draw_face_normal);
+        cfg.onnx.device = InferenceDeviceFromString(
+            SafeGet<std::string>(onx, "device", "cpu"));
     }
 
     if (auto g = SafeSub(root, "l2cs")) {
@@ -172,6 +176,8 @@ PipelineConfig LoadPipelineConfig(const std::string& yaml_path) {
             SafeGet<std::string>(g, "model", cfg.l2cs.model);
         cfg.l2cs.draw_gaze =
             SafeGet<bool>(g, "draw_gaze", cfg.l2cs.draw_gaze);
+        cfg.l2cs.device = InferenceDeviceFromString(
+            SafeGet<std::string>(g, "device", "cpu"));
     }
     // 向后兼容旧配置键名 "gaze"
     if (auto g = SafeSub(root, "gaze")) {
@@ -179,6 +185,8 @@ PipelineConfig LoadPipelineConfig(const std::string& yaml_path) {
             SafeGet<std::string>(g, "model", cfg.l2cs.model);
         cfg.l2cs.draw_gaze =
             SafeGet<bool>(g, "draw_gaze", cfg.l2cs.draw_gaze);
+        cfg.l2cs.device = InferenceDeviceFromString(
+            SafeGet<std::string>(g, "device", "cpu"));
     }
 
     // 值域裁剪，确保配置值在合法范围内
@@ -223,6 +231,7 @@ void SavePipelineConfig(const std::string& yaml_path, const PipelineConfig& cfg)
     root["model"]["recognition_confidence_threshold"] = cfg.model.recognition_confidence_threshold;
     root["model"]["recognition_iou"] = cfg.model.recognition_iou;
     root["model"]["openface_model_dir"] = cfg.model.openface_model_dir;
+    root["model"]["device"] = InferenceDeviceToString(cfg.model.device);
 
     {
         const auto& of = cfg.openface;
@@ -280,7 +289,6 @@ void SavePipelineConfig(const std::string& yaml_path, const PipelineConfig& cfg)
     root["log"]["level"] = cfg.log.level;
 
     root["analysis_backend"] = AnalysisBackendToString(cfg.analysis_backend);
-
     {
         const auto& onx = cfg.onnx;
         root["onnx"]["enable_pose"] = onx.enable_pose;
@@ -295,12 +303,14 @@ void SavePipelineConfig(const std::string& yaml_path, const PipelineConfig& cfg)
         root["onnx"]["draw_landmarks"] = onx.draw_landmarks;
         root["onnx"]["draw_face_wireframe"] = onx.draw_face_wireframe;
         root["onnx"]["draw_face_normal"] = onx.draw_face_normal;
+        root["onnx"]["device"] = InferenceDeviceToString(onx.device);
     }
 
     {
         const auto& l2 = cfg.l2cs;
         root["l2cs"]["model"] = l2.model;
         root["l2cs"]["draw_gaze"] = l2.draw_gaze;
+        root["l2cs"]["device"] = InferenceDeviceToString(l2.device);
     }
 
     std::ofstream fout(yaml_path);

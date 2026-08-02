@@ -70,7 +70,7 @@ public:
 
     Impl(const Config& cfg)
         : config_(cfg)
-        , session_(cfg.model_path, "L2csEstimator", cfg.intra_threads)
+        , session_(cfg.model_path, "L2csEstimator", cfg.intra_threads, cfg.device)
         , preproc_(detail::PreprocessConfig{
               .target_size = 448,
               .norm = detail::NormKind::kImageNet,

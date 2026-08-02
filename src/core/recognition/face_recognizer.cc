@@ -17,7 +17,7 @@ public:
     Config config_;
 
     Impl(const std::string& model_path, Config cfg)
-        : session_(model_path, "FaceRecognizer", cfg.intra_threads), config_(cfg) {}
+        : session_(model_path, "FaceRecognizer", cfg.intra_threads, cfg.device), config_(cfg) {}
 };
 
 FaceRecognizer::FaceRecognizer(const std::string& model_path, Config config) {

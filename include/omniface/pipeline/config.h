@@ -4,9 +4,28 @@
 #include <string>
 #include <vector>
 
+#include "omniface/core/detail/onnx_session.h"
+
 namespace omniface {
 
 enum class AnalysisBackend { kOpenFace, kMediaPipe, kL2cs, kNone };
+
+inline const char* InferenceDeviceToString(InferenceDevice d) {
+    switch (d) {
+    case InferenceDevice::kCPU:      return "cpu";
+    case InferenceDevice::kDirectML: return "directml";
+    case InferenceDevice::kCUDA:     return "cuda";
+    case InferenceDevice::kTensorRT: return "tensorrt";
+    }
+    return "cpu";
+}
+
+inline InferenceDevice InferenceDeviceFromString(const std::string& s) {
+    if (s == "directml") return InferenceDevice::kDirectML;
+    if (s == "cuda")     return InferenceDevice::kCUDA;
+    if (s == "tensorrt") return InferenceDevice::kTensorRT;
+    return InferenceDevice::kCPU;
+}
 
 inline const char* AnalysisBackendToString(AnalysisBackend b) {
     switch (b) {
@@ -37,6 +56,7 @@ struct ModelConfig {
     float recognition_confidence_threshold = 0.0f;
     float recognition_iou = 0.3f;
     std::string openface_model_dir = "openface_model";
+    InferenceDevice device = InferenceDevice::kCPU;
 };
 
 struct ThresholdConfig {
@@ -60,6 +80,7 @@ struct PipelineBehavior {
 struct L2csConfig {
     std::string model = "mobilenetv2_gaze.onnx";
     bool draw_gaze = true;
+    InferenceDevice device = InferenceDevice::kCPU;
 };
 
 struct VideoSourceConfig {
@@ -108,6 +129,7 @@ struct MediaPipeConfig {
     bool draw_landmarks = true;
     bool draw_face_wireframe = true;
     bool draw_face_normal = true;
+    InferenceDevice device = InferenceDevice::kCPU;
 };
 
 struct PipelineConfig {

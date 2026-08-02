@@ -7,6 +7,7 @@
 #include <opencv2/core/mat.hpp>
 #include <opencv2/core/types.hpp>
 
+#include "omniface/core/detail/onnx_session.h"
 #include "omniface/types.h"
 
 namespace omniface::analysis::mediapipe {
@@ -28,6 +29,7 @@ public:
         float score_threshold = 0.95f;
         std::string canonical_model_path;
         int intra_threads = 1;
+        InferenceDevice device = InferenceDevice::kCPU;
     };
 
     explicit MediaPipePoseEstimator(const std::string& landmark_model_path, Config config);

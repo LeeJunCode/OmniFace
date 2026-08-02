@@ -26,7 +26,7 @@ public:
     } anchors_;
 
     Impl(const std::string& model_path, Config cfg)
-        : session_(model_path, "FaceDetector", cfg.intra_threads), config_(cfg) {
+        : session_(model_path, "FaceDetector", cfg.intra_threads, cfg.device), config_(cfg) {
         anchors_ = GenerateAnchorCenters(config_.input_width, config_.input_height);
     }
 

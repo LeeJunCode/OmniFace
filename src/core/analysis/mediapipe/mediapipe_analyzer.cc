@@ -22,6 +22,7 @@ MediaPipeAnalyzer::MediaPipeAnalyzer(const MediaPipeAnalyzerConfig& config)
             pose_cfg.score_threshold = config_.score_threshold;
             pose_cfg.canonical_model_path = config_.canonical_model;
             pose_cfg.intra_threads = config_.analysis_threads;
+            pose_cfg.device = config_.device;
 
             try {
                 pose_estimator_ = std::make_unique<MediaPipePoseEstimator>(

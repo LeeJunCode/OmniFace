@@ -85,7 +85,7 @@ public:
     std::string landmark_model_path_;
 
     Impl(const std::string& landmark_model_path, Config cfg)
-        : session_(landmark_model_path, "MediaPipePoseEstimator", cfg.intra_threads)
+        : session_(landmark_model_path, "MediaPipePoseEstimator", cfg.intra_threads, cfg.device)
         , preproc_(detail::PreprocessConfig{
               .target_size = 192,
               .norm = detail::NormKind::kSimple,

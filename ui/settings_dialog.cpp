@@ -7,6 +7,7 @@
 #include <QGroupBox>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QMessageBox>
 #include <QPushButton>
 #include <QStackedWidget>
 #include <QTabWidget>
@@ -55,6 +56,45 @@ QComboBox* makeBoolCombo(bool val) {
     box->addItem(QStringLiteral("\u5f00\u542f"), true);
     box->setCurrentIndex(val ? 1 : 0);
     box->setMinimumWidth(120);
+    return box;
+}
+
+QComboBox* MakeDeviceCombo(InferenceDevice current) {
+    auto* box = new QComboBox;
+    box->addItem(QStringLiteral("CPU"), "cpu");
+    box->addItem(QStringLiteral("DirectML"), "directml");
+    box->addItem(QStringLiteral("CUDA"), "cuda");
+    box->addItem(QStringLiteral("TensorRT"), "tensorrt");
+    int idx = box->findData(QString::fromStdString(InferenceDeviceToString(current)));
+    if (idx < 0) idx = 0;
+    box->setCurrentIndex(idx);
+    box->setMinimumWidth(180);
+
+    // Validate initial value: if selected GPU device unavailable, silently fall back to CPU
+    if (current != InferenceDevice::kCPU &&
+        !detail::OnnxSession::CheckProviderAvailable(current)) {
+        box->blockSignals(true);
+        box->setCurrentIndex(0);
+        box->blockSignals(false);
+    }
+
+    QObject::connect(box, QOverload<int>::of(&QComboBox::currentIndexChanged), box,
+                     [box](int index) {
+        QString data = box->itemData(index).toString();
+        InferenceDevice selected = InferenceDeviceFromString(data.toStdString());
+        if (selected != InferenceDevice::kCPU &&
+            !detail::OnnxSession::CheckProviderAvailable(selected)) {
+            QMessageBox::warning(
+                box->window(),
+                QStringLiteral("\u8bbe\u5907\u4e0d\u53ef\u7528"),
+                QStringLiteral("\u6240\u9009\u8bbe\u5907 '%1' \u5728\u5f53\u524d\u73af\u5883\u4e2d\u4e0d\u53ef\u7528\uff0c\u5df2\u5207\u6362\u4e3a CPU\u3002")
+                    .arg(box->itemText(index)));
+            box->blockSignals(true);
+            box->setCurrentIndex(0);
+            box->blockSignals(false);
+        }
+    });
+
     return box;
 }
 
@@ -121,6 +161,14 @@ void SettingsDialog::setupUI() {
     rt_container->addWidget(HintLabel(QStringLiteral("\u5efa\u8bae 1 ~ %1").arg(hw_threads)));
     rt_container->addStretch();
     core_form->addRow(new QLabel(QStringLiteral("\u8bc6\u522b\u7ebf\u7a0b\u6570")), rt_container);
+
+    // 检测+识别模型推理设备
+    model_device_ = MakeDeviceCombo(config_.model.device);
+    auto* md_container = new QHBoxLayout;
+    md_container->addWidget(model_device_);
+    md_container->addWidget(HintLabel(QStringLiteral("\u68c0\u6d4b\u3001识\u522b\u6a21\u578b\u8bbe\u5907\uff0c\u4ec5\u5f71\u54cd ONNX \u63a8\u7406")));
+    md_container->addStretch();
+    core_form->addRow(new QLabel(QStringLiteral("\u6a21\u578b\u63a8\u7406\u8bbe\u5907")), md_container);
 
     // 硬件线程信息
     auto* hw_label = new QLabel(
@@ -351,6 +399,10 @@ void SettingsDialog::setupUI() {
     addOnnxRow(QStringLiteral("\u663e\u793a\u6cd5\u7ebf\u7bad\u5934"), onnx_draw_normal_,
                QStringLiteral("\u7ed8\u5236\u9f3b\u5c16\u6cd5\u7ebf\u65b9\u5411\u7bad\u5934"));
 
+    onnx_device_ = MakeDeviceCombo(config_.onnx.device);
+    addOnnxRow(QStringLiteral("\u63a8\u7406\u8bbe\u5907"), onnx_device_,
+               QStringLiteral("MediaPipe \u6a21\u578b GPU \u52a0\u901f"));
+
     config_stack->addWidget(onnx_page);
 
     // --- Page 2: Gaze config ---
@@ -381,6 +433,10 @@ void SettingsDialog::setupUI() {
     gaze_draw_ = makeBoolCombo(config_.l2cs.draw_gaze);
     addGazeRow(QStringLiteral("\u663e\u793a\u89c6\u7ebf\u7bad\u5934"), gaze_draw_,
                QStringLiteral("\u5728\u89c6\u9891\u5e27\u4e0a\u7ed8\u5236\u89c6\u7ebf\u65b9\u5411\u7bad\u5934"));
+
+    gaze_device_ = MakeDeviceCombo(config_.l2cs.device);
+    addGazeRow(QStringLiteral("\u63a8\u7406\u8bbe\u5907"), gaze_device_,
+               QStringLiteral("L2CS-Net \u6a21\u578b GPU \u52a0\u901f"));
 
     config_stack->addWidget(gaze_page);
 
@@ -453,6 +509,17 @@ void SettingsDialog::setupUI() {
         gaze_model_combo_->setCurrentIndex(gmodel_idx >= 0 ? gmodel_idx : 0);
         gaze_draw_->setCurrentIndex(defaults.l2cs.draw_gaze ? 1 : 0);
 
+        // 推理设备默认值
+        auto resetDeviceCombo = [](QComboBox* box, InferenceDevice dev) {
+            if (!box) return;
+            int idx = box->findData(
+                QString::fromStdString(InferenceDeviceToString(dev)));
+            box->setCurrentIndex(idx >= 0 ? idx : 0);
+        };
+        resetDeviceCombo(model_device_, defaults.model.device);
+        resetDeviceCombo(onnx_device_, defaults.onnx.device);
+        resetDeviceCombo(gaze_device_, defaults.l2cs.device);
+
         analysis_backend_->setCurrentIndex(
             analysis_backend_->findData(
                 AnalysisBackendToString(defaults.analysis_backend)));
@@ -506,6 +573,10 @@ void SettingsDialog::saveTo(PipelineConfig& cfg) const {
     // OpenFace 配置
     cfg.openface.profile = of_profile_->currentData().toString().toStdString();
 
+    // 模型推理设备
+    cfg.model.device = InferenceDeviceFromString(
+        model_device_->currentData().toString().toStdString());
+
     // 分析后端
     cfg.analysis_backend = AnalysisBackendFromString(
         analysis_backend_->currentData().toString().toStdString());
@@ -517,9 +588,13 @@ void SettingsDialog::saveTo(PipelineConfig& cfg) const {
     cfg.onnx.draw_landmarks = onnx_draw_landmarks_->currentData().toBool();
     cfg.onnx.draw_face_wireframe = onnx_draw_wireframe_->currentData().toBool();
     cfg.onnx.draw_face_normal = onnx_draw_normal_->currentData().toBool();
+    cfg.onnx.device = InferenceDeviceFromString(
+        onnx_device_->currentData().toString().toStdString());
     // 视线估计
     cfg.l2cs.model = gaze_model_combo_->currentData().toString().toStdString();
     cfg.l2cs.draw_gaze = gaze_draw_->currentData().toBool();
+    cfg.l2cs.device = InferenceDeviceFromString(
+        gaze_device_->currentData().toString().toStdString());
 }
 
 PipelineConfig SettingsDialog::getConfig() const {

@@ -53,6 +53,24 @@ add_custom_command(TARGET OmniFace POST_BUILD
         ${WINDEPLOYQT_EXECUTABLE} $<TARGET_FILE:OmniFace>
 )
 
+# 使用本地 ONNX Runtime 时复制 DLL（含 GPU provider）
+if(OMNIFACE_ONNXRUNTIME_ROOT)
+    add_custom_command(TARGET OmniFace POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${OMNIFACE_ONNXRUNTIME_ROOT}/lib/onnxruntime.dll"
+            $<TARGET_FILE_DIR:OmniFace>/onnxruntime.dll
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${OMNIFACE_ONNXRUNTIME_ROOT}/lib/onnxruntime_providers_shared.dll"
+            $<TARGET_FILE_DIR:OmniFace>/onnxruntime_providers_shared.dll
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${OMNIFACE_ONNXRUNTIME_ROOT}/lib/onnxruntime_providers_cuda.dll"
+            $<TARGET_FILE_DIR:OmniFace>/onnxruntime_providers_cuda.dll
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${OMNIFACE_ONNXRUNTIME_ROOT}/lib/onnxruntime_providers_tensorrt.dll"
+            $<TARGET_FILE_DIR:OmniFace>/onnxruntime_providers_tensorrt.dll
+    )
+endif()
+
 # 安装规则：将 EXE 及所有运行时依赖安装到指定目录
 install(TARGETS OmniFace DESTINATION .)
 

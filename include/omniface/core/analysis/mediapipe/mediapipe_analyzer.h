@@ -9,6 +9,7 @@
 
 #include "omniface/core/analysis/analyzer_interface.h"
 #include "omniface/core/analysis/mediapipe/mediapipe_pose_estimator.h"
+#include "omniface/core/detail/onnx_session.h"
 #include "omniface/types.h"
 
 namespace omniface::analysis::mediapipe {
@@ -28,6 +29,7 @@ struct MediaPipeAnalyzerConfig {
     int analysis_threads = 1;
     float margin = 0.25f;
     float score_threshold = 0.95f;
+    InferenceDevice device = InferenceDevice::kCPU;
 };
 
 class MediaPipeAnalyzer : public IAnalyzer {

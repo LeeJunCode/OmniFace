@@ -8,6 +8,7 @@
 #include <opencv2/core/types.hpp>
 
 #include "omniface/core/analysis/analyzer_interface.h"
+#include "omniface/core/detail/onnx_session.h"
 #include "omniface/types.h"
 
 namespace omniface::analysis::l2cs {
@@ -24,6 +25,7 @@ public:
     struct Config {
         std::string model_path;
         int intra_threads = 1;
+        InferenceDevice device = InferenceDevice::kCPU;
     };
 
     explicit L2csEstimator(const Config& cfg);
