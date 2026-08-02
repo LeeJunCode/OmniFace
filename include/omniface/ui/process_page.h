@@ -11,6 +11,7 @@
 #include "omniface/pipeline/config.h"
 #include "omniface/pipeline/pipeline.h"
 #include "omniface/ui/app_state.h"
+#include "omniface/ui/au_panel.h"
 #include "omniface/ui/onnx_analysis_panel.h"
 #include "omniface/ui/processing_dashboard.h"
 #include "omniface/ui/video_player_widget.h"
@@ -83,6 +84,7 @@ private:
     QProgressBar* processing_progress_ = nullptr;
     FpsPanel* fps_panel_ = nullptr;
     OnnxAnalysisPanel* onnx_panel_ = nullptr;
+    AUPanel* au_panel_ = nullptr;
 
     QWidget* completion_panel_ = nullptr;
     QLabel* completion_label_ = nullptr;

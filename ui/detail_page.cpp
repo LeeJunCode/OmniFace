@@ -290,9 +290,13 @@ void DetailPage::showTask(const std::string& output_dir, bool from_history) {
     tracked_fps_ = 0.0;
     is_onnx_csv_ = false;
     is_gaze_csv_ = false;
+    is_au_csv_ = false;
     gaze_csv_headers_.clear();
     gaze_csv_rows_.clear();
     gaze_frame_to_row_.clear();
+    au_csv_headers_.clear();
+    au_csv_rows_.clear();
+    au_frame_to_row_.clear();
 
     loadCSV(output_dir);
 
@@ -554,6 +558,51 @@ void DetailPage::loadCSV(const std::string& output_dir) {
         }
     }
     }  // if (!is_gaze_csv_)
+
+    // 检测 AU CSV（主 CSV 是否为 AU 格式）
+    if (!is_gaze_csv_ && !is_onnx_csv_) {
+        for (const auto& h : csv_headers_) {
+            if (h == "AU1_prob") { is_au_csv_ = true; break; }
+        }
+    }
+
+    // 加载独立的 AU CSV（如果主 CSV 不是 AU 数据）
+    if (!is_au_csv_) {
+        std::string au_csv_path;
+        for (const auto& entry : fs::directory_iterator(output_dir)) {
+            auto fname = entry.path().filename().string();
+            if (fname == "mefarg_au_analysis.csv") { au_csv_path = entry.path().string(); break; }
+        }
+        if (!au_csv_path.empty()) {
+            std::ifstream aufile(au_csv_path);
+            if (aufile.is_open()) {
+                std::string aline;
+                bool afirst = true;
+                while (std::getline(aufile, aline)) {
+                    if (aline.empty()) continue;
+                    if (afirst) { au_csv_headers_ = parseRow(aline); afirst = false; }
+                    else { au_csv_rows_.push_back(parseRow(aline)); }
+                }
+                int aframe_col = -1;
+                for (size_t i = 0; i < au_csv_headers_.size(); ++i) {
+                    if (au_csv_headers_[i] == "frame") { aframe_col = static_cast<int>(i); break; }
+                }
+                if (aframe_col >= 0) {
+                    for (size_t r = 0; r < au_csv_rows_.size(); ++r) {
+                        try {
+                            int fnum = std::stoi(au_csv_rows_[r][aframe_col]);
+                            au_frame_to_row_[fnum] = static_cast<int>(r);
+                        } catch (...) {}
+                    }
+                }
+            }
+        }
+    } else {
+        // 主 CSV 即是 AU CSV，直接复用已解析的数据
+        au_csv_headers_ = csv_headers_;
+        au_csv_rows_ = csv_rows_;
+        au_frame_to_row_ = frame_to_row_;
+    }
 }
 
 void DetailPage::onDetailFrameSync(qint64 positionMs) {
@@ -644,6 +693,109 @@ void DetailPage::onDetailFrameSync(qint64 positionMs) {
             "<b>(%1, %2, %3)</b>"
             "</div>").arg(gx, 0, 'f', 3).arg(gy2, 0, 'f', 3).arg(gz, 0, 'f', 3);
         return ghtml;
+    };
+
+    auto buildAuHtml = [&](int csv_frame_num) -> QString {
+        if (au_csv_rows_.empty() || au_frame_to_row_.empty()) return {};
+        auto ait = au_frame_to_row_.find(csv_frame_num);
+        if (ait == au_frame_to_row_.end()) return {};
+        const auto& arow = au_csv_rows_[ait->second];
+        auto av = [&arow](int idx) -> std::string {
+            if (idx < 0 || idx >= static_cast<int>(arow.size())) return "0";
+            return arow[idx];
+        };
+        auto avf = [&av](int idx) -> double {
+            try { return std::stod(av(idx)); } catch (...) { return 0.0; }
+        };
+
+        static const std::unordered_map<std::string, QString> kMefargAuDesc = {
+            {"AU1", QStringLiteral("\u5185\u4fa7\u7709\u6bdb\u62ac\u8d77")},
+            {"AU2", QStringLiteral("\u5916\u4fa7\u7709\u6bdb\u62ac\u8d77")},
+            {"AU4", QStringLiteral("\u7709\u6bdb\u538b\u4f4e")},
+            {"AU5", QStringLiteral("\u4e0a\u773c\u7751\u62ac\u8d77")},
+            {"AU6", QStringLiteral("\u8138\u988a\u62ac\u8d77")},
+            {"AU7", QStringLiteral("\u773c\u7751\u6536\u7d27")},
+            {"AU9", QStringLiteral("\u9f3b\u5b50\u76b1\u8d77")},
+            {"AU10", QStringLiteral("\u4e0a\u5507\u62ac\u8d77")},
+            {"AU11", QStringLiteral("\u9f3b\u5507\u6c9f\u52a0\u6df1")},
+            {"AU12", QStringLiteral("\u5634\u89d2\u4e0a\u626c")},
+            {"AU13", QStringLiteral("\u8138\u988a\u9f13\u8d77")},
+            {"AU14", QStringLiteral("\u5634\u89d2\u6536\u7d27")},
+            {"AU15", QStringLiteral("\u5634\u89d2\u4e0b\u6487")},
+            {"AU16", QStringLiteral("\u4e0b\u5507\u4e0b\u538b")},
+            {"AU17", QStringLiteral("\u4e0b\u5df4\u62ac\u8d77")},
+            {"AU18", QStringLiteral("\u5634\u5507\u805a\u62e2")},
+            {"AU19", QStringLiteral("\u820c\u5934\u9732\u51fa")},
+            {"AU20", QStringLiteral("\u5634\u5507\u62c9\u4f38")},
+            {"AU22", QStringLiteral("\u5634\u5507\u6f0f\u6597\u72b6")},
+            {"AU23", QStringLiteral("\u5634\u5507\u6536\u7d27")},
+            {"AU24", QStringLiteral("\u5634\u5507\u62bf\u7d27")},
+            {"AU25", QStringLiteral("\u53cc\u5507\u5206\u5f00")},
+            {"AU26", QStringLiteral("\u4e0b\u988c\u4e0b\u5760")},
+            {"AU27", QStringLiteral("\u5634\u5df4\u62c9\u4f38")},
+            {"AU32", QStringLiteral("\u54ac\u5507")},
+            {"AU38", QStringLiteral("\u9f3b\u5b54\u6269\u5f20")},
+            {"AU39", QStringLiteral("\u9f3b\u5b54\u538b\u7f29")},
+            {"AUL1", QStringLiteral("\u5185\u4fa7\u7709\u6bdb\u62ac\u8d77(\u5de6)")},
+            {"AUR1", QStringLiteral("\u5185\u4fa7\u7709\u6bdb\u62ac\u8d77(\u53f3)")},
+            {"AUL2", QStringLiteral("\u5916\u4fa7\u7709\u6bdb\u62ac\u8d77(\u5de6)")},
+            {"AUR2", QStringLiteral("\u5916\u4fa7\u7709\u6bdb\u62ac\u8d77(\u53f3)")},
+            {"AUL4", QStringLiteral("\u7709\u6bdb\u538b\u4f4e(\u5de6)")},
+            {"AUR4", QStringLiteral("\u7709\u6bdb\u538b\u4f4e(\u53f3)")},
+            {"AUL6", QStringLiteral("\u8138\u988a\u62ac\u8d77(\u5de6)")},
+            {"AUR6", QStringLiteral("\u8138\u988a\u62ac\u8d77(\u53f3)")},
+            {"AUL10", QStringLiteral("\u4e0a\u5507\u62ac\u8d77(\u5de6)")},
+            {"AUR10", QStringLiteral("\u4e0a\u5507\u62ac\u8d77(\u53f3)")},
+            {"AUL12", QStringLiteral("\u9f3b\u5507\u6c9f\u52a0\u6df1(\u5de6)")},
+            {"AUR12", QStringLiteral("\u9f3b\u5507\u6c9f\u52a0\u6df1(\u53f3)")},
+            {"AUL14", QStringLiteral("\u5634\u89d2\u6536\u7d27(\u5de6)")},
+            {"AUR14", QStringLiteral("\u5634\u89d2\u6536\u7d27(\u53f3)")},
+        };
+
+        int active_count = 0;
+        QStringList parts;
+        for (size_t h = 0; h < au_csv_headers_.size(); ++h) {
+            const auto& hdr = au_csv_headers_[h];
+            if (hdr.size() < 6 || hdr.compare(hdr.size() - 5, 5, "_prob") != 0)
+                continue;
+            std::string au_code = hdr.substr(0, hdr.size() - 5);
+            double prob = avf(static_cast<int>(h));
+            bool active = prob >= 0.5;
+            if (active) ++active_count;
+
+            auto desc_it = kMefargAuDesc.find(au_code);
+            QString desc = (desc_it != kMefargAuDesc.end())
+                ? desc_it->second : QString::fromStdString(au_code);
+
+            parts << QStringLiteral(
+                "<div style='display:inline-block; width:48%%; margin:1px 1%%; "
+                "padding:2px 4px; background:%1; border-radius:3px; font-size:11px;'>"
+                "<span style='color:%2; font-weight:bold;'>%3</span> "
+                "<span style='color:%4;'>%5</span>"
+                "<span style='float:right; color:%6;'>%7</span>"
+                "</div>")
+                .arg(active ? "#e8f5e9" : "#f5f5f5")
+                .arg(active ? "#2e7d32" : "#999")
+                .arg(QString::fromStdString(au_code))
+                .arg(active ? "#555" : "#bbb")
+                .arg(desc)
+                .arg(active ? "#2e7d32" : "#999")
+                .arg(QString::number(prob, 'f', 2));
+        }
+
+        if (parts.isEmpty()) return {};
+
+        QString ahtml;
+        ahtml += QStringLiteral(
+            "<div style='margin-top:8px;'>"
+            "<span style='color:#888;'>\u52a8\u4f5c\u5355\u5143 (MEFARG)\uff1a</span>"
+            "<b>%1 / 41</b> \u6d3b\u8dc3"
+            "</div>").arg(active_count);
+        ahtml += "<div style='margin-top:4px; line-height:1.5;'>";
+        for (const auto& part : parts)
+            ahtml += part;
+        ahtml += "</div>";
+        return ahtml;
     };
 
     if (is_gaze_csv_) {
@@ -793,9 +945,135 @@ void DetailPage::onDetailFrameSync(qint64 positionMs) {
             "&nbsp;&nbsp;<span style='color:#888;'>\u6a21\u578b\uff1a</span><b>MediaPipe FaceMesh</b>"
             "</div>");
         html += buildGazeHtml(csv_frame_num);
+        html += buildAuHtml(csv_frame_num);
         html += "</div>";
         detail_data_label_->setText(html);
 
+        detail_face_thumb_->setVisible(false);
+        align_caption_->setVisible(false);
+        return;
+    }
+
+    if (is_au_csv_) {
+        static const std::unordered_map<std::string, QString> kMefargAuDesc = {
+            {"AU1", QStringLiteral("\u5185\u4fa7\u7709\u6bdb\u62ac\u8d77")},
+            {"AU2", QStringLiteral("\u5916\u4fa7\u7709\u6bdb\u62ac\u8d77")},
+            {"AU4", QStringLiteral("\u7709\u6bdb\u538b\u4f4e")},
+            {"AU5", QStringLiteral("\u4e0a\u773c\u7751\u62ac\u8d77")},
+            {"AU6", QStringLiteral("\u8138\u988a\u62ac\u8d77")},
+            {"AU7", QStringLiteral("\u773c\u7751\u6536\u7d27")},
+            {"AU9", QStringLiteral("\u9f3b\u5b50\u76b1\u8d77")},
+            {"AU10", QStringLiteral("\u4e0a\u5507\u62ac\u8d77")},
+            {"AU11", QStringLiteral("\u9f3b\u5507\u6c9f\u52a0\u6df1")},
+            {"AU12", QStringLiteral("\u5634\u89d2\u4e0a\u626c")},
+            {"AU13", QStringLiteral("\u8138\u988a\u9f13\u8d77")},
+            {"AU14", QStringLiteral("\u5634\u89d2\u6536\u7d27")},
+            {"AU15", QStringLiteral("\u5634\u89d2\u4e0b\u6487")},
+            {"AU16", QStringLiteral("\u4e0b\u5507\u4e0b\u538b")},
+            {"AU17", QStringLiteral("\u4e0b\u5df4\u62ac\u8d77")},
+            {"AU18", QStringLiteral("\u5634\u5507\u805a\u62e2")},
+            {"AU19", QStringLiteral("\u820c\u5934\u9732\u51fa")},
+            {"AU20", QStringLiteral("\u5634\u5507\u62c9\u4f38")},
+            {"AU22", QStringLiteral("\u5634\u5507\u6f0f\u6597\u72b6")},
+            {"AU23", QStringLiteral("\u5634\u5507\u6536\u7d27")},
+            {"AU24", QStringLiteral("\u5634\u5507\u62bf\u7d27")},
+            {"AU25", QStringLiteral("\u53cc\u5507\u5206\u5f00")},
+            {"AU26", QStringLiteral("\u4e0b\u988c\u4e0b\u5760")},
+            {"AU27", QStringLiteral("\u5634\u5df4\u62c9\u4f38")},
+            {"AU32", QStringLiteral("\u54ac\u5507")},
+            {"AU38", QStringLiteral("\u9f3b\u5b54\u6269\u5f20")},
+            {"AU39", QStringLiteral("\u9f3b\u5b54\u538b\u7f29")},
+            {"AUL1", QStringLiteral("\u5185\u4fa7\u7709\u6bdb\u62ac\u8d77(\u5de6)")},
+            {"AUR1", QStringLiteral("\u5185\u4fa7\u7709\u6bdb\u62ac\u8d77(\u53f3)")},
+            {"AUL2", QStringLiteral("\u5916\u4fa7\u7709\u6bdb\u62ac\u8d77(\u5de6)")},
+            {"AUR2", QStringLiteral("\u5916\u4fa7\u7709\u6bdb\u62ac\u8d77(\u53f3)")},
+            {"AUL4", QStringLiteral("\u7709\u6bdb\u538b\u4f4e(\u5de6)")},
+            {"AUR4", QStringLiteral("\u7709\u6bdb\u538b\u4f4e(\u53f3)")},
+            {"AUL6", QStringLiteral("\u8138\u988a\u62ac\u8d77(\u5de6)")},
+            {"AUR6", QStringLiteral("\u8138\u988a\u62ac\u8d77(\u53f3)")},
+            {"AUL10", QStringLiteral("\u4e0a\u5507\u62ac\u8d77(\u5de6)")},
+            {"AUR10", QStringLiteral("\u4e0a\u5507\u62ac\u8d77(\u53f3)")},
+            {"AUL12", QStringLiteral("\u9f3b\u5507\u6c9f\u52a0\u6df1(\u5de6)")},
+            {"AUR12", QStringLiteral("\u9f3b\u5507\u6c9f\u52a0\u6df1(\u53f3)")},
+            {"AUL14", QStringLiteral("\u5634\u89d2\u6536\u7d27(\u5de6)")},
+            {"AUR14", QStringLiteral("\u5634\u89d2\u6536\u7d27(\u53f3)")},
+        };
+
+        QString html;
+        html += "<div style='font-size:13px; line-height:1.8; color:#333;'>";
+        html += QStringLiteral(
+            "<div>"
+            "<span style='color:#888;'>\u7b2c </span><b>%1</b>"
+            "<span style='color:#888;'> \u5e27 &nbsp;|&nbsp; \u65f6\u95f4 </span><b>%2 \u79d2</b>"
+            "</div>")
+            .arg(QString::fromStdString(val(col("frame"))).toHtmlEscaped())
+            .arg(QString::fromStdString(val(col("timestamp"))).toHtmlEscaped());
+
+        int frame_idx = -1;
+        for (size_t i = 0; i < au_csv_headers_.size(); ++i) {
+            if (au_csv_headers_[i] == "frame") { frame_idx = static_cast<int>(i); break; }
+        }
+
+        int active_count = 0;
+        QStringList au_html_parts;
+        for (size_t h = 0; h < au_csv_headers_.size(); ++h) {
+            const auto& hdr = au_csv_headers_[h];
+            if (hdr.size() < 6 || hdr.compare(hdr.size() - 5, 5, "_prob") != 0)
+                continue;
+            std::string au_code = hdr.substr(0, hdr.size() - 5);
+            double prob = valf(static_cast<int>(h));
+            bool active = prob >= 0.5;
+            if (active) ++active_count;
+
+            auto desc_it = kMefargAuDesc.find(au_code);
+            QString desc = (desc_it != kMefargAuDesc.end())
+                ? desc_it->second : QString::fromStdString(au_code);
+
+            // 强度等级
+            QString level;
+            QColor bar_color;
+            if (prob >= 0.9)      { level = QStringLiteral("\u5f3a"); bar_color = QColor(0x2e, 0x7d, 0x32); }
+            else if (prob >= 0.7) { level = QStringLiteral("\u8f83\u5f3a"); bar_color = QColor(0x4c, 0xaf, 0x50); }
+            else if (prob >= 0.5) { level = QStringLiteral("\u4e2d\u7b49"); bar_color = QColor(0xf9, 0xa8, 0x25); }
+            else                  { level = QStringLiteral("\u5fae\u5f31"); bar_color = QColor(0x90, 0x90, 0x90); }
+
+            QString bar_width = QString::number(static_cast<int>(std::min(prob, 1.0) * 100));
+
+            au_html_parts << QStringLiteral(
+                "<div style='display:inline-block; width:48%%; margin:1px 1%%; "
+                "padding:2px 4px; background:%1; border-radius:3px; font-size:11px;'>"
+                "<span style='color:%2;'>%3</span> "
+                "<span style='color:%4;'>%5</span>"
+                "<span style='float:right; color:%6;'>%7</span>"
+                "</div>")
+                .arg(active ? "#e8f5e9" : "#f5f5f5")
+                .arg(active ? "#2e7d32" : "#999")
+                .arg(QString::fromStdString(au_code))
+                .arg(active ? "#555" : "#bbb")
+                .arg(desc)
+                .arg(active ? "#2e7d32" : "#999")
+                .arg(QString::number(prob, 'f', 2));
+        }
+
+        html += QStringLiteral(
+            "<div style='margin-top:4px;'>"
+            "<span style='color:#888;'>\u6d3b\u8dc3 AU\uff1a</span>"
+            "<b>%1 / 41</b>"
+            "</div>").arg(active_count);
+
+        html += QStringLiteral(
+            "<div style='margin-top:4px;'>"
+            "<span style='color:#888; font-size:11px;'>\u6a21\u578b\uff1a</span>"
+            "<span style='font-size:11px;'>MEFARG (ResNet-18)</span>"
+            "</div>");
+
+        html += "<div style='margin-top:6px; line-height:1.5;'>";
+        for (const auto& part : au_html_parts)
+            html += part;
+        html += "</div>";
+        html += "</div>";
+
+        detail_data_label_->setText(html);
         detail_face_thumb_->setVisible(false);
         align_caption_->setVisible(false);
         return;
@@ -959,6 +1237,7 @@ void DetailPage::onDetailFrameSync(qint64 positionMs) {
         "<span style='color:#888;'>\u9762\u90e8\u8868\u60c5\uff1a</span><b>%1</b>"
         "</div>").arg(au_desc);
     html += buildGazeHtml(csv_frame_num);
+    html += buildAuHtml(csv_frame_num);
     html += "</div>";
     detail_data_label_->setText(html);
 

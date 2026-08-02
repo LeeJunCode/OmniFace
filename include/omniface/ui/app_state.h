@@ -35,6 +35,7 @@ struct AppState {
     int64_t total_openface_analyses_ = 0;
     int64_t total_onnx_analyses_ = 0;
     int64_t total_l2cs_analyses_ = 0;
+    int64_t total_au_analyses_ = 0;
     std::chrono::steady_clock::time_point run_start_time_;
     std::chrono::steady_clock::time_point last_dashboard_time;
 };

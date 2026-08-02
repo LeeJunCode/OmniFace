@@ -63,12 +63,18 @@ private:
     bool from_history_ = false;
     bool is_onnx_csv_ = false;
     bool is_gaze_csv_ = false;
+    bool is_au_csv_ = false;
     std::string current_dir_;
 
     // 独立的视线 CSV 数据
     std::vector<std::string> gaze_csv_headers_;
     std::vector<std::vector<std::string>> gaze_csv_rows_;
     std::unordered_map<int, int> gaze_frame_to_row_;
+
+    // 独立的 AU CSV 数据
+    std::vector<std::string> au_csv_headers_;
+    std::vector<std::vector<std::string>> au_csv_rows_;
+    std::unordered_map<int, int> au_frame_to_row_;
 
     QImage qt_image_cache_;
 };

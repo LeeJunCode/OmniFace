@@ -16,6 +16,8 @@
 #include "omniface/pipeline/output_manager.h"
 #include "omniface/pipeline/target_tracker.h"
 
+#include "omniface/core/analysis/mefarg_au/mefarg_au_estimator.h"
+
 namespace omniface {
 
 namespace {
@@ -190,6 +192,48 @@ public:
             }
         }
 
+        // MEFARG AU 分析
+        if (!config_.behavior.skip_analysis && modules_.au_estimator
+            && modules_.au_estimator->IsValid()
+            && target_tracker_.HasTarget()) {
+            cv::Rect_<float> target_bbox_au = target_tracker_.GetTargetBbox();
+            if (target_bbox_au.width > 0 && target_bbox_au.height > 0) {
+                BoundingBox bbox;
+                bbox.x1 = target_bbox_au.x;
+                bbox.y1 = target_bbox_au.y;
+                bbox.x2 = target_bbox_au.x + target_bbox_au.width;
+                bbox.y2 = target_bbox_au.y + target_bbox_au.height;
+                bbox.confidence = 1.0f;
+
+                auto au_result = modules_.au_estimator->Estimate(
+                    frame, bbox);
+                if (au_result.valid) {
+                    modules_.au_estimator->EnsureCsvOpen(output_mgr_.GetOutputDir());
+                    double ts = (decoder_.GetFps() > 0.0)
+                        ? (frame_index - 1) / decoder_.GetFps() : 0.0;
+                    modules_.au_estimator->WriteCsvRow(frame_index, ts, au_result);
+
+                    analysis::FrameAnalysisResult unified;
+                    unified.backend = analysis::AnalyzerKind::kMefargAu;
+                    unified.track_id = target_tracker_.GetTargetTrackId();
+                    unified.valid = true;
+                    unified.action_units.reserve(analysis::mefarg_au::kNumAuOutputs);
+                    for (int i = 0; i < analysis::mefarg_au::kNumAuOutputs; ++i) {
+                        unified.action_units.emplace_back(
+                            analysis::mefarg_au::kAuNames[i],
+                            static_cast<double>(au_result.au_probs[i]));
+                    }
+                    result.analysis_results.push_back(std::move(unified));
+
+                    if (config_.mefarg_au.draw_au) {
+                        analysis::mefarg_au::MefargAuEstimator::DrawAu(
+                            frame, target_bbox_au, au_result,
+                            config_.mefarg_au.threshold);
+                    }
+                }
+            }
+        }
+
         // OpenFace 分析：仅对已确认的目标人脸执行
         if (modules_.face_analyzer && modules_.face_analyzer->IsValid()
             && target_tracker_.HasTarget()) {
@@ -276,7 +320,8 @@ public:
         result.recognition_latency_ms =
             std::chrono::duration<double, std::milli>(t_recognition_done - t_start).count();
         bool any_analysis = result.analysis.valid || !result.onnx_results.empty()
-                          || !result.l2cs_results.empty();
+                          || !result.l2cs_results.empty()
+                          || !result.analysis_results.empty();
         result.analysis_latency_ms = any_analysis
             ? std::chrono::duration<double, std::milli>(t_analysis_done - t_recognition_done).count()
             : 0.0;

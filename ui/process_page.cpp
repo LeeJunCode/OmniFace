@@ -231,16 +231,21 @@ void ProcessPage::setupUI() {
     onnx_panel_ = new OnnxAnalysisPanel;
     onnx_panel_->setVisible(false);
 
+    au_panel_ = new AUPanel;
+    au_panel_->setVisible(false);
+
     auto* right_splitter = new QSplitter(Qt::Vertical);
     right_splitter->setHandleWidth(3);
     right_splitter->setChildrenCollapsible(false);
     right_splitter->addWidget(video_section);
     right_splitter->addWidget(onnx_panel_);
+    right_splitter->addWidget(au_panel_);
     right_splitter->addWidget(fps_panel_);
     right_splitter->setStretchFactor(0, 1);
     right_splitter->setStretchFactor(1, 0);
     right_splitter->setStretchFactor(2, 0);
-    right_splitter->setSizes({500, 140, 34});
+    right_splitter->setStretchFactor(3, 0);
+    right_splitter->setSizes({500, 140, 220, 34});
 
     auto* main_splitter = new QSplitter(Qt::Horizontal);
     main_splitter->setHandleWidth(4);
@@ -516,6 +521,7 @@ void ProcessPage::onPlay() {
     state_.total_openface_analyses_ = 0;
     state_.total_onnx_analyses_ = 0;
     state_.total_l2cs_analyses_ = 0;
+    state_.total_au_analyses_ = 0;
     state_.run_start_time_ = state_.last_fps_time;
 
     DashboardData dd;
@@ -528,6 +534,7 @@ void ProcessPage::onPlay() {
     completion_panel_->hide();
     onnx_panel_->setVisible(config_.analysis_backend == AnalysisBackend::kMediaPipe
                             || config_.analysis_backend == AnalysisBackend::kL2cs);
+    au_panel_->setVisible(config_.analysis_backend == AnalysisBackend::kMefargAu);
     if (config_.analysis_backend == AnalysisBackend::kL2cs) {
         onnx_panel_->setAnalysisLabel(QStringLiteral("\u89c6\u7ebf\u5206\u6790"));
     } else {
@@ -576,6 +583,8 @@ void ProcessPage::onStop() {
     counter_summary_->setText(QStringLiteral("<span style='color:#999999'>\u5c1a\u672a\u5f00\u59cb\u5904\u7406</span>"));
     onnx_panel_->clear();
     onnx_panel_->setVisible(false);
+    au_panel_->clear();
+    au_panel_->setVisible(false);
 
     state_.has_finished_once = true;
     setFinishedState();
@@ -648,6 +657,7 @@ void ProcessPage::onRecognizeOnly() {
     state_.total_openface_analyses_ = 0;
     state_.total_onnx_analyses_ = 0;
     state_.total_l2cs_analyses_ = 0;
+    state_.total_au_analyses_ = 0;
     state_.run_start_time_ = state_.last_fps_time;
 
     DashboardData dd;
@@ -660,6 +670,7 @@ void ProcessPage::onRecognizeOnly() {
     completion_panel_->hide();
     onnx_panel_->setVisible(config_.analysis_backend == AnalysisBackend::kMediaPipe
                             || config_.analysis_backend == AnalysisBackend::kL2cs);
+    au_panel_->setVisible(config_.analysis_backend == AnalysisBackend::kMefargAu);
     if (config_.analysis_backend == AnalysisBackend::kL2cs) {
         onnx_panel_->setAnalysisLabel(QStringLiteral("\u89c6\u7ebf\u5206\u6790"));
     } else {
@@ -737,11 +748,27 @@ void ProcessPage::processNextFrame() {
     }
     if (has_gaze) state_.total_l2cs_analyses_++;
 
+    bool has_au = false;
+    for (const auto& ar : result.analysis_results) {
+        if (ar.backend == analysis::AnalyzerKind::kMefargAu && ar.valid) {
+            has_au = true; break;
+        }
+    }
+    if (has_au) state_.total_au_analyses_++;
+
     if (!result.onnx_results.empty()) {
         onnx_panel_->updateResults(result.onnx_results);
     }
     if (!result.l2cs_results.empty()) {
         onnx_panel_->updateGazeResults(result.l2cs_results);
+    }
+
+    for (const auto& ar : result.analysis_results) {
+        if (ar.backend == analysis::AnalyzerKind::kMefargAu
+            && !ar.action_units.empty()) {
+            au_panel_->setActionUnits(ar.action_units);
+            break;
+        }
     }
 
     double dash_elapsed = std::chrono::duration<double>(now - state_.last_dashboard_time).count();
@@ -765,6 +792,9 @@ void ProcessPage::processNextFrame() {
         } else if (config_.analysis_backend == AnalysisBackend::kL2cs) {
             dd.analysis_label = "L2CS";
             dd.analysis_running = (state_.total_l2cs_analyses_ > 0 && has_gaze);
+        } else if (config_.analysis_backend == AnalysisBackend::kMefargAu) {
+            dd.analysis_label = "MEFARG-AU";
+            dd.analysis_running = (state_.total_au_analyses_ > 0 && has_au);
         } else {
             dd.analysis_running = (state_.total_openface_analyses_ > 0 && result.analysis.valid);
         }
@@ -774,6 +804,7 @@ void ProcessPage::processNextFrame() {
         dd.openface_analyses = state_.total_openface_analyses_;
         dd.onnx_analyses = state_.total_onnx_analyses_;
         dd.l2cs_analyses = state_.total_l2cs_analyses_;
+        dd.mefarg_au_analyses = state_.total_au_analyses_;
         dd.elapsed_seconds = static_cast<int64_t>(run_elapsed);
         fps_panel_->updateData(dd);
 
@@ -794,6 +825,9 @@ void ProcessPage::processNextFrame() {
         } else if (config_.analysis_backend == AnalysisBackend::kL2cs) {
             analysis_label = "L2CS\u5206\u6790";
             analysis_count = state_.total_l2cs_analyses_;
+        } else if (config_.analysis_backend == AnalysisBackend::kMefargAu) {
+            analysis_label = "MEFARG-AU\u5206\u6790";
+            analysis_count = state_.total_au_analyses_;
         }
 
         counter_summary_->setText(QStringLiteral(

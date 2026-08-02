@@ -62,6 +62,12 @@ private:
     QComboBox* gaze_model_combo_ = nullptr;
     QComboBox* gaze_draw_ = nullptr;
     QComboBox* gaze_device_ = nullptr;
+
+    // MEFARG AU
+    QComboBox* mefarg_model_combo_ = nullptr;
+    QDoubleSpinBox* mefarg_threshold_ = nullptr;
+    QSpinBox* mefarg_threads_ = nullptr;
+    QComboBox* mefarg_device_ = nullptr;
 };
 
 }  // namespace omniface::ui

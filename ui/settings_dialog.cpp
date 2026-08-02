@@ -212,6 +212,7 @@ void SettingsDialog::setupUI() {
     analysis_backend_->addItem(QStringLiteral("\u9762\u90e8\u8868\u60c5\u5206\u6790 (OpenFace)"), "openface");
     analysis_backend_->addItem(QStringLiteral("\u5934\u90e8\u59ff\u6001\u63d0\u53d6 (MediaPipe)"), "mediapipe");
     analysis_backend_->addItem(QStringLiteral("\u89c6\u7ebf\u63d0\u53d6 (L2CS-Net)"), "l2cs");
+    analysis_backend_->addItem(QStringLiteral("\u52a8\u4f5c\u5355\u5143\u5206\u6790 (MEFARG)"), "mefarg_au");
     analysis_backend_->addItem(QStringLiteral("\u65e0"), "none");
     analysis_backend_->setCurrentIndex(
         analysis_backend_->findData(
@@ -228,7 +229,8 @@ void SettingsDialog::setupUI() {
         QString backend = analysis_backend_->currentData().toString();
         if (backend == "mediapipe") config_stack->setCurrentIndex(1);
         else if (backend == "l2cs") config_stack->setCurrentIndex(2);
-        else if (backend == "none") config_stack->setCurrentIndex(3);
+        else if (backend == "mefarg_au") config_stack->setCurrentIndex(3);
+        else if (backend == "none") config_stack->setCurrentIndex(4);
         else config_stack->setCurrentIndex(0);
     };
     connect(analysis_backend_, QOverload<int>::of(&QComboBox::currentIndexChanged),
@@ -440,7 +442,44 @@ void SettingsDialog::setupUI() {
 
     config_stack->addWidget(gaze_page);
 
-    // --- Page 3: None (empty) ---
+    // --- Page 3: MEFARG AU config ---
+    auto* mefarg_page = new QWidget;
+    auto* mefarg_form = new QFormLayout(mefarg_page);
+    mefarg_form->setContentsMargins(0, 8, 0, 0);
+    mefarg_form->setSpacing(6);
+
+    auto addMefargRow = [&](const QString& label, QWidget* widget, const QString& hint) {
+        auto* row = new QHBoxLayout;
+        row->setContentsMargins(0, 2, 0, 2);
+        row->addWidget(widget);
+        if (!hint.isEmpty()) row->addWidget(HintLabel(hint));
+        row->addStretch();
+        mefarg_form->addRow(new QLabel(label), row);
+    };
+
+    mefarg_model_combo_ = new QComboBox;
+    mefarg_model_combo_->addItem(QStringLiteral("MEFARG-ResNet18"), "models/OpenGprahAU/mefarg_resnet18_au.onnx");
+    int mefarg_idx = mefarg_model_combo_->findData(QString::fromStdString(config_.mefarg_au.model));
+    mefarg_model_combo_->setCurrentIndex(mefarg_idx >= 0 ? mefarg_idx : 0);
+    mefarg_model_combo_->setMinimumWidth(240);
+    addMefargRow(QStringLiteral("\u6a21\u578b\u9009\u62e9"), mefarg_model_combo_,
+                 QStringLiteral("OpenGraphAU MEFARG \u6a21\u578b"));
+
+    mefarg_threshold_ = MakeDoubleBox(0.0, 1.0, config_.mefarg_au.threshold, 2);
+    addMefargRow(QStringLiteral("\u6fc0\u6d3b\u9608\u503c"), mefarg_threshold_,
+                 QStringLiteral("Sigmoid \u540e\u6982\u7387\u5927\u4e8e\u6b64\u503c\u5219\u8ba4\u4e3a AU \u6fc0\u6d3b"));
+
+    mefarg_threads_ = MakeIntBox(1, 32, config_.mefarg_au.intra_threads);
+    addMefargRow(QStringLiteral("\u63a8\u7406\u7ebf\u7a0b\u6570"), mefarg_threads_,
+                 QStringLiteral("MEFARG AU \u6a21\u578b\u63a8\u7406\u7ebf\u7a0b\u6570"));
+
+    mefarg_device_ = MakeDeviceCombo(config_.mefarg_au.device);
+    addMefargRow(QStringLiteral("\u63a8\u7406\u8bbe\u5907"), mefarg_device_,
+                 QStringLiteral("MEFARG AU \u6a21\u578b GPU \u52a0\u901f"));
+
+    config_stack->addWidget(mefarg_page);
+
+    // --- Page 4: None (empty) ---
     config_stack->addWidget(new QWidget);
 
     syncAnalysisPage();
@@ -520,6 +559,14 @@ void SettingsDialog::setupUI() {
         resetDeviceCombo(onnx_device_, defaults.onnx.device);
         resetDeviceCombo(gaze_device_, defaults.l2cs.device);
 
+        // MEFARG AU 默认值
+        int mefarg_midx = mefarg_model_combo_->findData(
+            QString::fromStdString(defaults.mefarg_au.model));
+        mefarg_model_combo_->setCurrentIndex(mefarg_midx >= 0 ? mefarg_midx : 0);
+        mefarg_threshold_->setValue(defaults.mefarg_au.threshold);
+        mefarg_threads_->setValue(defaults.mefarg_au.intra_threads);
+        resetDeviceCombo(mefarg_device_, defaults.mefarg_au.device);
+
         analysis_backend_->setCurrentIndex(
             analysis_backend_->findData(
                 AnalysisBackendToString(defaults.analysis_backend)));
@@ -595,6 +642,13 @@ void SettingsDialog::saveTo(PipelineConfig& cfg) const {
     cfg.l2cs.draw_gaze = gaze_draw_->currentData().toBool();
     cfg.l2cs.device = InferenceDeviceFromString(
         gaze_device_->currentData().toString().toStdString());
+
+    // MEFARG AU
+    cfg.mefarg_au.model = mefarg_model_combo_->currentData().toString().toStdString();
+    cfg.mefarg_au.threshold = static_cast<float>(mefarg_threshold_->value());
+    cfg.mefarg_au.intra_threads = mefarg_threads_->value();
+    cfg.mefarg_au.device = InferenceDeviceFromString(
+        mefarg_device_->currentData().toString().toStdString());
 }
 
 PipelineConfig SettingsDialog::getConfig() const {

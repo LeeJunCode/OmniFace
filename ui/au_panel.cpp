@@ -1,155 +1,151 @@
 #include "omniface/ui/au_panel.h"
 
-#include <algorithm>
-#include <map>
+#include <unordered_map>
 
 #include <QPainter>
-#include <QPaintEvent>
+#include <QVBoxLayout>
 
 namespace {
 
-const std::map<std::string, std::string> kAUDescriptions = {
-    {"AU01", "Inner Brow Raiser"},
-    {"AU02", "Outer Brow Raiser"},
-    {"AU04", "Brow Lowerer"},
-    {"AU05", "Upper Lid Raiser"},
-    {"AU06", "Cheek Raiser"},
-    {"AU07", "Lid Tightener"},
-    {"AU09", "Nose Wrinkler"},
-    {"AU10", "Upper Lip Raiser"},
-    {"AU12", "Lip Corner Puller"},
-    {"AU14", "Dimpler"},
-    {"AU15", "Lip Corner Depressor"},
-    {"AU17", "Chin Raiser"},
-    {"AU20", "Lip Stretcher"},
-    {"AU23", "Lip Tightener"},
-    {"AU25", "Lips Part"},
-    {"AU26", "Jaw Drop"},
-    {"AU28", "Lip Suck"},
-    {"AU45", "Blink"},
+const std::unordered_map<std::string, QString> kAuDescriptions = {
+    {"AU1", QStringLiteral("\u5185\u7709\u62ac")},
+    {"AU2", QStringLiteral("\u5916\u7709\u62ac")},
+    {"AU4", QStringLiteral("\u7709\u538b\u4f4e")},
+    {"AU5", QStringLiteral("\u4e0a\u7751\u62ac")},
+    {"AU6", QStringLiteral("\u8138\u988a\u62ac")},
+    {"AU7", QStringLiteral("\u7751\u7d27\u7f29")},
+    {"AU9", QStringLiteral("\u9f3b\u76b1")},
+    {"AU10", QStringLiteral("\u4e0a\u5507\u62ac")},
+    {"AU11", QStringLiteral("\u9f3b\u5507\u6c9f")},
+    {"AU12", QStringLiteral("\u5634\u89d2\u626c")},
+    {"AU13", QStringLiteral("\u8138\u988a\u9f13")},
+    {"AU14", QStringLiteral("\u5634\u89d2\u7d27")},
+    {"AU15", QStringLiteral("\u5634\u89d2\u6487")},
+    {"AU16", QStringLiteral("\u4e0b\u5507\u538b")},
+    {"AU17", QStringLiteral("\u4e0b\u5df4\u62ac")},
+    {"AU18", QStringLiteral("\u5507\u805a\u62e2")},
+    {"AU19", QStringLiteral("\u820c\u9732")},
+    {"AU20", QStringLiteral("\u5507\u62c9\u4f38")},
+    {"AU22", QStringLiteral("\u5507\u6f0f\u6597")},
+    {"AU23", QStringLiteral("\u5507\u7d27\u7f29")},
+    {"AU24", QStringLiteral("\u5507\u62bf\u7d27")},
+    {"AU25", QStringLiteral("\u53cc\u5507\u5206")},
+    {"AU26", QStringLiteral("\u4e0b\u988c\u5760")},
+    {"AU27", QStringLiteral("\u5634\u62c9\u4f38")},
+    {"AU32", QStringLiteral("\u54ac\u5507")},
+    {"AU38", QStringLiteral("\u9f3b\u5b54\u6269")},
+    {"AU39", QStringLiteral("\u9f3b\u5b54\u538b")},
+    {"AUL1", QStringLiteral("\u5185\u7709\u62acL")},
+    {"AUR1", QStringLiteral("\u5185\u7709\u62acR")},
+    {"AUL2", QStringLiteral("\u5916\u7709\u62acL")},
+    {"AUR2", QStringLiteral("\u5916\u7709\u62acR")},
+    {"AUL4", QStringLiteral("\u7709\u538b\u4f4eL")},
+    {"AUR4", QStringLiteral("\u7709\u538b\u4f4eR")},
+    {"AUL6", QStringLiteral("\u8138\u988a\u62acL")},
+    {"AUR6", QStringLiteral("\u8138\u988a\u62acR")},
+    {"AUL10", QStringLiteral("\u4e0a\u5507\u62acL")},
+    {"AUR10", QStringLiteral("\u4e0a\u5507\u62acR")},
+    {"AUL12", QStringLiteral("\u9f3b\u5507\u6c9fL")},
+    {"AUR12", QStringLiteral("\u9f3b\u5507\u6c9fR")},
+    {"AUL14", QStringLiteral("\u5634\u89d2\u7d27L")},
+    {"AUR14", QStringLiteral("\u5634\u89d2\u7d27R")},
 };
-
-constexpr int kBarHeight = 18;
-constexpr int kBarSpacing = 4;
-constexpr int kHeaderHeight = 32;
-constexpr int kHPadding = 10;
-constexpr int kVPadding = 8;
-constexpr int kNameWidth = 48;
-constexpr int kValueWidth = 44;
-constexpr int kMinBarWidth = 80;
-constexpr double kMaxIntensity = 5.0;
 
 }  // namespace
 
 namespace omniface::ui {
 
 AUPanel::AUPanel(QWidget* parent) : QWidget(parent) {
-    setMinimumWidth(200);
-    setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Expanding);
+    setMinimumWidth(240);
+
+    auto* layout = new QVBoxLayout(this);
+    layout->setContentsMargins(0, 0, 0, 0);
+    layout->setSpacing(0);
+
+    scroll_area_ = new QScrollArea;
+    scroll_area_->setWidgetResizable(true);
+    scroll_area_->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    scroll_area_->setStyleSheet(
+        "QScrollArea { border: 1px solid #e0e5ec; border-radius: 6px; background: #ffffff; }"
+        "QScrollBar:vertical { width: 6px; background: #fafafa; }"
+        "QScrollBar::handle:vertical { background: #d0d0d0; border-radius: 3px; min-height: 20px; }"
+        "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }");
+
+    content_label_ = new QLabel;
+    content_label_->setWordWrap(true);
+    content_label_->setTextFormat(Qt::RichText);
+    content_label_->setAlignment(Qt::AlignTop);
+    content_label_->setStyleSheet(
+        "QLabel { background: #ffffff; border: none; padding: 0; }");
+    scroll_area_->setWidget(content_label_);
+
+    layout->addWidget(scroll_area_);
 }
 
 void AUPanel::setActionUnits(
     const std::vector<std::pair<std::string, double>>& action_units) {
-    au_entries_.clear();
-    for (const auto& [code, intensity] : action_units) {
-        std::string desc = code;
-        auto it = kAUDescriptions.find(code);
-        if (it != kAUDescriptions.end()) desc = it->second;
-        au_entries_.push_back({code, desc, intensity});
-    }
-    update();
+    action_units_ = action_units;
+    rebuildHtml();
 }
 
 void AUPanel::clear() {
-    au_entries_.clear();
-    update();
+    action_units_.clear();
+    rebuildHtml();
 }
 
-QSize AUPanel::minimumSizeHint() const {
-    return QSize(200, 100);
-}
-
-QSize AUPanel::sizeHint() const {
-    int h = kHeaderHeight + kVPadding * 2 +
-            static_cast<int>(au_entries_.size()) * (kBarHeight + kBarSpacing);
-    return QSize(220, std::max(h, 100));
-}
-
-void AUPanel::paintEvent(QPaintEvent* /*event*/) {
-    QPainter p(this);
-    p.setRenderHint(QPainter::Antialiasing);
-
-    int w = width();
-    // 进度条区域宽度 = 面板宽度 - 左右内边距 - AU代码列宽 - 数值列宽 - 间距
-    int bar_area_w = w - kHPadding * 2 - kNameWidth - kValueWidth - 12;
-    bar_area_w = std::max(bar_area_w, kMinBarWidth);
-
-    p.fillRect(rect(), QColor(0x18, 0x18, 0x25));
-
-    QFont title_font = font();
-    title_font.setBold(true);
-    title_font.setPointSize(title_font.pointSize() + 1);
-    p.setFont(title_font);
-    p.setPen(QColor(0x89, 0xb4, 0xfa));
-    p.drawText(kHPadding, kVPadding, w - kHPadding * 2, kHeaderHeight,
-               Qt::AlignVCenter | Qt::AlignLeft, QStringLiteral("Action Units"));
-
-    if (au_entries_.empty()) {
-        p.setPen(QColor(0x6c, 0x70, 0x86));
-        QFont f = font();
-        f.setPointSize(f.pointSize() - 1);
-        p.setFont(f);
-        p.drawText(QRect(0, kHeaderHeight + kVPadding, w, 40),
-                   Qt::AlignCenter, QStringLiteral("No data"));
+void AUPanel::rebuildHtml() {
+    if (action_units_.empty()) {
+        content_label_->setText(QStringLiteral(
+            "<div style='color:#999; font-size:12px; padding:8px;'>"
+            "\u6682\u65e0 AU \u6570\u636e</div>"));
         return;
     }
 
-    QFont au_font = font();
-    au_font.setPointSize(std::max(au_font.pointSize() - 1, 7));
-    p.setFont(au_font);
+    int active_count = 0;
+    QStringList cards;
 
-    int y = kHeaderHeight + kVPadding;
+    for (const auto& [code, prob] : action_units_) {
+        bool active = prob >= 0.5;
+        if (active) ++active_count;
 
-    for (const auto& au : au_entries_) {
-        // 强度>0.1视为该AU被激活，以高亮文字和彩色进度条显示
-        bool present = au.intensity > 0.1;
-        QColor text_color = present ? QColor(0xcd, 0xd6, 0xf4) : QColor(0x6c, 0x70, 0x86);
+        auto desc_it = kAuDescriptions.find(code);
+        QString desc = (desc_it != kAuDescriptions.end())
+            ? desc_it->second : QString::fromStdString(code);
 
-        p.setPen(text_color);
-        p.drawText(kHPadding, y, kNameWidth, kBarHeight,
-                   Qt::AlignVCenter | Qt::AlignLeft,
-                   QString::fromStdString(au.code));
+        QString bg = active ? "#e8f5e9" : "#fafafa";
+        QString code_color = active ? "#2e7d32" : "#999";
+        QString desc_color = active ? "#555" : "#bbb";
+        QString prob_color = active ? "#2e7d32" : "#ccc";
 
-        int bar_x = kHPadding + kNameWidth + 4;
-        QRect bar_bg(bar_x, y + 3, bar_area_w, kBarHeight - 6);
-        p.fillRect(bar_bg, QColor(0x31, 0x32, 0x44));
-
-        if (present) {
-            double ratio = std::min(au.intensity / kMaxIntensity, 1.0);
-            int fill_w = static_cast<int>(bar_area_w * ratio);
-            if (fill_w > 0) {
-                QRect bar_fill(bar_x, y + 3, fill_w, kBarHeight - 6);
-                // 根据强度比例分四级着色：蓝(低) -> 绿(中低) -> 黄(中高) -> 红(高)
-                QColor bar_color;
-                if (ratio < 0.25)
-                    bar_color = QColor(0x89, 0xb4, 0xfa);
-                else if (ratio < 0.5)
-                    bar_color = QColor(0xa6, 0xe3, 0xa1);
-                else if (ratio < 0.75)
-                    bar_color = QColor(0xf9, 0xe2, 0xaf);
-                else
-                    bar_color = QColor(0xfa, 0xb3, 0x87);
-                p.fillRect(bar_fill, bar_color);
-            }
-        }
-
-        QString val_text = present ? QString::number(au.intensity, 'f', 2) : QStringLiteral("0.00");
-        p.setPen(text_color);
-        p.drawText(bar_x + bar_area_w + 4, y, kValueWidth, kBarHeight,
-                   Qt::AlignVCenter | Qt::AlignLeft, val_text);
-
-        y += kBarHeight + kBarSpacing;
+        cards << QStringLiteral(
+            "<div style='display:inline-block; width:32%%; margin:0.5px 0.6%%; "
+            "padding:1px 3px; background:%1; border-radius:2px; font-size:10px;'>"
+            "<span style='color:%2; font-weight:bold;'>%3</span>"
+            "<span style='color:%4;'>%5</span>"
+            "<span style='float:right; color:%6;'>%7</span>"
+            "</div>")
+            .arg(bg)
+            .arg(code_color)
+            .arg(QString::fromStdString(code))
+            .arg(desc_color)
+            .arg(desc)
+            .arg(prob_color)
+            .arg(QString::number(prob, 'f', 2));
     }
+
+    QString html;
+    html += QStringLiteral(
+        "<div style='font-size:10px; line-height:1.4; color:#333; padding:4px 6px;'>"
+        "<div style='padding:2px 0; margin-bottom:2px; font-size:11px;'>"
+        "<b style='color:#333;'>\u52a8\u4f5c\u5355\u5143</b> "
+        "<span style='color:#888;'>%1 / 41 \u6d3b\u8dc3</span>"
+        "</div>"
+        "<div style='line-height:1.2;'>").arg(active_count);
+    for (const auto& card : cards)
+        html += card;
+    html += "</div></div>";
+
+    content_label_->setText(html);
 }
 
 }  // namespace omniface::ui

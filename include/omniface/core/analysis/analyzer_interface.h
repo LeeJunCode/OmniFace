@@ -14,13 +14,14 @@
 namespace omniface::analysis {
 
 // 分析后端枚举
-enum class AnalyzerKind { kOpenFace, kMediaPipe, kL2cs };
+enum class AnalyzerKind { kOpenFace, kMediaPipe, kL2cs, kMefargAu };
 
 inline const char* AnalyzerKindToString(AnalyzerKind k) {
     switch (k) {
     case AnalyzerKind::kOpenFace:  return "openface";
     case AnalyzerKind::kMediaPipe: return "mediapipe";
     case AnalyzerKind::kL2cs:      return "l2cs";
+    case AnalyzerKind::kMefargAu:  return "mefarg_au";
     }
     return "unknown";
 }
@@ -28,6 +29,7 @@ inline const char* AnalyzerKindToString(AnalyzerKind k) {
 inline AnalyzerKind AnalyzerKindFromString(const std::string& s) {
     if (s == "mediapipe") return AnalyzerKind::kMediaPipe;
     if (s == "l2cs" || s == "gaze") return AnalyzerKind::kL2cs;
+    if (s == "mefarg_au") return AnalyzerKind::kMefargAu;
     return AnalyzerKind::kOpenFace;
 }
 

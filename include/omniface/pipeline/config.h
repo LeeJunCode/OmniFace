@@ -8,7 +8,7 @@
 
 namespace omniface {
 
-enum class AnalysisBackend { kOpenFace, kMediaPipe, kL2cs, kNone };
+enum class AnalysisBackend { kOpenFace, kMediaPipe, kL2cs, kMefargAu, kNone };
 
 inline const char* InferenceDeviceToString(InferenceDevice d) {
     switch (d) {
@@ -32,6 +32,7 @@ inline const char* AnalysisBackendToString(AnalysisBackend b) {
     case AnalysisBackend::kOpenFace:  return "openface";
     case AnalysisBackend::kMediaPipe: return "mediapipe";
     case AnalysisBackend::kL2cs:      return "l2cs";
+    case AnalysisBackend::kMefargAu:  return "mefarg_au";
     case AnalysisBackend::kNone:      return "none";
     }
     return "openface";
@@ -40,6 +41,7 @@ inline const char* AnalysisBackendToString(AnalysisBackend b) {
 inline AnalysisBackend AnalysisBackendFromString(const std::string& s) {
     if (s == "mediapipe" || s == "onnx") return AnalysisBackend::kMediaPipe;
     if (s == "l2cs" || s == "gaze")     return AnalysisBackend::kL2cs;
+    if (s == "mefarg_au")              return AnalysisBackend::kMefargAu;
     if (s == "none")                    return AnalysisBackend::kNone;
     return AnalysisBackend::kOpenFace;
 }
@@ -132,6 +134,14 @@ struct MediaPipeConfig {
     InferenceDevice device = InferenceDevice::kCPU;
 };
 
+struct MefargAuConfig {
+    std::string model = "models/OpenGprahAU/mefarg_resnet18_au.onnx";
+    int intra_threads = 1;
+    float threshold = 0.5f;
+    bool draw_au = true;
+    InferenceDevice device = InferenceDevice::kCPU;
+};
+
 struct PipelineConfig {
     ModelConfig model;
     ThresholdConfig thresholds;
@@ -141,6 +151,7 @@ struct PipelineConfig {
     OpenFaceConfig openface;
     MediaPipeConfig onnx;
     L2csConfig l2cs;
+    MefargAuConfig mefarg_au;
     AnalysisBackend analysis_backend = AnalysisBackend::kOpenFace;
     std::string output_base_dir;
 };

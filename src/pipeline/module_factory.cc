@@ -109,6 +109,22 @@ PipelineModules CreateModules(const PipelineConfig& config) {
         }
     }
 
+    if (config.analysis_backend == AnalysisBackend::kMefargAu) {
+        analysis::mefarg_au::MefargAuEstimator::Config au_cfg;
+        au_cfg.model = config.mefarg_au.model;
+        au_cfg.intra_threads = config.mefarg_au.intra_threads;
+        au_cfg.threshold = config.mefarg_au.threshold;
+        au_cfg.device = config.mefarg_au.device;
+
+        try {
+            mods.au_estimator = std::make_unique<analysis::mefarg_au::MefargAuEstimator>(au_cfg);
+            spdlog::info("MEFARG AU backend activated (model={}, threshold={:.2f})",
+                         config.mefarg_au.model, config.mefarg_au.threshold);
+        } catch (const std::exception& e) {
+            spdlog::error("Failed to load MefargAuEstimator: {}", e.what());
+        }
+    }
+
     return mods;
 }
 

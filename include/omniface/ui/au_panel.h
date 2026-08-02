@@ -4,6 +4,8 @@
 #include <vector>
 #include <utility>
 
+#include <QLabel>
+#include <QScrollArea>
 #include <QWidget>
 
 namespace omniface::ui {
@@ -19,19 +21,12 @@ public:
 
     void clear();
 
-protected:
-    void paintEvent(QPaintEvent* event) override;
-    QSize minimumSizeHint() const override;
-    QSize sizeHint() const override;
-
 private:
-    struct AUEntry {
-        std::string code;
-        std::string description;
-        double intensity;
-    };
-    std::vector<AUEntry> au_entries_;
-    QString title_;
+    void rebuildHtml();
+
+    QScrollArea* scroll_area_ = nullptr;
+    QLabel* content_label_ = nullptr;
+    std::vector<std::pair<std::string, double>> action_units_;
 };
 
 }  // namespace omniface::ui

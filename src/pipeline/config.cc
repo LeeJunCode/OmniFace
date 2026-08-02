@@ -189,6 +189,19 @@ PipelineConfig LoadPipelineConfig(const std::string& yaml_path) {
             SafeGet<std::string>(g, "device", "cpu"));
     }
 
+
+    if (auto ma = SafeSub(root, "mefarg_au")) {
+        cfg.mefarg_au.model =
+            SafeGet<std::string>(ma, "model", cfg.mefarg_au.model);
+        cfg.mefarg_au.intra_threads =
+            SafeGet<int>(ma, "intra_threads", cfg.mefarg_au.intra_threads);
+        cfg.mefarg_au.threshold =
+            SafeGet<float>(ma, "threshold", cfg.mefarg_au.threshold);
+        cfg.mefarg_au.device = InferenceDeviceFromString(
+            SafeGet<std::string>(ma, "device", "cpu"));
+        cfg.mefarg_au.draw_au =
+            SafeGet<bool>(ma, "draw_au", cfg.mefarg_au.draw_au);
+    }
     // 值域裁剪，确保配置值在合法范围内
     cfg.model.detection_threads = std::clamp(cfg.model.detection_threads, 1, 32);
     cfg.model.recognition_threads = std::clamp(cfg.model.recognition_threads, 1, 32);
@@ -213,6 +226,9 @@ PipelineConfig LoadPipelineConfig(const std::string& yaml_path) {
     cfg.onnx.analysis_threads = std::clamp(cfg.onnx.analysis_threads, 1, 32);
     cfg.onnx.margin = std::clamp(cfg.onnx.margin, 0.0f, 1.0f);
     cfg.onnx.score_threshold = std::clamp(cfg.onnx.score_threshold, 0.0f, 1.0f);
+
+    cfg.mefarg_au.intra_threads = std::clamp(cfg.mefarg_au.intra_threads, 1, 32);
+    cfg.mefarg_au.threshold = std::clamp(cfg.mefarg_au.threshold, 0.0f, 1.0f);
 
     return cfg;
 }
@@ -311,6 +327,15 @@ void SavePipelineConfig(const std::string& yaml_path, const PipelineConfig& cfg)
         root["l2cs"]["model"] = l2.model;
         root["l2cs"]["draw_gaze"] = l2.draw_gaze;
         root["l2cs"]["device"] = InferenceDeviceToString(l2.device);
+    }
+
+    {
+        const auto& ma = cfg.mefarg_au;
+        root["mefarg_au"]["model"] = ma.model;
+        root["mefarg_au"]["intra_threads"] = ma.intra_threads;
+        root["mefarg_au"]["threshold"] = ma.threshold;
+        root["mefarg_au"]["draw_au"] = ma.draw_au;
+        root["mefarg_au"]["device"] = InferenceDeviceToString(ma.device);
     }
 
     std::ofstream fout(yaml_path);

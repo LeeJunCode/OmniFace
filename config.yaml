@@ -78,5 +78,12 @@ gaze:
   draw_gaze: true
   device: cpu
 
+# ---- MEFARG AU 分析（选择 "mefarg_au" 后端启用） ----------------
+mefarg_au:
+  model: "models/OpenGprahAU/mefarg_resnet18_au.onnx"
+  intra_threads: 1
+  threshold: 0.5
+  device: cpu
+
 log:
   level: "debug"

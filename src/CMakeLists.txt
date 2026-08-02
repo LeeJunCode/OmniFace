@@ -160,6 +160,26 @@ target_link_libraries(omniface_analysis_l2cs PUBLIC
 target_compile_features(omniface_analysis_l2cs PUBLIC cxx_std_20)
 
 # ============================================================
+# MEFARG AU Analysis module — Action Unit estimator
+# ============================================================
+add_library(omniface_analysis_mefarg STATIC
+    core/analysis/mefarg_au/mefarg_au_estimator.cc
+)
+
+target_include_directories(omniface_analysis_mefarg PUBLIC
+    ${PROJECT_SOURCE_DIR}/include
+)
+
+target_link_libraries(omniface_analysis_mefarg PUBLIC
+    omniface_detail
+    spdlog::spdlog
+    opencv_core
+    opencv_imgproc
+)
+
+target_compile_features(omniface_analysis_mefarg PUBLIC cxx_std_20)
+
+# ============================================================
 # Pipeline module — config + orchestration
 # ============================================================
 add_library(omniface_pipeline STATIC
@@ -182,6 +202,7 @@ target_link_libraries(omniface_pipeline PUBLIC
     omniface_analysis
     omniface_analysis_mediapipe
     omniface_analysis_l2cs
+    omniface_analysis_mefarg
     yaml-cpp::yaml-cpp
     spdlog::spdlog
     opencv_core
