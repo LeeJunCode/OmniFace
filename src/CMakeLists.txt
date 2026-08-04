@@ -212,3 +212,5 @@ target_link_libraries(omniface_pipeline PUBLIC
 )
 
 target_compile_features(omniface_pipeline PUBLIC cxx_std_20)
+
+add_subdirectory(ui)

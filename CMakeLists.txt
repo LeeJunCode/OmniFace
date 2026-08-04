@@ -54,5 +54,4 @@ endif()
 add_subdirectory(third_party/OpenFace)
 
 add_subdirectory(src)
-add_subdirectory(ui)
 add_subdirectory(app)
