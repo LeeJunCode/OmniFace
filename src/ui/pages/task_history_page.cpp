@@ -715,32 +715,15 @@ void TaskHistoryPage::OnDeleteTask() {
     auto rec = task_repo_->FindById(task_id);
     if (!rec) return;
 
-    QMessageBox msgBox(this);
-    msgBox.setWindowTitle(QStringLiteral("删除任务"));
-    msgBox.setText(QStringLiteral("确定要删除此任务记录吗？"));
-    msgBox.setInformativeText(QStringLiteral("此操作不可撤销。"));
-    msgBox.setIcon(QMessageBox::Warning);
-    msgBox.setStandardButtons(QMessageBox::Yes | QMessageBox::No);
-    msgBox.setDefaultButton(QMessageBox::No);
-    msgBox.button(QMessageBox::Yes)->setText(QStringLiteral("仅删除记录"));
+    auto result = QMessageBox::question(this,
+        QStringLiteral("删除任务"),
+        QStringLiteral("确定要删除此任务吗？\n\n将同时删除记录和输出文件，此操作不可撤销。"),
+        QMessageBox::Yes | QMessageBox::No,
+        QMessageBox::No);
 
-    auto* deleteWithFiles = msgBox.addButton(QStringLiteral("删除记录和输出文件"), QMessageBox::DestructiveRole);
-    auto& tm = ThemeManager::Instance();
-    msgBox.setStyleSheet(QString(
-        "QMessageBox { background: %1; color: %2; }"
-        "QPushButton { background: %3; color: %2; border: none;"
-        "  border-radius: 4px; padding: 6px 16px; }"
-        "QPushButton:hover { background: %3; }").arg(tm.SurfaceBg(), tm.TextPrimary(), tm.HoverBg()));
-    msgBox.exec();
+    if (result != QMessageBox::Yes) return;
 
-    bool delete_files = false;
-    if (msgBox.clickedButton() == deleteWithFiles) {
-        delete_files = true;
-    } else if (msgBox.standardButton(msgBox.clickedButton()) != QMessageBox::Yes) {
-        return;
-    }
-
-    task_repo_->Delete(task_id, delete_files);
+    task_repo_->Delete(task_id, true);
     Refresh();
 }
 

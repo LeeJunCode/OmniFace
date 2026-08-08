@@ -21,7 +21,6 @@ namespace omniface::analysis::openface {
 
 namespace {
 
-constexpr float kDegPerRad = 180.0f / 3.14159265358979323846f;
 
 void ApproxIntrinsics(int cols, int rows, float& fx, float& fy,
                       float& cx, float& cy) {
@@ -259,8 +258,7 @@ public:
             }
             result.visible_landmarks = vis_count;
 
-            float cert_norm = (clnf_->detection_certainty + 1.0f) / 2.0f;
-            cert_norm = std::clamp(1.0f - cert_norm, 0.0f, 1.0f);
+            float cert_norm = std::clamp(clnf_->detection_certainty, 0.0f, 1.0f);
             result.quality_score = cert_norm * 0.5f +
                 (static_cast<float>(vis_count) / 68.0f) * 0.5f;
         }
@@ -273,9 +271,9 @@ public:
             clnf_->GetVisibilities());
 
         cv::Vec6f pose_vec = LandmarkDetector::GetPose(*clnf_, fx, fy, cx, cy);
-        result.head_pose.pitch = pose_vec[3] * kDegPerRad;
-        result.head_pose.yaw   = pose_vec[4] * kDegPerRad;
-        result.head_pose.roll  = pose_vec[5] * kDegPerRad;
+        result.head_pose.pitch = pose_vec[3];
+        result.head_pose.yaw   = pose_vec[4];
+        result.head_pose.roll  = pose_vec[5];
         result.pose_Tx = pose_vec[0];
         result.pose_Ty = pose_vec[1];
         result.pose_Tz = pose_vec[2];

@@ -15,6 +15,7 @@ CsvReferenceDialog::CsvReferenceDialog(QWidget* parent)
     setWindowTitle(QStringLiteral("CSV 数据参考 — 全量字段说明与映射关系"));
     resize(960, 680);
     setMinimumSize(860, 560);
+    setWindowFlags(windowFlags() | Qt::WindowMaximizeButtonHint);
     setStyleSheet(QStringLiteral(
         "QDialog { background: %1; color: %2; }"
         "QPushButton {"
@@ -206,103 +207,86 @@ static QTextEdit* BuildOpenFaceFieldDoc() {
     QString html;
     html += QStringLiteral("<h2 style='color:%1;'>OpenFace — 最全面的传统面部分析</h2>").arg(ThemeManager::Instance().Primary());
 
-    html += Note(QStringLiteral("<b>概述：</b>OpenFace 是本项目中最为全面的分析后端，"
-        "使用 CE-CLM（Constrained Local Neural Field）面部关键点检测器定位 68 个 dlib 标准关键点，"
-        "在此基础上进一步计算头部姿态、视线方向、面部动作单元（AU）等信息。"
-        "OpenFace 是学术界广泛使用的开源面部行为分析框架，其分析方法在大量心理学和人机交互研究中得到验证。"));
+    html += Note(QStringLiteral("<b>概述：</b>OpenFace 使用 CE-CLM（Constrained Local Neural Field）面部关键点检测器"
+        "定位 68 个 dlib 标准关键点，在此基础上进一步计算头部姿态、视线方向、面部动作单元（AU）等信息。"
+        "CSV 文件由 OpenFace 原生 RecorderOpenFace 模块生成，以逗号分隔（列名前有前导空格），共约 700+ 列。"));
 
-    html += Note(QStringLiteral("CSV 文件由 OpenFace 原生的 RecorderOpenFace 模块生成，"
-        "以逗号分隔，首行为列名（列名前有前导空格）。共包含约 700+ 列数据，分为以下几个功能类别："));
+    // ── Direction convention ──
+    html += H2(QStringLiteral("坐标与方向约定"));
+    html += Note(QStringLiteral(
+        "<b>相机坐标系（Camera Coordinate System）：</b>"
+        "<table cellspacing='4' style='margin:4px 0;'>"
+        "<tr><td><b>+X</b></td><td>= 画面右侧（即被拍摄人物的<b>左侧</b>）</td></tr>"
+        "<tr><td><b>+Y</b></td><td>= 画面下方</td></tr>"
+        "<tr><td><b>+Z</b></td><td>= 镜头朝向被拍摄人物（深度方向）</td></tr>"
+        "</table>"
+        "<b>欧拉角分解：</b><code>R = Rx(pitch) * Ry(yaw) * Rz(roll)</code>（ZYX 顺序，右手系正号约定）<br>"
+        "<b>角度单位：</b>所有姿态与视线角度均为<b>弧度 (rad)</b>，与 OpenFace 官方输出一致。<br>"
+        "<b>方向描述原则：</b>以下「左/右/上/下」均从<b>被拍摄人物自身视角</b>出发，非画面视角。"));
 
     html += H2(QStringLiteral("1. 基本检测信息（3 列）"));
-    html += Note(QStringLiteral("<b>作用：</b>标注每帧的序号和检测质量，帮助判断分析结果是否可信。"));
     html += FieldTable({
-        " frame", "帧序号（从 1 开始计数的视频帧编号）",
+        " frame", "帧序号（从 1 开始）",
         " face_id", "检测到的面部编号（0 表示第一个面部）",
-        " confidence", QString::fromUtf8("面部检测置信度（0~1）。<b>高于 0.8 表示检测结果可信</b>，低于 0.5 建议谨慎使用该帧数据"),
+        " confidence", QString::fromUtf8("面部检测置信度（0~1）。<b>> 0.8 可信</b>，< 0.5 建议谨慎使用"),
     });
 
     html += H2(QStringLiteral("2. 头部姿态（6 列）"));
-    html += Note(QStringLiteral("<b>作用：</b>描述头部在三维空间中的朝向和在画面中的位置，"
-        "可以判断被拍摄者是否正对镜头、是否在关注画面中的某个区域。"));
+    html += Note(QStringLiteral("<b>作用：</b>描述头部在三维空间中的朝向和位置，判断被拍摄者是否正对镜头。"));
     html += FieldTable({
-        " pose_Rx", QString::fromUtf8("头部俯仰角 / Pitch（度）。<b>正值 = 下俯</b>（脸部朝下），<b>负值 = 上扬</b>（脸部朝上）。绝对值超过 25° 时姿态变化明显"),
-        " pose_Ry", QString::fromUtf8("头部偏航角 / Yaw（度）。<b>正值 = 向左转</b>（被观察者向其左侧转头），<b>负值 = 向右转</b>。绝对值超过 25° 时转向明显"),
-        " pose_Rz", QString::fromUtf8("头部翻滚角 / Roll（度）。<b>正值 = 头部右倾</b>，<b>负值 = 头部左倾</b>。绝对值超过 15° 时倾斜明显"),
-        " pose_Tx", QString::fromUtf8("头部在相机坐标系中的水平位移（mm）。<b>正值 = 人脸偏画面右侧</b>，表示被拍摄者未居中"),
-        " pose_Ty", QString::fromUtf8("头部在相机坐标系中的垂直位移（mm）。<b>正值 = 人脸偏画面上方</b>"),
-        " pose_Tz", QString::fromUtf8("头部到相机的距离 / 深度（mm）。数值越小表示人脸离镜头越近，<b>正常谈话距离约 500-800mm</b>"),
+        " pose_Rx", QString::fromUtf8("俯仰角 / Pitch（弧度）。<b>正值 = 下俯</b>（低头），<b>负值 = 上扬</b>（抬头）。|值| > 0.44 rad（约 25°）时姿态变化明显"),
+        " pose_Ry", QString::fromUtf8("偏航角 / Yaw（弧度）。<b>正值 = 人物向左转</b>，<b>负值 = 人物向右转</b>。<code>sin(yaw) = R(0,2)</code>，面部法线在相机 X 轴的分量决定转向方向"),
+        " pose_Rz", QString::fromUtf8("翻滚角 / Roll（弧度）。<b>正值 = 头部右倾</b>（偏向右肩），<b>负值 = 头部左倾</b>（偏向左肩）。|值| > 0.26 rad（约 15°）时倾斜明显"),
+        " pose_Tx", QString::fromUtf8("头部水平位移（mm）。正值 = 人脸偏画面右侧"),
+        " pose_Ty", QString::fromUtf8("头部垂直位移（mm）。正值 = 人脸偏画面上方"),
+        " pose_Tz", QString::fromUtf8("头部到相机距离（mm）。值越小越近，正常谈话距离约 500-800 mm"),
     });
 
-    html += Note(QStringLiteral(
-        "<b>头部姿态方向判断原理（OpenFace / MediaPipe 通用）：</b><br>"
-        "OpenFace 使用 CE-CLM 检测面部关键点后，通过旋转矩阵 <code>R = Rx(pitch) * Ry(yaw) * Rz(roll)</code>"
-        "（左手系正号约定）解算欧拉角。<br>"
-        "<code>R(0,2) = sin(yaw)</code>，即面部法线在相机 X 轴的分量。<br>"
-        "相机坐标系中 <b>+X = 画面右侧</b>（即被拍摄人物的左侧），"
-        "因此 sin(yaw) > 0（法线朝画面右）→ 人物面部转向其<b>左侧</b>（yaw > 0 → 左转）；"
-        "sin(yaw) < 0（法线朝画面左）→ 人物面部转向其<b>右侧</b>（yaw < 0 → 右转）。<br>"
-        "MediaPipe FaceMesh 的头部姿态解算使用完全相同的 ZYX 欧拉角分解约定，因此符号含义一致。"));
-
-    html += H2(QStringLiteral("3. 视线方向（14 列）"));
-    html += Note(QStringLiteral("<b>作用：</b>判断被观察者正在看哪里。这是判断注意力的关键指标。"
-        "3.1 节是综合视线方向（已扣除头部姿态影响），最能反映真实的注视方向。"));
+    html += H2(QStringLiteral("3. 视线方向 — 综合注视角度（6 列）"));
+    html += Note(QStringLiteral("<b>作用：</b>判断被观察者正在看哪里。<b>以下角度已扣除头部姿态影响</b>，反映眼球在眼眶内的运动方向。"));
     html += FieldTable({
         " gaze_angle_x",
-            QString::fromUtf8("<b>头部姿态补偿后的水平注视角度</b>（弧度）。"
-            "从被拍摄人物视角出发，<b>正值 = 向左看</b>，<b>负值 = 向右看</b>。这是判断水平注视方向的最重要字段"),
+            QString::fromUtf8("水平注视角度（弧度）。<b>正值 = 人物向左看</b>，<b>负值 = 人物向右看</b>。<code>gaze_angle_x = atan2(gaze.x, -gaze.z)</code>，与 3D 视线向量的 X 分量同号"),
         " gaze_angle_y",
-            QString::fromUtf8("<b>头部姿态补偿后的垂直注视角度</b>（弧度）。"
-            "正值 = 向下看，负值 = 向上看"),
+            QString::fromUtf8("垂直注视角度（弧度）。<b>正值 = 向下看</b>，<b>负值 = 向上看</b>"),
         " gaze_0_x / gaze_0_y / gaze_0_z",
-            "左眼在三维空间中的注视方向向量（单位向量，长度≈1）",
+            "左眼 3D 注视方向向量（单位向量，长度≈1），<b>包含头部姿态</b>",
         " gaze_1_x / gaze_1_y / gaze_1_z",
-            "右眼在三维空间中的注视方向向量",
+            "右眼 3D 注视方向向量，<b>包含头部姿态</b>",
     });
-    html += Note(QStringLiteral("<b>注意：</b>gaze_angle_x/y 已经扣除了头部转动的影响，反映的是<i>眼球在眼眶内的运动方向</i>。"
-        "3D 向量 gaze_0/gaze_1 包含头部姿态，通常不直接用于判断看的方向。"));
+    html += Note(QStringLiteral("<b>注意：</b>gaze_angle_x/y 已经扣除头部转动的影响，反映的是<i>眼球在眼眶内的运动方向</i>。"
+        "3D 向量 gaze_0/gaze_1 包含头部姿态，通常不直接用于判断注视方向。"));
 
-    html += Note(QStringLiteral(
-        "<b>方向判断原理（OpenFace 视线）：</b><br>"
-        "<code>gaze_angle_x = atan2(gaze.x, -gaze.z)</code>，符号由 gaze 向量的 X 分量决定。<br>"
-        "相机坐标系中 <b>+X = 画面右侧</b>（即被拍摄人物的左侧），"
-        "因此 gaze.x > 0（画面右）→ gaze_angle_x > 0 → 人物在<b>向左看</b>；"
-        "gaze.x < 0（画面左）→ gaze_angle_x < 0 → 人物在<b>向右看</b>。<br>"
-        "<b>与其他后端的区别：</b>OpenFace 的视线角度符号与 3D 视线向量的 X 分量<b>同号</b>，"
-        "与 L2CS-Net 的 gaze_yaw <b>符号相反</b>（L2CS 在 GazeTo3D 公式中有一个负号，见 L2CS-Net 原理说明）。"));
-
-    html += H2(QStringLiteral("3. 视线方向（3.2 眼球关键点 — 280 列）"));
-    html += Note(QStringLiteral("<b>作用：</b>提供眼球周围 56 个精细关键点的 2D 和 3D 坐标（每点 5 个值 = X₂D + Y₂D + X₃D + Y₃D + Z₃D，共 280 列），用于高精度视线追踪。"
+    html += H2(QStringLiteral("4. 视线方向 — 眼球关键点（280 列）"));
+    html += Note(QStringLiteral("<b>作用：</b>眼球周围 56 个精细关键点的 2D 和 3D 坐标"
+        "（每点 5 个值 = X₂D + Y₂D + X₃D + Y₃D + Z₃D，共 56×5 = 280 列）。"
         "前 28 个点属于左眼，后 28 个属于右眼。适合需要精确分析眼球运动的高级研究场景。"));
 
-    html += H2(QStringLiteral("4. 面部 68 个关键点（340 列）"));
-    html += Note(QStringLiteral("<b>作用：</b>提供 68 个 dlib 标准面部关键点的完整 2D 和 3D 坐标信息。"
-        "这 68 个点覆盖了眉毛（1-17）、鼻子（28-36）、眼睛（37-48）、嘴巴（49-68）、下颌轮廓（1-17）等面部主要结构。"));
+    html += H2(QStringLiteral("5. 面部 68 个关键点（340 列）"));
+    html += Note(QStringLiteral("<b>作用：</b>68 个 dlib 标准面部关键点的完整 2D 和 3D 坐标。"
+        "覆盖眉毛（1-17）、鼻子（28-36）、眼睛（37-48）、嘴巴（49-68）、下颌轮廓（1-17）等面部主要结构。"));
     html += FieldTable({
-        " x_0 ~ x_67 / y_0 ~ y_67", "68 个点的 2D 坐标（像素），共 136 列。可直接用于在图像上绘制面部关键点",
-        " X_0 ~ X_67 / Y_0 ~ Y_67 / Z_0 ~ Z_67", "68 个点的 3D 坐标（mm，相机坐标系），共 204 列。反映面部的三维结构",
+        " x_0 ~ x_67 / y_0 ~ y_67", "68 个点的 2D 坐标（像素），共 136 列",
+        " X_0 ~ X_67 / Y_0 ~ Y_67 / Z_0 ~ Z_67", "68 个点的 3D 坐标（mm，相机坐标系），共 204 列",
     });
 
-    html += H2(QStringLiteral("5. PDM 参数（40 列）"));
-    html += Note(QStringLiteral("<b>作用：</b>Point Distribution Model（点分布模型）参数是 OpenFace 内部的数学模型参数，"
-        "用于描述人脸形状的变化。包含 6 个刚性参数（缩放 + 旋转 + 平移）和 34 个非刚性参数（表情相关的形状变化）。"
-        "<b>普通用户通常不需要关注这些参数</b>，它们主要供研究人员分析面部形变时使用。"));
+    html += H2(QStringLiteral("6. PDM 参数（40 列）"));
+    html += Note(QStringLiteral("<b>作用：</b>Point Distribution Model（点分布模型）参数，包括 6 个刚性参数（缩放+旋转+平移）"
+        "和 34 个非刚性参数（表情相关的形状变化）。普通用户通常不需要关注这些参数。"));
 
-    html += H2(QStringLiteral("6. 面部动作单元 / AU（约 35 列）"));
+    html += H2(QStringLiteral("7. 面部动作单元 / AU（约 35 列）"));
     html += Note(QStringLiteral("<b>作用：</b>Action Units（动作单元）是 FACS（面部动作编码系统）中的基本单位，"
-        "每个 AU 对应一组面部肌肉的运动。AU 的激活组合可以判断被观察者的表情。"));
+        "每个 AU 对应一组面部肌肉的运动。"));
     html += Note(QStringLiteral(
-        "<b>常用 AU 示例：</b><br>"
-        "• AU01_r（眉心提升）+ AU02_r（眉梢提升）→ 眉部活动，常与惊讶或关注有关<br>"
-        "• AU04_r（眉毛下压）+ AU07_r（眼睑收紧）→ 皱眉，常与困惑或愤怒有关<br>"
-        "• AU06_r（脸颊提升）+ AU12_r（嘴角提升）→ <b>微笑</b><br>"
-        "• AU09_r（鼻部皱起）+ AU10_r（上唇提升）→ 厌恶<br>"
-        "• AU25_r（双唇分开）+ AU26_r（下巴下降）→ 张嘴<br>"
-        "• AU45_r（眨眼）→ 眨眼动作"));
+        "<b>常用 AU 组合示例：</b><br>"
+        "• AU01_r + AU02_r（眉部提升）→ 惊讶或关注<br>"
+        "• AU04_r + AU07_r（眉毛下压 + 眼睑收紧）→ 皱眉，常与困惑或愤怒有关<br>"
+        "• AU06_r + AU12_r（脸颊提升 + 嘴角提升）→ <b>微笑</b><br>"
+        "• AU09_r + AU10_r（鼻部皱起 + 上唇提升）→ 厌恶<br>"
+        "• AU25_r + AU26_r（双唇分开 + 下巴下降）→ 张嘴"));
     html += Note(QStringLiteral(
-        "AU 强度列（AU{n}_r）：数值 0~5，0 = 无激活，5 = 最大强度。<br>"
-        "AU 激活列（AU{n}_c）：0 = 未激活，1 = 激活。<br>"
-        "每个 AU 的详细含义请切换到【数据映射关系】标签页查看。"));
+        "AU 强度列（AU{n}_r）：0~5，0 = 无激活，5 = 最大强度。<br>"
+        "AU 激活列（AU{n}_c）：0 = 未激活，1 = 激活。"));
 
     return MakeReadOnlyTextEdit(html);
 }
@@ -312,56 +296,45 @@ static QTextEdit* BuildMediaPipeFieldDoc() {
     html += QStringLiteral("<h2 style='color:%1;'>MediaPipe FaceMesh — 最密集的面部网格</h2>").arg(ThemeManager::Instance().Primary());
 
     html += Note(QStringLiteral("<b>概述：</b>MediaPipe FaceMesh 是 Google 开发的高精度面部网格模型，"
-        "使用 468 个密集关键点覆盖整个面部区域，包括面部轮廓、五官细节和前额区域。"
-        "相比传统 68 点模型，468 点的覆盖范围更广、密度更高，尤其适合 AR 特效渲染、虚拟化妆、"
-        "面部表情驱动（Vtuber 虚拟形象）等需要精确面部网格的应用场景。"));
+        "使用 468 个密集关键点覆盖整个面部区域。本项目使用 PINTO0309 转换的 ONNX 版本模型，"
+        "通过 PnP 算法从 3D 关键点解算出头部姿态。CSV 文件共 941 列。"));
 
-    html += Note(QStringLiteral("本项目的 MediaPipe 后端使用 PINTO0309 转换的 ONNX 版本模型（face_landmark.tflite → ONNX 转换），"
-        "输入人脸裁剪图像后直接输出 468 个关键点的 2D 坐标，然后通过 PnP 算法从 3D 关键点解算出头部姿态角度。"
-        "CSV 文件共 941 列。"));
+    // ── Direction convention ──
+    html += H2(QStringLiteral("坐标与方向约定"));
+    html += Note(QStringLiteral(
+        "<b>相机坐标系：</b>与 OpenFace 相同（+X = 画面右侧/人物左侧，+Y = 画面下方，+Z = 镜头朝向人物）<br>"
+        "<b>坐标变换：</b>通过 <code>canonical_to_headpose = diag(1, -1, -1)</code> 将规范模型坐标系对齐到头部位姿坐标系<br>"
+        "<b>欧拉角分解：</b><code>R = Rz(roll) * Ry(yaw) * Rx(pitch)</code>（ZYX 顺序），yaw 通过 <code>atan2(-R(2,0), cy)</code> 解算<br>"
+        "<b>角度单位：</b>所有姿态角度均为<b>度 (°)</b><br>"
+        "<b>方向描述原则：</b>以下「左/右/上/下」均从<b>被拍摄人物自身视角</b>出发。"));
 
     html += H2(QStringLiteral("1. 基本检测信息（5 列）"));
-    html += Note(QStringLiteral("<b>作用：</b>标注帧序号、时间戳和计算出的头部姿态。"));
     html += FieldTable({
         " frame", "帧序号（从 1 开始）",
         " timestamp", "时间戳（秒）。计算公式：timestamp = (frame - 1) / 帧率",
-        " pitch", QString::fromUtf8("头部俯仰角（度）。通过 PnP 从 468 个 3D 关键点解算。正值 = 下俯（低头），负值 = 上扬（抬头）"),
-        " yaw", QString::fromUtf8("头部偏航角（度）。PnP 解算。正值 = 左转，负值 = 右转"),
-        " roll", QString::fromUtf8("头部翻滚角（度）。PnP 解算。正值 = 右倾，负值 = 左倾"),
+        " pitch", QString::fromUtf8("俯仰角（度）。<b>正值 = 下俯</b>（低头），<b>负值 = 上扬</b>（抬头）"),
+        " yaw", QString::fromUtf8("偏航角（度）。<b>正值 = 人物向左转</b>，<b>负值 = 人物向右转</b>。<b>与 OpenFace 符号约定完全一致</b>"),
+        " roll", QString::fromUtf8("翻滚角（度）。<b>正值 = 头部右倾</b>，<b>负值 = 头部左倾</b>"),
     });
 
-    html += Note(QStringLiteral(
-        "<b>头部姿态方向判断原理（MediaPipe）：</b><br>"
-        "通过 solvePnP 从 468 个 3D 关键点到 2D 图像坐标解算旋转矩阵，"
-        "再通过 <code>canonical_to_headpose = diag(1, -1, -1)</code> 变换将规范模型坐标系对齐到头部位姿坐标系，"
-        "最后使用 ZYX 欧拉角分解 <code>R = Rz(roll) * Ry(yaw) * Rx(pitch)</code> 得到角度。<br>"
-        "yaw 的符号判定：<code>yaw = atan2(-R(2,0), cy)</code>。"
-        "当 yaw > 0 时，面部法线在相机 X 轴的投影 <code>R(2,0) = -sin(yaw) < 0</code>（朝画面左侧 = 人物右侧），"
-        "人物面部转向其<b>左侧</b>（yaw > 0 → 左转）。<br>"
-        "MediaPipe 与 OpenFace 使用<b>完全相同的符号约定</b>，因此头部姿态的映射规则一致。"));
-
     html += H2(QStringLiteral("2. 468 个 FaceMesh 面部关键点（936 列 = 468×2）"));
-    html += Note(QStringLiteral("<b>作用：</b>提供面部每个像素级位置的精确坐标，"
-        "这是 MediaPipe 的核心输出，也是后续所有分析的基础。"));
+    html += Note(QStringLiteral("<b>作用：</b>面部每个像素级位置的精确坐标，是 MediaPipe 的核心输出。"));
     html += FieldTable({
         " x_0 ~ x_467", "468 个关键点的 X 坐标（像素）",
         " y_0 ~ y_467", "468 个关键点的 Y 坐标（像素）",
     });
 
     html += Note(QStringLiteral(
-        "<b>关键点分布说明（按索引范围）：</b><br>"
-        "• 0-32（33 个）：<b>面部轮廓及下颌线</b> — 定义整个面部的轮廓边界<br>"
-        "• 33-132（100 个）：<b>嘴唇及口周区域</b> — 嘴唇外轮廓 + 口腔内部，可精确刻画唇形和开合<br>"
-        "• 133-209（77 个）：<b>左眼及左眉</b> — 左眼轮廓 + 左眉形态，含虹膜（瞳孔）位置<br>"
-        "• 210-276（67 个）：<b>右眼及右眉</b> — 右眼轮廓 + 右眉形态<br>"
-        "• 277-467（191 个）：<b>前额、鼻梁及面颊</b> — 额头到面颊的完整覆盖<br><br>"
-        "<b>总列数 = 5（元数据）+ 468×2（坐标对）= 941 列</b>"
-    ));
+        "<b>关键点分布（按索引范围）：</b><br>"
+        "• 0-32（33 个）：面部轮廓及下颌线<br>"
+        "• 33-132（100 个）：嘴唇及口周区域（外轮廓 + 口腔内部）<br>"
+        "• 133-209（77 个）：左眼及左眉（含虹膜位置）<br>"
+        "• 210-276（67 个）：右眼及右眉<br>"
+        "• 277-467（191 个）：前额、鼻梁及面颊<br><br>"
+        "<b>总列数 = 5（元数据）+ 468×2（坐标对）= 941 列</b>"));
 
-    html += Note(QStringLiteral("<b>适用场景：</b>"
-        "MediaPipe 的密集网格特别适合虚拟化妆（口红、腮红贴合）、AR 面具、"
-        "面部表情动作捕捉（通过关键点位移推断表情）等应用。"
-        "但 MediaPipe 本身不提供视线方向或面部动作单元（AU）信息。"));
+    html += Note(QStringLiteral("<b>适用场景：</b>虚拟化妆、AR 面具、面部表情动作捕捉等。"
+        "MediaPipe 本身不提供视线方向或 AU 信息。"));
 
     return MakeReadOnlyTextEdit(html);
 }
@@ -371,47 +344,49 @@ static QTextEdit* BuildL2csFieldDoc() {
     html += QStringLiteral("<h2 style='color:%1;'>L2CS-Net — 最专注的视线方向估计</h2>").arg(ThemeManager::Instance().Primary());
 
     html += Note(QStringLiteral("<b>概述：</b>L2CS-Net（L2 Coordinate System Network）是专门用于视线方向估计的深度学习模型。"
-        "它以 MobileNetV2 为主干网络，输入 448×448 的人脸裁剪图像，直接输出两个维度的视线角度（俯仰角 pitch 和偏航角 yaw）。"
-        "与 OpenFace 的眼球跟踪不同，L2CS-Net 直接从整张面部图像预测视线方向，不需要检测眼球关键点。"));
+        "以 MobileNetV2 为主干网络，输入 448×448 的人脸裁剪图像，直接输出视线俯仰角和偏航角。"
+        "与 OpenFace 的眼球跟踪不同，L2CS-Net 直接从整张面部图像预测视线方向，不需要检测眼球关键点。"
+        "CSV 文件共 7 列。"));
 
-    html += Note(QStringLiteral("L2CS-Net 的核心优势："
-        "能够区分【头部朝向】和【眼球注视方向】。"
-        "即使被观察者的头转向一侧，模型仍能推断出眼球真实的注视方向。"
-        "这是判断一个人真正在关注什么的非常直接的指标。"));
+    // ── Direction convention ──
+    html += H2(QStringLiteral("坐标与方向约定"));
+    html += Note(QStringLiteral(
+        "<b>注意：L2CS-Net 的视线方向符号约定与 OpenFace 不同！</b>这是各自数学模型决定的，不是错误。"));
 
-    html += Note(QStringLiteral("CSV 文件仅 7 列，输出最为精简。"));
+    auto& tm = ThemeManager::Instance();
+    html += Note(QStringLiteral(
+        "<table cellspacing='4' style='margin:4px 0;width:100%;'>"
+        "<tr style='background:%1;'><td style='padding:4px 8px;'><b>字段</b></td>"
+        "<td style='padding:4px 8px;'><b>L2CS-Net 约定</b></td>"
+        "<td style='padding:4px 8px;'><b>OpenFace 约定（对比）</b></td></tr>"
+        "<tr><td style='padding:4px 8px;'>水平视线正值</td><td style='padding:4px 8px;color:%2;'><b>人物向右看</b></td>"
+        "<td style='padding:4px 8px;'>人物向左看</td></tr>"
+        "<tr><td style='padding:4px 8px;'>垂直视线正值</td><td style='padding:4px 8px;color:%2;'><b>人物向上看</b></td>"
+        "<td style='padding:4px 8px;'>人物向下看</td></tr>"
+        "</table>")
+        .arg(tm.HoverBg(), tm.Warning()));
 
-    html += H2(QStringLiteral("全部字段（7 列）"));
+    html += Note(QStringLiteral(
+        "差异源于 GazeTo3D 公式：<code>gaze = (-cos(pitch)·sin(yaw), -sin(pitch), -cos(pitch)·cos(yaw))</code><br>"
+        "公式中的负号使 3D 向量 X 分量与 yaw 反号。"
+        "而 OpenFace 的 <code>gaze_angle_x = atan2(gaze.x, -gaze.z)</code> 与 gaze.x 同号。"
+        "因此同一注视方向在两个后端中记录的<b>符号恰好相反</b>。<br>"
+        "<b>角度单位：度 (°)</b>。<b>方向描述：</b>均从被拍摄人物自身视角出发。"));
+
+    html += H2(QStringLiteral("1. 基本检测信息（7 列）"));
     html += FieldTable({
         " frame", "帧序号（从 1 开始）",
         " timestamp", "时间戳（秒）",
         " gaze_yaw",
-            QString::fromUtf8("<b>视线偏航角</b>（度）。经 EMA 指数平滑处理后输出。<br>"
-            "从被拍摄人物视角出发，<b>正值 = 向右看</b>，<b>负值 = 向左看</b>。<br>"
-            "原始模型从人脸裁剪图中预测 90 个角度区间（覆盖 -180° ~ +180°）的概率，"
-            "然后通过加权平均计算出精确的角度值"),
+            QString::fromUtf8("视线偏航角（度）。经 EMA 平滑（α=0.20）。<b>正值 = 人物向右看</b>，<b>负值 = 人物向左看</b>。<br>"
+            "通过 90-bin 分类回归解码：<code>Σ(p[i] × i) × 4.0 - 180.0</code>"),
         " gaze_pitch",
-            QString::fromUtf8("<b>视线俯仰角</b>（度）。解码方式同 yaw。<br>"
-            "正值 = 向上看，负值 = 向下看"),
-        " gaze_x", QString::fromUtf8("<b>3D 视线单位向量的 X 分量</b>。由 yaw/pitch 计算得到。正值 = 视线偏右（相机 X 轴正方向）"),
-        " gaze_y", QString::fromUtf8("<b>3D 视线单位向量的 Y 分量</b>。由 pitch 计算得到。正值 = 视线偏下（相机 Y 轴正方向），负值 = 视线偏上"),
-        " gaze_z", QString::fromUtf8("<b>3D 视线单位向量的 Z 分量</b>。由 yaw/pitch 计算。负值 = 视线朝前（朝向相机），绝对值接近 1"),
+            QString::fromUtf8("视线俯仰角（度）。<b>正值 = 人物向上看</b>，<b>负值 = 人物向下看</b>"),
+        " gaze_x", QString::fromUtf8("3D 视线单位向量的 X 分量。<code>gaze_x = -cos(pitch)·sin(yaw)</code>。正值 = 视线偏画面右，负值 = 偏画面左"),
+        " gaze_y", QString::fromUtf8("3D 视线单位向量的 Y 分量。<code>gaze_y = -sin(pitch)</code>。正值 = 偏画面下方，负值 = 偏画面上方"),
+        " gaze_z", QString::fromUtf8("3D 视线单位向量的 Z 分量。<code>gaze_z = -cos(pitch)·cos(yaw)</code>。≈ -1 时视线朝前"),
     });
-    html += Note(QStringLiteral(
-        "<b>方向判断原理（L2CS-Net 视线）：</b><br>"
-        "L2CS-Net 使用 GazeTo3D 公式将角度转为 3D 向量：<br>"
-        "<code>gaze = (-cos(pitch)·sin(yaw), -sin(pitch), -cos(pitch)·cos(yaw))</code><br>"
-        "当 yaw > 0 时，sin(yaw) > 0，gaze.x = -cos(p)·sin(yaw) < 0（画面左→人物向右看）；"
-        "当 yaw < 0 时，gaze.x > 0（画面右→人物向左看）。<br>"
-        "<b>与 OpenFace 的区别：</b>L2CS 的 gaze_yaw 通过 GazeTo3D 公式中的<b>负号</b>与 gaze.x 反号，"
-        "而 OpenFace 的 gaze_angle_x = atan2(gaze.x, -gaze.z) 与 gaze.x 同号。"
-        "因此对于同一个注视方向，L2CS 的 gaze_yaw 与 OpenFace 的 gaze_angle_x <b>符号恰好相反</b>，这是由各自的数学模型决定的，不是错误。"));
-
-    html += Note(QStringLiteral(
-        "<b>3D 视线向量说明：</b>gaze_x、gaze_y、gaze_z 是由视线角度（yaw、pitch）计算出的 3D 单位向量分量，"
-        "三个值满足：x² + y² + z² ≈ 1。这个向量可用于在 3D 场景中投射视线射线。<br><br>"
-        "<b>何时使用 3D 向量而非角度：</b>当需要精确计算视线落在空间中的哪个位置时，"
-        "使用 3D 向量做射线投射（ray casting）比角度值更方便和准确。"));
+    html += Note(QStringLiteral("<b>提示：</b>x² + y² + z² ≈ 1（单位向量）。大多数帧 gaze_z 在 -0.95 ~ -1.0（几乎朝前）。"));
 
     return MakeReadOnlyTextEdit(html);
 }
@@ -420,19 +395,24 @@ static QTextEdit* BuildMefargAuFieldDoc() {
     QString html;
     html += QStringLiteral("<h2 style='color:%1;'>MEFARG-AU — 最精细的面部表情分析</h2>").arg(ThemeManager::Instance().Primary());
 
-    html += Note(QStringLiteral("<b>概述：</b>MEFARG-AU（Multi-scale Edge Features Aggregated Graph Network for Action Unit Recognition）"
-        "是目前最先进的面部动作单元（AU）识别模型之一。"
-        "它以 ResNet18 或 Swin Transformer 提取面部特征，"
-        "再通过图神经网络（GNN）建模面部不同区域之间的关联关系，"
-        "最终输出 41 个面部动作单元（AU）的激活概率。"));
+    html += Note(QStringLiteral("<b>概述：</b>MEFARG-AU（Multi-scale Edge Features Aggregated Graph Network for AU Recognition）"
+        "以 ResNet18 或 Swin Transformer 提取面部特征，再通过图神经网络（GNN）建模面部不同区域之间的关联关系，"
+        "输出 41 个面部动作单元（AU）的激活概率。CSV 文件共 84 列。"));
 
-    html += Note(QStringLiteral("<b>什么是动作单元（AU）：</b>"
-        "AU 是 FACS（面部动作编码系统）的基本单位。每个 AU 对应一组面部肌肉的运动。"
+    html += Note(QStringLiteral("<b>什么是 AU：</b>AU 是 FACS（面部动作编码系统）的基本单位。每个 AU 对应一组面部肌肉的运动。"
         "例如 AU12（嘴角提升）是微笑的核心动作，AU4（眉毛下压）是皱眉的核心动作。"
-        "人类的表情是由多个 AU 组合而成的，"
-        "MEFARG-AU 可以同时识别 41 种 AU 动作，从而精确地分析面部表情的每一个细节。"));
+        "人类的表情由多个 AU 组合而成。"));
 
-    html += Note(QStringLiteral("CSV 文件共 84 列（2 列元数据 + 41 组 AU × 每组 2 列：概率 + 激活状态）。"));
+    html += H2(QStringLiteral("输出说明"));
+    html += Note(QStringLiteral(
+        "<b>数据格式：</b>模型输出为余弦相似度 [-1, 1]，经 <code>clamp(0, 1)</code> 得到概率值。<br>"
+        "每两个连续列组成一组，交替排列：<br>"
+        "• AU{n}_prob：概率值（0~1），值越大该面部动作越明显<br>"
+        "• AU{n}_active：二值激活状态（0 = 未激活，1 = 激活），prob ≥ 0.5 时判定为激活<br><br>"
+        "<b>使用建议：</b><br>"
+        "• 判断表情是否出现 → 查 active 列<br>"
+        "• 判断动作强烈程度 → 查 prob 列（接近 1.0 = 非常明显）<br>"
+        "• 分析微表情 → 关注 prob 在 0.5~0.7 之间的 AU"));
 
     html += H2(QStringLiteral("1. 基本检测信息（2 列）"));
     html += FieldTable({
@@ -440,24 +420,14 @@ static QTextEdit* BuildMefargAuFieldDoc() {
         " timestamp", "时间戳（秒）",
     });
 
-    html += H2(QStringLiteral("2. AU 概率与激活状态（41 组 = 82 列）"));
-    html += Note(QStringLiteral(
-        "<b>数据格式：</b>每两个连续列组成一组，交替排列：<br>"
-        "• AU{n}_prob：概率值（0~1），表示该 AU 的激活概率。<b>值越大，该面部动作越明显</b><br>"
-        "• AU{n}_active：二值激活状态（0 = 未激活 / 1 = 激活）。当概率 ≥ 0.5 时判定为激活<br><br>"
-        "<b>如何使用：</b><br>"
-        "• 想判断某个表情是否出现：查 AU{n}_active 列（1 = 该动作出现）<br>"
-        "• 想了解动作的强烈程度：查 AU{n}_prob 列（接近 1.0 = 动作非常明显）<br>"
-        "• 想判断微表情：关注 prob 值在 0.5~0.7 之间的 AU（可能表示被抑制或短暂的表情）"));
-
-    html += H2(QStringLiteral("3. 全部 41 个 AU 的详细说明"));
-    html += Note(QStringLiteral("共 27 个全局 AU + 14 个左右不对称 AU。以下是完整列表："));
+    html += H2(QStringLiteral("2. 41 个 AU 的完整说明"));
+    html += Note(QStringLiteral("共 27 个全局 AU + 14 个左右不对称 AU："));
     QStringList auRows;
     auRows << "AU1" << QString::fromUtf8("眉心提升（Inner Brow Raiser）— 眉毛内侧向上抬起")
            << "AU2" << QString::fromUtf8("眉梢提升（Outer Brow Raiser）— 眉毛外侧向上抬起")
            << "AU4" << QString::fromUtf8("眉毛下压（Brow Lowerer）— 眉毛整体向下压低")
            << "AU5" << QString::fromUtf8("上眼睑提升（Upper Lid Raiser）— 上眼皮向上抬，眼睛变大")
-           << "AU6" << QString::fromUtf8("脸颊提升（Cheek Raiser）— 脸颊肌肉收缩向上推，是微笑的关键动作")
+           << "AU6" << QString::fromUtf8("脸颊提升（Cheek Raiser）— 脸颊肌肉收缩向上推，微笑的关键动作")
            << "AU7" << QString::fromUtf8("眼睑收紧（Lid Tightener）— 眼轮匝肌收缩，眼睛眯起")
            << "AU9" << QString::fromUtf8("鼻部皱起（Nose Wrinkler）— 鼻梁皮肤起皱，常见于厌恶表情")
            << "AU10" << QString::fromUtf8("上唇提升（Upper Lip Raiser）— 上唇向上抬，可露出上牙")
@@ -481,7 +451,6 @@ static QTextEdit* BuildMefargAuFieldDoc() {
            << "AU38" << QString::fromUtf8("鼻孔扩张（Nostril Dilator）— 鼻孔向外扩大")
            << "AU39" << QString::fromUtf8("鼻孔收缩（Nostril Compressor）— 鼻孔向内缩小");
 
-    // Asymmetric AUs
     auRows << "AUL1 / AUR1" << QString::fromUtf8("左侧/右侧眉心提升 — 单侧眉毛内侧抬起（不对称表情的关键指标）")
            << "AUL2 / AUR2" << QString::fromUtf8("左侧/右侧眉梢提升 — 单侧眉梢抬起")
            << "AUL4 / AUR4" << QString::fromUtf8("左侧/右侧眉毛下压 — 单侧眉毛压低")
@@ -492,11 +461,8 @@ static QTextEdit* BuildMefargAuFieldDoc() {
 
     html += FieldTable(auRows);
     html += Note(QStringLiteral(
-        "<b>左右不对称 AU 的特别说明：</b>"
-        "这是 MEFARG-AU 模型的一个独特优势。大部分 AU 识别模型只检测对称的面部动作，"
-        "但 MEFARG-AU 能区分左右两侧独立的面部动作。这对于检测<b>不对称表情</b>"
-        "（如单侧嘴角上拉的轻蔑表情、单侧眉梢提升的怀疑表情）非常有价值。"));
-
+        "<b>左右不对称 AU：</b>MEFARG-AU 能区分左右两侧独立的面部动作，"
+        "对于检测不对称表情（单侧嘴角上拉的轻蔑、单侧眉梢提升的怀疑等）非常有价值。"));
     html += Note(QStringLiteral("<b>总列数 = 2（元数据）+ 41×2（概率 + 激活）= 84 列</b>"));
 
     return MakeReadOnlyTextEdit(html);
@@ -509,35 +475,33 @@ static QTextEdit* BuildMefargAuFieldDoc() {
 static QTextEdit* BuildOpenFaceMappingDoc() {
     QString html;
     html += QStringLiteral("<h2 style='color:%1;'>OpenFace — 数值 → 文字描述对照</h2>").arg(ThemeManager::Instance().Primary());
-    html += Note(QStringLiteral("以下说明了如何将 OpenFace 输出的数值转换为通俗易懂的文字描述。"
-        "这些映射关系在任务详情界面的分析数据展示中被使用。"));
+    html += Note(QStringLiteral("<b>方向描述均从被拍摄人物自身视角出发。</b>"
+        "所有姿态和视线角度单位为<b>弧度 (rad)</b>，AU 强度单位为<b>原始分（0~5）</b>。"));
 
-    html += H2(QStringLiteral("头部姿态 → 通俗描述"));
-    html += Note(QStringLiteral("<b>用途：</b>判断被拍摄者面部的朝向。"
-        "可用于分析被拍摄者是否在看画面中的某个位置，或者是否注意力偏移。"));
+    html += H2(QStringLiteral("1. 头部姿态映射"));
+    html += Note(QStringLiteral("<b>用途：</b>判断被拍摄者面部的朝向。"));
     html += MappingTable({
-        "pose_Rx（俯仰）", "< -25°", "明显上扬（头部明显后仰）",
-        "pose_Rx（俯仰）", "-25° ~ -10°", "略微上扬（头部稍向后）",
-        "pose_Rx（俯仰）", "-10° ~ 10°", "基本水平（自然平视状态）",
-        "pose_Rx（俯仰）", "10° ~ 25°", "略微下俯（头部稍向前倾）",
-        "pose_Rx（俯仰）", "> 25°", "明显下俯（头部明显低垂）",
+        "pose_Rx（俯仰）", "< -0.44 rad（约 -25°）", "明显上扬（头部明显后仰）",
+        "pose_Rx（俯仰）", "-0.44 ~ -0.17 rad（约 -25°~-10°）", "略微上扬（头部稍向后）",
+        "pose_Rx（俯仰）", "-0.17 ~ 0.17 rad（约 -10°~10°）", "基本水平（自然平视状态）",
+        "pose_Rx（俯仰）", "0.17 ~ 0.44 rad（约 10°~25°）", "略微下俯（头部稍向前倾）",
+        "pose_Rx（俯仰）", "> 0.44 rad（约 > 25°）", "明显下俯（头部明显低垂）",
 
-        "pose_Ry（偏航）", "< -25°", "明显右转（面部大幅向右）",
-        "pose_Ry（偏航）", "-25° ~ -10°", "略微右转（面部稍向右）",
-        "pose_Ry（偏航）", "-10° ~ 10°", "正面朝向（基本正对镜头）",
-        "pose_Ry（偏航）", "10° ~ 25°", "略微左转（面部稍向左）",
-        "pose_Ry（偏航）", "> 25°", "明显左转（面部大幅向左）",
+        "pose_Ry（偏航）", "< -0.44 rad（约 -25°）", "明显右转（面部大幅向右）",
+        "pose_Ry（偏航）", "-0.44 ~ -0.17 rad（约 -25°~-10°）", "略微右转（面部稍向右）",
+        "pose_Ry（偏航）", "-0.17 ~ 0.17 rad（约 -10°~10°）", "正面朝向（基本正对镜头）",
+        "pose_Ry（偏航）", "0.17 ~ 0.44 rad（约 10°~25°）", "略微左转（面部稍向左）",
+        "pose_Ry（偏航）", "> 0.44 rad（约 > 25°）", "明显左转（面部大幅向左）",
 
-        "pose_Rz（翻滚）", "< -15°", "明显左倾（头部明显向左肩倾斜）",
-        "pose_Rz（翻滚）", "-15° ~ -6°", "略微左倾（头部稍向左肩倾斜）",
-        "pose_Rz（翻滚）", "-6° ~ 6°", "基本水平（头部端正）",
-        "pose_Rz（翻滚）", "6° ~ 15°", "略微右倾（头部稍向右肩倾斜）",
-        "pose_Rz（翻滚）", "> 15°", "明显右倾（头部明显向右肩倾斜）",
+        "pose_Rz（翻滚）", "< -0.26 rad（约 -15°）", "明显左倾（头部明显向左肩倾斜）",
+        "pose_Rz（翻滚）", "-0.26 ~ -0.10 rad（约 -15°~-6°）", "略微左倾（头部稍向左肩倾斜）",
+        "pose_Rz（翻滚）", "-0.10 ~ 0.10 rad（约 -6°~6°）", "基本水平（头部端正）",
+        "pose_Rz（翻滚）", "0.10 ~ 0.26 rad（约 6°~15°）", "略微右倾（头部稍向右肩倾斜）",
+        "pose_Rz（翻滚）", "> 0.26 rad（约 > 15°）", "明显右倾（头部明显向右肩倾斜）",
     });
 
-    html += H2(QStringLiteral("视线方向 → 通俗描述"));
-    html += Note(QStringLiteral("<b>用途：</b>判断被观察者真正在看哪里。"
-        "注意 gaze_angle_x/y 是扣除头部姿态后的眼球注视方向，更能反映真实的注意力方向。"));
+    html += H2(QStringLiteral("2. 视线方向映射"));
+    html += Note(QStringLiteral("<b>用途：</b>判断被观察者真正在看哪里。</b>gaze_angle_x/y 已扣除头部姿态，反映眼球注视方向。"));
     html += MappingTable({
         "gaze_angle_x（水平注视）", "< -0.3 rad", "明显向右看（视线大幅偏右）",
         "gaze_angle_x（水平注视）", "-0.3 ~ -0.1 rad", "略微向右看（视线稍偏右）",
@@ -552,7 +516,7 @@ static QTextEdit* BuildOpenFaceMappingDoc() {
         "gaze_angle_y（垂直注视）", "> 0.3 rad", "明显向下看（视线大幅向下）",
     });
 
-    html += H2(QStringLiteral("AU 强度 → 通俗描述"));
+    html += H2(QStringLiteral("3. AU 强度映射"));
     html += Note(QStringLiteral("<b>用途：</b>判断某个面部动作的剧烈程度。"));
     html += MappingTable({
         "AU{n}_r", "0.0 ~ 0.4", "未激活 — 该面部动作未发生，对应肌肉处于放松状态",
@@ -561,7 +525,7 @@ static QTextEdit* BuildOpenFaceMappingDoc() {
         "AU{n}_r", "4.0 ~ 5.0", "强烈激活 — 面部动作非常明显，幅度达到最大范围",
     });
 
-    html += H2(QStringLiteral("检测置信度 → 通俗描述"));
+    html += H2(QStringLiteral("4. 检测置信度映射"));
     html += MappingTable({
         "confidence", "< 0.5", "较低 — 面部检测不确定，该帧的分析结果仅供参考，建议谨慎使用",
         "confidence", "0.5 ~ 0.7", "一般 — 检测可信度中等，基本分析结果可用",
@@ -575,9 +539,10 @@ static QTextEdit* BuildOpenFaceMappingDoc() {
 static QTextEdit* BuildMediaPipeMappingDoc() {
     QString html;
     html += QStringLiteral("<h2 style='color:%1;'>MediaPipe FaceMesh — 数值 → 文字描述对照</h2>").arg(ThemeManager::Instance().Primary());
-    html += Note(QStringLiteral("MediaPipe 的头部姿态映射规则与 OpenFace 相同，但使用了自己的 PnP 解算角度。"));
+    html += Note(QStringLiteral("<b>方向描述均从被拍摄人物自身视角出发。所有角度单位为度 (°)。</b><br>"
+        "MediaPipe 与 OpenFace 使用相同的相机坐标系和 ZYX 欧拉角分解约定，因此头部姿态映射规则一致。"));
 
-    html += H2(QStringLiteral("头部姿态 → 通俗描述"));
+    html += H2(QStringLiteral("1. 头部姿态映射"));
     html += MappingTable({
         "pitch（俯仰）", "< -25°", "明显上扬（脸朝上）",
         "pitch（俯仰）", "-25° ~ -10°", "略微上扬",
@@ -598,7 +563,7 @@ static QTextEdit* BuildMediaPipeMappingDoc() {
         "roll（翻滚）", "> 15°", "明显右倾",
     });
 
-    html += H2(QStringLiteral("468 个关键点坐标"));
+    html += H2(QStringLiteral("2. 468 个关键点坐标说明"));
     html += Note(QStringLiteral(
         "<b>说明：</b>468 个 FaceMesh 关键点的 x/y 坐标（像素）<b>不进行数值→文字的映射</b>，"
         "而是直接用于可视化目的：在图像上绘制面部线框网格、面颊轮廓曲线、"
@@ -618,10 +583,13 @@ static QTextEdit* BuildMediaPipeMappingDoc() {
 static QTextEdit* BuildL2csMappingDoc() {
     QString html;
     html += QStringLiteral("<h2 style='color:%1;'>L2CS-Net — 数值 → 文字描述对照</h2>").arg(ThemeManager::Instance().Primary());
-    html += Note(QStringLiteral("L2CS-Net 输出的是纯粹的视线方向数据。以下说明如何根据角度值和 3D 向量值判断视线方向。"));
+    html += Note(QStringLiteral("<b>方向描述均从被拍摄人物自身视角出发。所有角度单位为度 (°)。</b><br>"
+        "<b>注意：L2CS-Net 的视线方向符号约定与 OpenFace 相反！</b>"
+        "同一注视方向，L2CS 的 gaze_yaw 正值 = 向右看，而 OpenFace 的 gaze_angle_x 正值 = 向左看。"
+        "这是各自数学模型（GazeTo3D 公式 vs atan2 分解）决定的，不是错误。详见字段含义标签页。"));
 
-    html += H2(QStringLiteral("视线方向（角度值）→ 通俗描述"));
-    html += Note(QStringLiteral("<b>用途：</b>最直观地判断被观察者正在看哪里。正前方即镜头方向。"));
+    html += H2(QStringLiteral("1. 视线方向（角度值）映射"));
+    html += Note(QStringLiteral("<b>用途：</b>最直观地判断被观察者正在看哪里。"));
     html += MappingTable({
         "gaze_yaw（水平视线）", "< -25°", "明显向左看 — 被观察者正在关注画面或环境左侧",
         "gaze_yaw（水平视线）", "-25° ~ -10°", "略微向左看 — 视线稍偏画面左侧",
@@ -636,7 +604,7 @@ static QTextEdit* BuildL2csMappingDoc() {
         "gaze_pitch（垂直视线）", "> 25°", "明显向上看 — 被观察者正在关注上方（如天花板或屏幕上方）",
     });
 
-    html += H2(QStringLiteral("3D 视线向量 → 通俗描述"));
+    html += H2(QStringLiteral("2. 3D 视线向量映射"));
     html += Note(QStringLiteral("<b>用途：</b>用于计算视线在 3D 空间中的精确投射方向。"
         "向量分量的大小直接反映视线在各个方向上的偏转程度。"));
     html += MappingTable({
@@ -652,7 +620,7 @@ static QTextEdit* BuildL2csMappingDoc() {
         "大多数帧的 gaze_z 都在 -0.95 到 -1.0 之间（几乎完全朝前），"
         "这是因为人类大多数的注视方向都接近正前方。"));
 
-    html += H2(QStringLiteral("视线分析 → 通俗理解"));
+    html += H2(QStringLiteral("3. 综合判断规则"));
     html += Note(QStringLiteral(
         "<b>综合判断规则：</b><br>"
         "• gaze_yaw 和 gaze_pitch 都在 ±8° 以内 → 被观察者<b>正视画面中央</b><br>"
@@ -667,16 +635,16 @@ static QTextEdit* BuildL2csMappingDoc() {
 static QTextEdit* BuildMefargAuMappingDoc() {
     QString html;
     html += QStringLiteral("<h2 style='color:%1;'>MEFARG-AU — 数值 → 文字描述对照</h2>").arg(ThemeManager::Instance().Primary());
-    html += Note(QStringLiteral("以下说明了如何将 MEFARG-AU 输出的概率值转换为对面部表情的通俗理解。"));
+    html += Note(QStringLiteral("所有概率值范围为 0~1，由模型输出的余弦相似度经 clamp(0,1) 得到。"));
 
-    html += H2(QStringLiteral("AU 激活状态判断"));
+    html += H2(QStringLiteral("1. AU 激活状态判断"));
     html += Note(QStringLiteral("<b>用途：</b>快速判断某个面部动作是否正在发生。这是最常用的判断方法。"));
     html += MappingTable({
         "AU{n}_prob", "> 0.5", QStringLiteral("<span style='color:%1;'>● 激活</span> — 该面部动作正在发生，对应肌肉处于收缩状态").arg(ThemeManager::Instance().Success()),
         "AU{n}_prob", "≤ 0.5", QStringLiteral("<span style='color:%1;'>○ 未激活</span> — 该面部动作未发生，对应肌肉处于放松状态").arg(ThemeManager::Instance().TextDim()),
     });
 
-    html += H2(QStringLiteral("AU 强度层级"));
+    html += H2(QStringLiteral("2. AU 强度层级"));
     html += Note(QStringLiteral("<b>用途：</b>判断面部动作的明显程度。对于分析微表情（概率 0.5~0.7）特别有用。"));
     html += MappingTable({
         "AU{n}_prob", "0.0 ~ 0.3", "极弱 — 基本确定该 AU 未激活，脸部对应区域自然放松",
@@ -685,7 +653,7 @@ static QTextEdit* BuildMefargAuMappingDoc() {
         "AU{n}_prob", "0.7 ~ 1.0", "强激活 — 面部动作明显，肉眼可以清晰观察到对应的肌肉运动",
     });
 
-    html += H2(QStringLiteral("AU 按面部区域的分类"));
+    html += H2(QStringLiteral("3. AU 按面部区域的分类"));
     html += Note(QStringLiteral("<b>用途：</b>按面部区域理解不同的 AU 组合代表的含义。"
         "在任务详情界的面部表情分析中，AU 就是按照这些区域分组展示的。"));
     html += Note(QStringLiteral(
@@ -712,7 +680,7 @@ static QTextEdit* BuildMefargAuMappingDoc() {
         "控制脸颊的提拉和鼓起。脸颊提升（AU6）配合嘴角提升（AU12）构成<b>真正的微笑（Duchenne smile）</b>。<br>"
         "如果只有 AU12 激活而 AU6 未激活，可能是<b>社交性的假笑</b>。"));
 
-    html += H2(QStringLiteral("常见表情的 AU 组合"));
+    html += H2(QStringLiteral("4. 常见表情的 AU 组合"));
     html += Note(QStringLiteral("<b>用途：</b>将多个 AU 的激活状态综合起来判断整体表情。"
         "这是最接近人类理解表情的方式——不是看单个 AU，而是看多个 AU 的组合模式。"));
 

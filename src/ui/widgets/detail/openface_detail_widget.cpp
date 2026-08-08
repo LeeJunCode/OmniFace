@@ -14,26 +14,26 @@ namespace ui {
 namespace {
 
 QString PitchLabel(float p) {
-    if (p < -25) return QStringLiteral("明显上扬");
-    if (p < -10) return QStringLiteral("略微上扬");
-    if (p > 25)  return QStringLiteral("明显下俯");
-    if (p > 10)  return QStringLiteral("略微下俯");
+    if (p < -0.44f) return QStringLiteral("明显上扬");
+    if (p < -0.17f) return QStringLiteral("略微上扬");
+    if (p > 0.44f)  return QStringLiteral("明显下俯");
+    if (p > 0.17f)  return QStringLiteral("略微下俯");
     return {};
 }
 
 QString YawLabel(float y) {
-    if (y < -25) return QStringLiteral("明显右转");
-    if (y < -10) return QStringLiteral("略微右转");
-    if (y > 25)  return QStringLiteral("明显左转");
-    if (y > 10)  return QStringLiteral("略微左转");
+    if (y < -0.44f) return QStringLiteral("明显右转");
+    if (y < -0.17f) return QStringLiteral("略微右转");
+    if (y > 0.44f)  return QStringLiteral("明显左转");
+    if (y > 0.17f)  return QStringLiteral("略微左转");
     return {};
 }
 
 QString RollLabel(float r) {
-    if (r < -15) return QStringLiteral("明显左倾");
-    if (r < -6)  return QStringLiteral("略微左倾");
-    if (r > 15)  return QStringLiteral("明显右倾");
-    if (r > 6)   return QStringLiteral("略微右倾");
+    if (r < -0.26f) return QStringLiteral("明显左倾");
+    if (r < -0.10f) return QStringLiteral("略微左倾");
+    if (r > 0.26f)  return QStringLiteral("明显右倾");
+    if (r > 0.10f)  return QStringLiteral("略微右倾");
     return {};
 }
 
@@ -261,7 +261,7 @@ void OpenFaceDetailWidget::UpdateForFrame(int videoFrameNumber) {
         html += QStringLiteral("面部") + poseParts.join(QStringLiteral("，"));
     }
     html += QStringLiteral(" <span style='color:%1;font-size:11px;'>"
-        "(pitch: %2°, yaw: %3°, roll: %4°)</span></p>")
+        "(pitch: %2 rad, yaw: %3 rad, roll: %4 rad)</span></p>")
         .arg(textDim)
         .arg(d.pose_rx, 0, 'f', 1).arg(d.pose_ry, 0, 'f', 1).arg(d.pose_rz, 0, 'f', 1);
 
