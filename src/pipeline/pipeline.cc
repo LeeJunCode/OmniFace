@@ -62,6 +62,7 @@ public:
     DecodeWorker decoder_;
     OutputManager output_mgr_;
     TargetTracker target_tracker_;
+    std::string video_input_path_;
 
     std::atomic<bool> stop_requested_{false};
 
@@ -77,8 +78,7 @@ public:
         FrameResult result;
         result.frame_index = frame_index;
 
-        output_mgr_.Initialize(frame.size(), decoder_.GetFps(),
-                              modules_.detector.get());
+        output_mgr_.Initialize(frame.size(), decoder_.GetFps());
 
         auto t_start = std::chrono::steady_clock::now();
 
@@ -244,7 +244,7 @@ public:
 
                 if (result.analysis.valid && !config_.behavior.skip_analysis) {
                     modules_.face_analyzer->EnsureWriterInitialized(
-                        config_.video.input_path,
+                        video_input_path_,
                         output_mgr_.GetOutputDir(),
                         decoder_.GetFps(),
                         modules_.face_analyzer->CanAlignFace());
@@ -338,22 +338,13 @@ public:
     }
 
     void Run() {
-        if (config_.video.input_path.empty()) {
+        if (video_input_path_.empty()) {
             spdlog::error("No video input specified");
             return;
         }
 
-        decoder_.Start(config_.video.input_path);
-
-        cv::VideoWriter writer;
-        if (!config_.video.output_path.empty()) {
-            int fw = static_cast<int>(decoder_.GetFrameCount() > 0 ?
-                decoder_.GetFrameCount() : 0);
-            double fps = decoder_.GetFps();
-            writer.open(config_.video.output_path,
-                        cv::VideoWriter::fourcc('M', 'J', 'P', 'G'),
-                        fps, cv::Size(fw > 0 ? 0 : 0, 0));
-        }
+        decoder_.Start(video_input_path_);
+        output_mgr_.SetVideoSource(video_input_path_);
 
         const char* kWindowName = "OmniFace";
         if (!config_.behavior.headless) {
@@ -390,11 +381,9 @@ public:
                 cv::imshow(kWindowName, result.annotated_frame);
                 if (cv::waitKey(1) == 27) break;
             }
-            if (writer.isOpened()) writer.write(result.annotated_frame);
         }
 
         decoder_.Stop();
-        writer.release();
         if (!config_.behavior.headless) {
             cv::destroyAllWindows();
         }
@@ -423,7 +412,11 @@ void Pipeline::Stop() {
     impl_->decoder_.Stop();
 }
 
-void Pipeline::OpenVideo(const std::string& path) { impl_->decoder_.Start(path); }
+void Pipeline::OpenVideo(const std::string& path) {
+    impl_->video_input_path_ = path;
+    impl_->output_mgr_.SetVideoSource(path);
+    impl_->decoder_.Start(path);
+}
 
 bool Pipeline::PollFrame(cv::Mat& frame) { return impl_->decoder_.PollFrame(frame); }
 

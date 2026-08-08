@@ -34,6 +34,10 @@ struct FrameResult {
 
 using FrameCallback = std::function<void(const FrameResult&)>;
 
+// Deprecated: use BasePipeline + CreatePipeline() instead.
+// This class is kept for backward compatibility with existing CLI usage.
+// New code should use the Template Method hierarchy:
+//   OpenFacePipeline / MediaPipePipeline / L2csPipeline / MefargAuPipeline / RecognitionPipeline
 class Pipeline {
 public:
     explicit Pipeline(const std::string& cfg_path, FrameCallback callback = nullptr);

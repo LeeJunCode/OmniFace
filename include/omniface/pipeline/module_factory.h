@@ -27,8 +27,4 @@ struct PipelineModules {
 
 PipelineModules CreateModules(const PipelineConfig& config);
 
-FaceEmbedding ExtractReferenceEmbedding(const std::string& image_path,
-                                        detection::FaceDetector& detector,
-                                        recognition::FaceRecognizer& recognizer);
-
 }  // namespace omniface

@@ -74,8 +74,8 @@ public:
 private:
     std::unique_ptr<MediaPipePoseEstimator> pose_estimator_;
     MediaPipeAnalyzerConfig config_;
-    std::ofstream onnx_csv_;
-    bool onnx_csv_initialized_ = false;
+    std::ofstream csv_;
+    bool csv_initialized_ = false;
 };
 
 }  // namespace omniface::analysis::mediapipe

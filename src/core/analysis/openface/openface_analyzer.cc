@@ -36,7 +36,7 @@ std::string ResolveModelFile(const std::string& model_dir,
     fs::path base = fs::absolute(model_dir).lexically_normal();
     if (!explicit_file.empty())
         return (base / explicit_file).string();
-    return (base / "main_ceclm_general.txt").string();
+    return (base / "model" / "main_ceclm_general.txt").string();
 }
 
 }  // namespace
@@ -184,7 +184,7 @@ public:
         }
 
         FaceAnalysis::FaceAnalyserParameters fa_params(
-            model_dir.parent_path().string());
+            model_dir.string());
         fa_params.OptimizeForVideos();
         face_analyser_ = std::make_unique<FaceAnalysis::FaceAnalyser>(fa_params);
         spdlog::info("FaceAnalyser (AU) initialized (dynamic)");

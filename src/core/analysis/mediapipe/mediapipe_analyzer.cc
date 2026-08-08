@@ -119,34 +119,34 @@ void MediaPipeAnalyzer::DrawResults(cv::Mat& frame,
 }
 
 void MediaPipeAnalyzer::EnsureCsvOpen(const std::string& output_dir) {
-    if (onnx_csv_initialized_) return;
-    std::string csv_path = output_dir + "/onnx_analysis.csv";
-    onnx_csv_.open(csv_path);
-    if (onnx_csv_.is_open()) {
-        onnx_csv_ << "frame,timestamp,pitch,yaw,roll";
+    if (csv_initialized_) return;
+    std::string csv_path = output_dir + "/mediapipe_analysis.csv";
+    csv_.open(csv_path);
+    if (csv_.is_open()) {
+        csv_ << "frame,timestamp,pitch,yaw,roll";
         for (int i = 0; i < 468; ++i)
-            onnx_csv_ << ",x_" << i << ",y_" << i;
-        onnx_csv_ << "\n";
-        onnx_csv_initialized_ = true;
-        spdlog::info("ONNX CSV output: {}", csv_path);
+            csv_ << ",x_" << i << ",y_" << i;
+        csv_ << "\n";
+        csv_initialized_ = true;
+        spdlog::info("MediaPipe CSV output: {}", csv_path);
     }
 }
 
 void MediaPipeAnalyzer::WriteCsvRow(int frame_index, double timestamp,
                                      const MediaPipeAnalysisResult& result) {
-    if (!onnx_csv_.is_open()) return;
-    onnx_csv_ << frame_index << "," << timestamp << ","
-              << result.pose.pose.pitch << ","
-              << result.pose.pose.yaw << ","
-              << result.pose.pose.roll;
+    if (!csv_.is_open()) return;
+    csv_ << frame_index << "," << timestamp << ","
+         << result.pose.pose.pitch << ","
+         << result.pose.pose.yaw << ","
+         << result.pose.pose.roll;
     for (const auto& lm : result.pose.landmarks)
-        onnx_csv_ << "," << lm.x << "," << lm.y;
-    onnx_csv_ << "\n";
+        csv_ << "," << lm.x << "," << lm.y;
+    csv_ << "\n";
 }
 
 void MediaPipeAnalyzer::CloseCsv() {
-    if (onnx_csv_.is_open()) onnx_csv_.close();
-    onnx_csv_initialized_ = false;
+    if (csv_.is_open()) csv_.close();
+    csv_initialized_ = false;
 }
 
 }  // namespace omniface::analysis::mediapipe

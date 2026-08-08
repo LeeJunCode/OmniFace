@@ -43,8 +43,6 @@ PipelineConfig LoadPipelineConfig(const std::string& yaml_path) {
             SafeGet<std::string>(m, "detector_model", cfg.model.detector_model);
         cfg.model.recognizer_model =
             SafeGet<std::string>(m, "recognizer_model", cfg.model.recognizer_model);
-        cfg.model.reference_image =
-            SafeGet<std::string>(m, "reference_image", cfg.model.reference_image);
         cfg.model.detection_threads =
             SafeGet<int>(m, "detection_threads", cfg.model.detection_threads);
         cfg.model.recognition_threads =
@@ -128,11 +126,6 @@ PipelineConfig LoadPipelineConfig(const std::string& yaml_path) {
             SafeGet<int>(b, "target_recheck_interval", cfg.behavior.target_recheck_interval);
         cfg.behavior.headless =
             SafeGet<bool>(b, "headless", cfg.behavior.headless);
-    }
-
-    if (auto v = SafeSub(root, "video")) {
-        cfg.video.input_path = SafeGet<std::string>(v, "input_path", cfg.video.input_path);
-        cfg.video.output_path = SafeGet<std::string>(v, "output_path", cfg.video.output_path);
     }
 
     if (auto l = SafeSub(root, "log")) {
@@ -238,7 +231,6 @@ void SavePipelineConfig(const std::string& yaml_path, const PipelineConfig& cfg)
 
     root["model"]["detector_model"] = cfg.model.detector_model;
     root["model"]["recognizer_model"] = cfg.model.recognizer_model;
-    root["model"]["reference_image"] = cfg.model.reference_image;
     root["model"]["detection_threads"] = cfg.model.detection_threads;
     root["model"]["recognition_threads"] = cfg.model.recognition_threads;
     root["model"]["detection_input_width"] = cfg.model.detection_input_width;
@@ -298,9 +290,6 @@ void SavePipelineConfig(const std::string& yaml_path, const PipelineConfig& cfg)
     root["behavior"]["max_frame_width"] = cfg.behavior.max_frame_width;
     root["behavior"]["target_recheck_interval"] = cfg.behavior.target_recheck_interval;
     root["behavior"]["headless"] = cfg.behavior.headless;
-
-    root["video"]["input_path"] = cfg.video.input_path;
-    root["video"]["output_path"] = cfg.video.output_path;
 
     root["log"]["level"] = cfg.log.level;
 

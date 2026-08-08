@@ -49,7 +49,6 @@ inline AnalysisBackend AnalysisBackendFromString(const std::string& s) {
 struct ModelConfig {
     std::string detector_model = "models/buffalo_sc/det_500m.onnx";
     std::string recognizer_model = "models/buffalo_sc/w600k_mbf.onnx";
-    std::string reference_image;
     int detection_threads = 4;
     int recognition_threads = 4;
     int detection_input_width = 640;
@@ -83,11 +82,6 @@ struct L2csConfig {
     std::string model = "mobilenetv2_gaze.onnx";
     bool draw_gaze = true;
     InferenceDevice device = InferenceDevice::kCPU;
-};
-
-struct VideoSourceConfig {
-    std::string input_path;
-    std::string output_path;
 };
 
 struct LogConfig {
@@ -146,7 +140,6 @@ struct PipelineConfig {
     ModelConfig model;
     ThresholdConfig thresholds;
     PipelineBehavior behavior;
-    VideoSourceConfig video;
     LogConfig log;
     OpenFaceConfig openface;
     MediaPipeConfig onnx;
