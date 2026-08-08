@@ -1,10 +1,13 @@
 #include "omniface/ui/pages/task_history_page.h"
 
+#include <QDir>
+#include <QFileInfo>
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QLabel>
 #include <QMenu>
 #include <QMessageBox>
+#include <QProcess>
 #include <QPushButton>
 #include <QTableView>
 #include <QVBoxLayout>
@@ -404,11 +407,10 @@ void TaskHistoryPage::SetupUI() {
     table_view_->setSortingEnabled(true);
     table_view_->setSelectionBehavior(QAbstractItemView::SelectRows);
     table_view_->setSelectionMode(QAbstractItemView::SingleSelection);
-    table_view_->setAlternatingRowColors(true);
     table_view_->setContextMenuPolicy(Qt::CustomContextMenu);
     table_view_->setEditTriggers(QAbstractItemView::DoubleClicked | QAbstractItemView::EditKeyPressed);
     table_view_->verticalHeader()->setVisible(false);
-    table_view_->setShowGrid(false);
+    table_view_->setShowGrid(true);
 
     auto* hdr = table_view_->horizontalHeader();
     hdr->setStretchLastSection(true);
@@ -441,19 +443,18 @@ void TaskHistoryPage::SetupUI() {
     table_view_->setStyleSheet(QString(
         "QTableView {"
         "  background: %1; border: 1px solid %2;"
-        "  gridline-color: %3;"
-        "  selection-background-color: %4;"
-        "  selection-color: %5;"
+        "  gridline-color: %2;"
+        "  selection-background-color: %3;"
+        "  selection-color: %4;"
         "}"
         "QTableView::item { padding: 6px 8px; }"
-        "QTableView::item:alternate { background: %6; }"
         "QHeaderView::section {"
-        "  background: %3; color: %7;"
+        "  background: %5; color: %6;"
         "  border: none; border-right: 1px solid %2;"
         "  border-bottom: 2px solid %2;"
         "  padding: 6px 8px; font-weight: bold;"
-        "}").arg(tm.DeepBg(), tm.Border(), tm.SurfaceBg(), tm.SelectedBg(),
-                 tm.TextPrimary(), tm.AltRow(), tm.TextMuted()));
+        "}").arg(tm.DeepBg(), tm.Border(), tm.SelectedBg(),
+                 tm.TextPrimary(), tm.SurfaceBg(), tm.TextMuted()));
 
     connect(table_view_, &QTableView::customContextMenuRequested,
             this, &TaskHistoryPage::OnContextMenu);
@@ -492,11 +493,11 @@ void TaskHistoryPage::SetupUI() {
     batch_delete_btn_->setEnabled(false);
     batch_delete_btn_->setCursor(Qt::PointingHandCursor);
     batch_delete_btn_->setStyleSheet(QString(
-        "QPushButton { background: %1; color: %2; border: none;"
+        "QPushButton { background: %1; color: %2; border: 1px solid %3;"
         "  border-radius: 4px; padding: 6px 16px; font-weight: bold; }"
-        "QPushButton:hover { background: %3; }"
-        "QPushButton:disabled { background: %4; color: %5; }").arg(
-            tm.Error(), tm.White(), tm.ErrorBg(), tm.HoverBg(), tm.TextDim()));
+        "QPushButton:hover { background: %4; }"
+        "QPushButton:disabled { background: %5; color: %6; }").arg(
+            tm.Error(), tm.White(), tm.Border(), tm.ErrorBg(), tm.HoverBg(), tm.TextDim()));
     connect(batch_delete_btn_, &QPushButton::clicked, this, &TaskHistoryPage::OnBatchDelete);
     bottom_bar->addWidget(batch_delete_btn_);
 
@@ -584,28 +585,27 @@ void TaskHistoryPage::ReapplyTheme() {
     table_view_->setStyleSheet(QString(
         "QTableView {"
         "  background: %1; border: 1px solid %2;"
-        "  gridline-color: %3;"
-        "  selection-background-color: %4;"
-        "  selection-color: %5;"
+        "  gridline-color: %2;"
+        "  selection-background-color: %3;"
+        "  selection-color: %4;"
         "}"
         "QTableView::item { padding: 6px 8px; }"
-        "QTableView::item:alternate { background: %6; }"
         "QHeaderView::section {"
-        "  background: %3; color: %7;"
+        "  background: %5; color: %6;"
         "  border: none; border-right: 1px solid %2;"
         "  border-bottom: 2px solid %2;"
         "  padding: 6px 8px; font-weight: bold;"
-        "}").arg(tm.DeepBg(), tm.Border(), tm.SurfaceBg(), tm.SelectedBg(),
-                 tm.TextPrimary(), tm.AltRow(), tm.TextMuted()));
+        "}").arg(tm.DeepBg(), tm.Border(), tm.SelectedBg(),
+                 tm.TextPrimary(), tm.SurfaceBg(), tm.TextMuted()));
 
     count_label_->setStyleSheet(QString("QLabel { color: %1; padding: 2px 0; }").arg(tm.TextDim()));
 
     batch_delete_btn_->setStyleSheet(QString(
-        "QPushButton { background: %1; color: %2; border: none;"
+        "QPushButton { background: %1; color: %2; border: 1px solid %3;"
         "  border-radius: 4px; padding: 6px 16px; font-weight: bold; }"
-        "QPushButton:hover { background: %3; }"
-        "QPushButton:disabled { background: %4; color: %5; }").arg(
-            tm.Error(), tm.White(), tm.ErrorBg(), tm.HoverBg(), tm.TextDim()));
+        "QPushButton:hover { background: %4; }"
+        "QPushButton:disabled { background: %5; color: %6; }").arg(
+            tm.Error(), tm.White(), tm.Border(), tm.ErrorBg(), tm.HoverBg(), tm.TextDim()));
 }
 
 // ─── Slots ───────────────────────────────────────────────────
@@ -679,6 +679,7 @@ void TaskHistoryPage::OnContextMenu(const QPoint& pos) {
     auto* view_action = menu.addAction(QStringLiteral("查看任务详情"));
     auto* edit_action = menu.addAction(QStringLiteral("编辑信息"));
     auto* csv_action = menu.addAction(QStringLiteral("查看CSV"));
+    auto* open_dir_action = menu.addAction(QStringLiteral("打开文件所在位置"));
     menu.addSeparator();
     auto* delete_action = menu.addAction(QStringLiteral("删除任务"));
 
@@ -691,6 +692,17 @@ void TaskHistoryPage::OnContextMenu(const QPoint& pos) {
         emit EditRequested(task_id);
     } else if (chosen == csv_action) {
         emit ViewCsvRequested(task_id);
+    } else if (chosen == open_dir_action) {
+        auto rec = task_repo_->FindById(task_id);
+        if (rec) {
+            QString dir;
+            if (!rec->output_dir.empty())
+                dir = QString::fromStdString(rec->output_dir);
+            else if (!rec->csv_path.empty())
+                dir = QFileInfo(QString::fromStdString(rec->csv_path)).absolutePath();
+            if (!dir.isEmpty())
+                QProcess::startDetached(QStringLiteral("explorer"), {QDir::toNativeSeparators(dir)});
+        }
     } else if (chosen == delete_action) {
         OnDeleteTask();
     }

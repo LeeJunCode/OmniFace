@@ -1,8 +1,9 @@
 <RCC>
     <qresource prefix="/icons">
+        <file alias="home">icons/home.svg</file>
+        <file alias="processing">icons/processing.svg</file>
         <file alias="video">icons/video.svg</file>
         <file alias="image">icons/image.svg</file>
-        <file alias="processing">icons/processing.svg</file>
         <file alias="history">icons/history.svg</file>
     </qresource>
 </RCC>

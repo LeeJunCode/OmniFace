@@ -93,10 +93,9 @@ void VideoSelectionDialog::SetupUI() {
     table_view_->setSortingEnabled(true);
     table_view_->setSelectionBehavior(QAbstractItemView::SelectRows);
     table_view_->setSelectionMode(QAbstractItemView::SingleSelection);
-    table_view_->setAlternatingRowColors(true);
     table_view_->setEditTriggers(QAbstractItemView::NoEditTriggers);
     table_view_->verticalHeader()->setVisible(false);
-    table_view_->setShowGrid(false);
+    table_view_->setShowGrid(true);
     table_view_->setColumnHidden(VideoTableModel::ColCheck, true);
 
     auto* hdr = table_view_->horizontalHeader();
@@ -118,20 +117,18 @@ void VideoSelectionDialog::SetupUI() {
     table_view_->setStyleSheet(QStringLiteral(
         "QTableView {"
         "  background: %1; border: 1px solid %2;"
-        "  gridline-color: %3;"
-        "  selection-background-color: %4;"
-        "  selection-color: %5;"
+        "  gridline-color: %2;"
+        "  selection-background-color: %3;"
+        "  selection-color: %4;"
         "}"
         "QTableView::item { padding: 6px 8px; }"
-        "QTableView::item:alternate { background: %6; }"
         "QHeaderView::section {"
-        "  background: %7; color: %8;"
-        "  border: none; border-right: 1px solid %9;"
-        "  border-bottom: 2px solid %10;"
+        "  background: %5; color: %6;"
+        "  border: none; border-right: 1px solid %2;"
+        "  border-bottom: 2px solid %2;"
         "  padding: 6px 8px; font-weight: bold;"
-        "}").arg(tm.DeepBg(), tm.Border(), tm.SurfaceBg(), tm.SelectedBg(),
-                tm.TextPrimary(), tm.AltRow(), tm.SurfaceBg(), tm.TextMuted(),
-                tm.Border(), tm.Border()));
+        "}").arg(tm.DeepBg(), tm.Border(), tm.SelectedBg(),
+                tm.TextPrimary(), tm.SurfaceBg(), tm.TextMuted()));
 
     connect(table_view_->selectionModel(), &QItemSelectionModel::selectionChanged,
             this, &VideoSelectionDialog::OnSelectionChanged);

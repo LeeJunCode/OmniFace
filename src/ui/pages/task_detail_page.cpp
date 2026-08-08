@@ -144,7 +144,7 @@ void TaskDetailPage::SetupUI() {
         return btn;
     };
     raw_btn_ = makeModeBtn(QStringLiteral("原始信息"));
-    analysis_btn_ = makeModeBtn(QStringLiteral("分析数据"));
+    analysis_btn_ = makeModeBtn(QStringLiteral("处理结果"));
     connect(raw_btn_, &QPushButton::clicked, this, &TaskDetailPage::OnShowRawInfo);
     connect(analysis_btn_, &QPushButton::clicked, this, &TaskDetailPage::OnShowAnalysis);
     analysis_btn_->setChecked(true);
@@ -155,9 +155,10 @@ void TaskDetailPage::SetupUI() {
     csv_btn_ = new QPushButton(QStringLiteral("查看CSV"), this);
     csv_btn_->setCursor(Qt::PointingHandCursor);
     csv_btn_->setStyleSheet(QString(
-        "QPushButton { background: transparent; color: %2; border: none;"
-        "  border-radius: 4px; padding: 6px 12px; font-size: 11px; }"
-        "QPushButton:hover { background: %1; }").arg(tm.HoverBg(), tm.TextMuted()));
+        "QPushButton { background: %1; color: %2; border: 1px solid %3;"
+        "  border-radius: 4px; padding: 6px 16px; font-weight: bold; }"
+        "QPushButton:hover { background: %4; color: %2; }")
+        .arg(tm.SurfaceBg(), tm.TextPrimary(), tm.Border(), tm.HoverBg()));
     connect(csv_btn_, &QPushButton::clicked, this, [this]() {
         if (task_id_ > 0) emit ViewCsvRequested(task_id_);
     });
@@ -320,9 +321,10 @@ void TaskDetailPage::ReapplyTheme() {
     analysis_btn_->setStyleSheet(modeBtnStyle());
 
     csv_btn_->setStyleSheet(QString(
-        "QPushButton { background: transparent; color: %2; border: none;"
-        "  border-radius: 4px; padding: 6px 12px; font-size: 11px; }"
-        "QPushButton:hover { background: %1; }").arg(tm.HoverBg(), tm.TextMuted()));
+        "QPushButton { background: %1; color: %2; border: 1px solid %3;"
+        "  border-radius: 4px; padding: 6px 16px; font-weight: bold; }"
+        "QPushButton:hover { background: %4; color: %2; }")
+        .arg(tm.SurfaceBg(), tm.TextPrimary(), tm.Border(), tm.HoverBg()));
 
     output_frame_label_->setStyleSheet(QString("QLabel { color: %1; font-size: 12px; padding: 2px; }").arg(tm.TextMuted()));
 

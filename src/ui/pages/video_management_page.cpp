@@ -1,6 +1,7 @@
 #include "omniface/ui/pages/video_management_page.h"
 
 #include <QDate>
+#include <QDir>
 #include <QFile>
 #include <QFileInfo>
 #include <QHBoxLayout>
@@ -9,6 +10,7 @@
 #include <QLineEdit>
 #include <QMenu>
 #include <QMessageBox>
+#include <QProcess>
 #include <QPushButton>
 #include <QTableView>
 #include <QVBoxLayout>
@@ -308,6 +310,9 @@ void VideoManagementPage::SetupUI() {
     connect(date_to_, &DatePicker::dateChanged, this, &VideoManagementPage::OnDateToChanged);
     top_bar->addWidget(date_to_);
 
+    date_from_->setFixedHeight(28);
+    date_to_->setFixedHeight(28);
+
     auto* reset_btn = new QPushButton(QStringLiteral("重置"), this);
     reset_btn_ = reset_btn;
     reset_btn->setCursor(Qt::PointingHandCursor);
@@ -363,11 +368,10 @@ void VideoManagementPage::SetupUI() {
     table_view_->setSortingEnabled(true);
     table_view_->setSelectionBehavior(QAbstractItemView::SelectRows);
     table_view_->setSelectionMode(QAbstractItemView::SingleSelection);
-    table_view_->setAlternatingRowColors(true);
     table_view_->setContextMenuPolicy(Qt::CustomContextMenu);
     table_view_->setEditTriggers(QAbstractItemView::NoEditTriggers);
     table_view_->verticalHeader()->setVisible(false);
-    table_view_->setShowGrid(false);
+    table_view_->setShowGrid(true);
 
     auto* hdr = table_view_->horizontalHeader();
     hdr->setStretchLastSection(true);
@@ -399,21 +403,19 @@ void VideoManagementPage::SetupUI() {
     table_view_->setStyleSheet(QString(
         "QTableView {"
         "  background: %1; border: 1px solid %2;"
-        "  gridline-color: %3;"
-        "  selection-background-color: %4;"
-        "  selection-color: %5;"
+        "  gridline-color: %2;"
+        "  selection-background-color: %3;"
+        "  selection-color: %4;"
         "}"
         "QTableView::item { padding: 6px 8px; }"
-        "QTableView::item:alternate { background: %6; }"
         "QHeaderView::section {"
-        "  background: %7; color: %8;"
-        "  border: none; border-right: 1px solid %9;"
-        "  border-bottom: 2px solid %10;"
+        "  background: %5; color: %6;"
+        "  border: none; border-right: 1px solid %2;"
+        "  border-bottom: 2px solid %2;"
         "  padding: 6px 8px; font-weight: bold;"
         "}"
-    ).arg(tm.DeepBg(), tm.Border(), tm.SurfaceBg(), tm.SelectedBg(),
-          tm.TextPrimary(), tm.AltRow(), tm.SurfaceBg(), tm.TextMuted(),
-          tm.Border(), tm.Border()));
+    ).arg(tm.DeepBg(), tm.Border(), tm.SelectedBg(),
+          tm.TextPrimary(), tm.SurfaceBg(), tm.TextMuted()));
 
     connect(table_view_, &QTableView::customContextMenuRequested,
             this, &VideoManagementPage::OnContextMenu);
@@ -441,11 +443,11 @@ void VideoManagementPage::SetupUI() {
     batch_delete_btn_->setEnabled(false);
     batch_delete_btn_->setCursor(Qt::PointingHandCursor);
     batch_delete_btn_->setStyleSheet(QString(
-        "QPushButton { background: %1; color: %2; border: none;"
+        "QPushButton { background: %1; color: %2; border: 1px solid %3;"
         "  border-radius: 4px; padding: 6px 16px; font-weight: bold; }"
-        "QPushButton:hover { background: %3; }"
-        "QPushButton:disabled { background: %4; color: %5; }"
-    ).arg(tm.Error(), tm.White(), tm.ErrorBg(), tm.HoverBg(), tm.TextDim()));
+        "QPushButton:hover { background: %4; }"
+        "QPushButton:disabled { background: %5; color: %6; }"
+    ).arg(tm.Error(), tm.White(), tm.Border(), tm.ErrorBg(), tm.HoverBg(), tm.TextDim()));
     connect(batch_delete_btn_, &QPushButton::clicked, this, &VideoManagementPage::OnBatchDelete);
     bottom_bar->addWidget(batch_delete_btn_);
 
@@ -510,28 +512,26 @@ void VideoManagementPage::ReapplyTheme() {
     table_view_->setStyleSheet(QString(
         "QTableView {"
         "  background: %1; border: 1px solid %2;"
-        "  gridline-color: %3;"
-        "  selection-background-color: %4;"
-        "  selection-color: %5;"
+        "  gridline-color: %2;"
+        "  selection-background-color: %3;"
+        "  selection-color: %4;"
         "}"
         "QTableView::item { padding: 6px 8px; }"
-        "QTableView::item:alternate { background: %6; }"
         "QHeaderView::section {"
-        "  background: %7; color: %8;"
-        "  border: none; border-right: 1px solid %9;"
-        "  border-bottom: 2px solid %10;"
+        "  background: %5; color: %6;"
+        "  border: none; border-right: 1px solid %2;"
+        "  border-bottom: 2px solid %2;"
         "  padding: 6px 8px; font-weight: bold;"
         "}"
-    ).arg(tm.DeepBg(), tm.Border(), tm.SurfaceBg(), tm.SelectedBg(),
-          tm.TextPrimary(), tm.AltRow(), tm.SurfaceBg(), tm.TextMuted(),
-          tm.Border(), tm.Border()));
+    ).arg(tm.DeepBg(), tm.Border(), tm.SelectedBg(),
+          tm.TextPrimary(), tm.SurfaceBg(), tm.TextMuted()));
     count_label_->setStyleSheet(QString("QLabel { color: %1; padding: 2px 0; }").arg(tm.TextDim()));
     batch_delete_btn_->setStyleSheet(QString(
-        "QPushButton { background: %1; color: %2; border: none;"
+        "QPushButton { background: %1; color: %2; border: 1px solid %3;"
         "  border-radius: 4px; padding: 6px 16px; font-weight: bold; }"
-        "QPushButton:hover { background: %3; }"
-        "QPushButton:disabled { background: %4; color: %5; }"
-    ).arg(tm.Error(), tm.White(), tm.ErrorBg(), tm.HoverBg(), tm.TextDim()));
+        "QPushButton:hover { background: %4; }"
+        "QPushButton:disabled { background: %5; color: %6; }"
+    ).arg(tm.Error(), tm.White(), tm.Border(), tm.ErrorBg(), tm.HoverBg(), tm.TextDim()));
 }
 
 // ─── Slots ───────────────────────────────────────────────────
@@ -609,6 +609,7 @@ void VideoManagementPage::OnContextMenu(const QPoint& pos) {
 
     auto* view_action = menu.addAction(QStringLiteral("查看详情"));
     auto* edit_action = menu.addAction(QStringLiteral("编辑信息"));
+    auto* open_dir_action = menu.addAction(QStringLiteral("打开文件所在位置"));
     menu.addSeparator();
     auto* delete_action = menu.addAction(QStringLiteral("删除"));
 
@@ -619,6 +620,12 @@ void VideoManagementPage::OnContextMenu(const QPoint& pos) {
         emit ViewDetailsRequested(vid);
     } else if (chosen == edit_action) {
         emit EditRequested(vid);
+    } else if (chosen == open_dir_action) {
+        auto rec = repo_->FindById(vid);
+        if (rec && !rec->saved_path.empty()) {
+            QString path = QDir::toNativeSeparators(QString::fromStdString(rec->saved_path));
+            QProcess::startDetached(QStringLiteral("explorer"), {QStringLiteral("/select,"), path});
+        }
     } else if (chosen == delete_action) {
         OnDeleteVideo();
     }

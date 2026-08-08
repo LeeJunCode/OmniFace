@@ -1,5 +1,6 @@
 #include "omniface/ui/pages/image_management_page.h"
 
+#include <QDir>
 #include <QFile>
 #include <QFileInfo>
 #include <QHBoxLayout>
@@ -8,6 +9,7 @@
 #include <QLineEdit>
 #include <QMenu>
 #include <QMessageBox>
+#include <QProcess>
 #include <QPushButton>
 #include <QTableView>
 #include <QVBoxLayout>
@@ -222,10 +224,10 @@ void ImageManagementPage::SetupUI() {
     reset_btn->setCursor(Qt::PointingHandCursor);
     reset_btn->setStyleSheet(QString(
         "QPushButton {"
-        "  background: %1; color: %2; border: none;"
+        "  background: %1; color: %2; border: 1px solid %3;"
         "  border-radius: 4px; padding: 6px 12px;"
         "}"
-        "QPushButton:hover { background: %3; }").arg("transparent", tm.TextPrimary(), tm.HoverBg()));
+        "QPushButton:hover { background: %4; }").arg("transparent", tm.TextPrimary(), tm.Border(), tm.HoverBg()));
     connect(reset_btn, &QPushButton::clicked, this, &ImageManagementPage::OnResetFilters);
     top_bar->addWidget(reset_btn);
 
@@ -269,11 +271,10 @@ void ImageManagementPage::SetupUI() {
     table_view_->setSortingEnabled(true);
     table_view_->setSelectionBehavior(QAbstractItemView::SelectRows);
     table_view_->setSelectionMode(QAbstractItemView::SingleSelection);
-    table_view_->setAlternatingRowColors(true);
     table_view_->setContextMenuPolicy(Qt::CustomContextMenu);
     table_view_->setEditTriggers(QAbstractItemView::NoEditTriggers);
     table_view_->verticalHeader()->setVisible(false);
-    table_view_->setShowGrid(false);
+    table_view_->setShowGrid(true);
 
     auto* hdr = table_view_->horizontalHeader();
     hdr->setStretchLastSection(true);
@@ -301,19 +302,18 @@ void ImageManagementPage::SetupUI() {
     table_view_->setStyleSheet(QString(
         "QTableView {"
         "  background: %1; border: 1px solid %2;"
-        "  gridline-color: %3;"
-        "  selection-background-color: %4;"
-        "  selection-color: %5;"
+        "  gridline-color: %2;"
+        "  selection-background-color: %3;"
+        "  selection-color: %4;"
         "}"
         "QTableView::item { padding: 6px 8px; }"
-        "QTableView::item:alternate { background: %6; }"
         "QHeaderView::section {"
-        "  background: %3; color: %7;"
+        "  background: %5; color: %6;"
         "  border: none; border-right: 1px solid %2;"
         "  border-bottom: 2px solid %2;"
         "  padding: 6px 8px; font-weight: bold;"
-        "}").arg(tm.DeepBg(), tm.Border(), tm.SurfaceBg(), tm.SelectedBg(),
-                 tm.TextPrimary(), tm.AltRow(), tm.TextMuted()));
+        "}").arg(tm.DeepBg(), tm.Border(), tm.SelectedBg(),
+                 tm.TextPrimary(), tm.SurfaceBg(), tm.TextMuted()));
 
     connect(table_view_, &QTableView::customContextMenuRequested,
             this, &ImageManagementPage::OnContextMenu);
@@ -341,11 +341,11 @@ void ImageManagementPage::SetupUI() {
     batch_delete_btn_->setEnabled(false);
     batch_delete_btn_->setCursor(Qt::PointingHandCursor);
     batch_delete_btn_->setStyleSheet(QString(
-        "QPushButton { background: %1; color: %2; border: none;"
+        "QPushButton { background: %1; color: %2; border: 1px solid %3;"
         "  border-radius: 4px; padding: 6px 16px; font-weight: bold; }"
-        "QPushButton:hover { background: %3; }"
-        "QPushButton:disabled { background: %4; color: %5; }").arg(
-            tm.Error(), tm.White(), tm.ErrorBg(), tm.HoverBg(), tm.TextDim()));
+        "QPushButton:hover { background: %4; }"
+        "QPushButton:disabled { background: %5; color: %6; }").arg(
+            tm.Error(), tm.White(), tm.Border(), tm.ErrorBg(), tm.HoverBg(), tm.TextDim()));
     connect(batch_delete_btn_, &QPushButton::clicked, this, &ImageManagementPage::OnBatchDelete);
     bottom_bar->addWidget(batch_delete_btn_);
 
@@ -409,27 +409,26 @@ void ImageManagementPage::ReapplyTheme() {
     table_view_->setStyleSheet(QString(
         "QTableView {"
         "  background: %1; border: 1px solid %2;"
-        "  gridline-color: %3;"
-        "  selection-background-color: %4;"
-        "  selection-color: %5;"
+        "  gridline-color: %2;"
+        "  selection-background-color: %3;"
+        "  selection-color: %4;"
         "}"
         "QTableView::item { padding: 6px 8px; }"
-        "QTableView::item:alternate { background: %6; }"
         "QHeaderView::section {"
-        "  background: %3; color: %7;"
+        "  background: %5; color: %6;"
         "  border: none; border-right: 1px solid %2;"
         "  border-bottom: 2px solid %2;"
         "  padding: 6px 8px; font-weight: bold;"
         "}"
-    ).arg(tm.DeepBg(), tm.Border(), tm.SurfaceBg(), tm.SelectedBg(),
-          tm.TextPrimary(), tm.AltRow(), tm.TextMuted()));
+    ).arg(tm.DeepBg(), tm.Border(), tm.SelectedBg(),
+          tm.TextPrimary(), tm.SurfaceBg(), tm.TextMuted()));
     count_label_->setStyleSheet(QString("QLabel { color: %1; padding: 2px 0; }").arg(tm.TextDim()));
     batch_delete_btn_->setStyleSheet(QString(
-        "QPushButton { background: %1; color: %2; border: none;"
+        "QPushButton { background: %1; color: %2; border: 1px solid %3;"
         "  border-radius: 4px; padding: 6px 16px; font-weight: bold; }"
-        "QPushButton:hover { background: %3; }"
-        "QPushButton:disabled { background: %4; color: %5; }"
-    ).arg(tm.Error(), tm.White(), tm.ErrorBg(), tm.HoverBg(), tm.TextDim()));
+        "QPushButton:hover { background: %4; }"
+        "QPushButton:disabled { background: %5; color: %6; }"
+    ).arg(tm.Error(), tm.White(), tm.Border(), tm.ErrorBg(), tm.HoverBg(), tm.TextDim()));
 }
 
 // ─── Slots ───────────────────────────────────────────────────
@@ -485,6 +484,7 @@ void ImageManagementPage::OnContextMenu(const QPoint& pos) {
 
     auto* view_action = menu.addAction(QStringLiteral("查看详情"));
     auto* edit_action = menu.addAction(QStringLiteral("编辑图片信息"));
+    auto* open_dir_action = menu.addAction(QStringLiteral("打开文件所在位置"));
     menu.addSeparator();
     auto* delete_action = menu.addAction(QStringLiteral("删除"));
 
@@ -495,6 +495,12 @@ void ImageManagementPage::OnContextMenu(const QPoint& pos) {
         emit ViewDetailsRequested(img_id);
     } else if (chosen == edit_action) {
         emit EditRequested(img_id);
+    } else if (chosen == open_dir_action) {
+        auto rec = repo_->FindById(img_id);
+        if (rec && !rec->saved_path.empty()) {
+            QString path = QDir::toNativeSeparators(QString::fromStdString(rec->saved_path));
+            QProcess::startDetached(QStringLiteral("explorer"), {QStringLiteral("/select,"), path});
+        }
     } else if (chosen == delete_action) {
         OnDeleteImage();
     }

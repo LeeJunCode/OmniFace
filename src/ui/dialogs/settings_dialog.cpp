@@ -32,6 +32,7 @@ QDoubleSpinBox* MakeDoubleSpin(QWidget* parent, double min, double max, double s
     spin->setRange(min, max);
     spin->setSingleStep(step);
     spin->setDecimals(decimals);
+    spin->setButtonSymbols(QAbstractSpinBox::NoButtons);
     spin->setStyleSheet(QStringLiteral(
         "QDoubleSpinBox { background: %1; border: 1px solid %2;"
         "  border-radius: 4px; padding: 5px 6px; color: %3; }"
@@ -43,6 +44,7 @@ QSpinBox* MakeSpinBox(QWidget* parent, int min, int max) {
     auto& tm = ThemeManager::Instance();
     auto* spin = new QSpinBox(parent);
     spin->setRange(min, max);
+    spin->setButtonSymbols(QAbstractSpinBox::NoButtons);
     spin->setStyleSheet(QStringLiteral(
         "QSpinBox { background: %1; border: 1px solid %2;"
         "  border-radius: 4px; padding: 5px 6px; color: %3; }"
@@ -211,9 +213,8 @@ QWidget* SettingsDialog::CreateGeneralPanel() {
             this, &SettingsDialog::OnDeviceChanged);
     layout->addRow(QStringLiteral("推理加速:"), device_combo_);
 
-    log_level_combo_ = MakeCombo(this, {QStringLiteral("trace"), QStringLiteral("debug"),
-                                        QStringLiteral("info"), QStringLiteral("warn"),
-                                        QStringLiteral("error"), QStringLiteral("critical"),
+    log_level_combo_ = MakeCombo(this, {QStringLiteral("debug"),
+                                        QStringLiteral("info"),
                                         QStringLiteral("off")});
     log_level_combo_->setCurrentText(QStringLiteral("debug"));
     layout->addRow(QStringLiteral("日志级别:"), log_level_combo_);
@@ -742,6 +743,12 @@ void SettingsDialog::OnDeviceChanged(int index) {
 }
 
 void SettingsDialog::OnResetAll() {
+    auto result = QMessageBox::warning(this,
+        QStringLiteral("恢复默认设置"),
+        QStringLiteral("确定要将所有参数恢复为默认值吗？\n\n此操作将重置所有设置项。"),
+        QMessageBox::Yes | QMessageBox::No,
+        QMessageBox::No);
+    if (result != QMessageBox::Yes) return;
     config_ = {};
     LoadToUI();
 }

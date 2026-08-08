@@ -64,6 +64,7 @@ void EditVideoDialog::SetupUI(const db::VideoRecord& rec) {
     record_time_edit_ = new DatePicker(this);
     record_time_edit_->setDisplayFormat(QStringLiteral("yyyy-MM-dd"));
     record_time_edit_->setDate(QDate::currentDate());
+    record_time_edit_->setFixedHeight(28);
     if (!rec.record_time.empty()) {
         auto d = QDate::fromString(QString::fromStdString(rec.record_time).left(10), QStringLiteral("yyyy-MM-dd"));
         if (d.isValid()) record_time_edit_->setDate(d);

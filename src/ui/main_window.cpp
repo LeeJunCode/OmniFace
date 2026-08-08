@@ -258,7 +258,9 @@ void MainWindow::SetupMenuBar() {
         dlg.exec();
     });
 
-    auto* theme_menu = menuBar()->addMenu(QStringLiteral("主题"));
+    settings_menu->addSeparator();
+
+    auto* theme_menu = settings_menu->addMenu(QStringLiteral("主题"));
     auto* dark_action = theme_menu->addAction(QStringLiteral("暗色模式"));
     dark_action->setCheckable(true);
     auto* light_action = theme_menu->addAction(QStringLiteral("亮色模式"));
@@ -707,7 +709,9 @@ void MainWindow::OnViewCsv(int64_t task_id) {
     auto* dlg = new QDialog(this);
     dlg->setWindowTitle(QStringLiteral("CSV数据查看"));
     dlg->resize(900, 500);
+    dlg->setMinimumSize(600, 400);
     dlg->setAttribute(Qt::WA_DeleteOnClose);
+    dlg->setWindowFlags(dlg->windowFlags() | Qt::WindowMaximizeButtonHint);
     auto& tm = ThemeManager::Instance();
     dlg->setStyleSheet(
         QString("QDialog { background: %1; }").arg(tm.SurfaceBg()));
@@ -743,15 +747,15 @@ void MainWindow::OnViewCsv(int64_t task_id) {
 
     table->setModel(model);
     table->setEditTriggers(QAbstractItemView::NoEditTriggers);
-    table->setAlternatingRowColors(true);
+    table->setShowGrid(true);
     table->setStyleSheet(QString(
         "QTableView { background: %1; color: %2; border: 1px solid %3;"
-        "  gridline-color: %4; font-size: 11px; }"
-        "QTableView::item:alternate { background: %5; }"
-        "QHeaderView::section { background: %4; color: %6;"
+        "  gridline-color: %3; font-size: 11px;"
+        "  selection-background-color: %4; selection-color: %5; }"
+        "QHeaderView::section { background: %6; color: %7;"
         "  border: none; border-bottom: 2px solid %3; padding: 4px 8px; }")
         .arg(tm.DeepBg(), tm.TextPrimary(), tm.Border(),
-             tm.SurfaceBg(), tm.AltRow(), tm.TextMuted()));
+             tm.Primary(), tm.White(), tm.SurfaceBg(), tm.TextMuted()));
     layout->addWidget(table, 1);
 
     auto* btn_row = new QHBoxLayout();
