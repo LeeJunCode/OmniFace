@@ -16,6 +16,7 @@ public:
     virtual void SetCsvPath(const QString& path) { csv_path_ = path; }
     virtual void SetOutputDir(const QString& path) { output_dir_ = path; }
     virtual void SetAlignedFaceDir(const QString& path) { aligned_face_dir_ = path; }
+    QString CsvPath() const { return csv_path_; }
     virtual void LoadCsvData() = 0;
     virtual void UpdateForFrame(int frameIndex) = 0;
     virtual int TotalFrames() const = 0;

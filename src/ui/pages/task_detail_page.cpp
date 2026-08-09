@@ -1,8 +1,11 @@
 #include "omniface/ui/pages/task_detail_page.h"
 
+#include <QComboBox>
+#include <QDialog>
 #include <QFile>
 #include <QFileInfo>
 #include <QFormLayout>
+#include <QMessageBox>
 #include <QGroupBox>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -13,8 +16,12 @@
 #include <QTimer>
 #include <QVBoxLayout>
 
+#include <QtConcurrent/QtConcurrent>
+
 #include <opencv2/videoio.hpp>
 
+#include "omniface/core/quality/openface/openface_quality_evaluator.h"
+#include "omniface/core/quality/openface/openface_data_cleaner.h"
 #include "omniface/db/image_repo.h"
 #include "omniface/db/task_repo.h"
 #include "omniface/db/video_repo.h"
@@ -23,6 +30,7 @@
 #include "omniface/ui/widgets/detail/mediapipe_detail_widget.h"
 #include "omniface/ui/widgets/detail/mefarg_au_detail_widget.h"
 #include "omniface/ui/widgets/detail/openface_detail_widget.h"
+#include "omniface/ui/widgets/detail/quality_report_widget.h"
 #include "omniface/ui/widgets/video_player_widget.h"
 
 namespace omniface {
@@ -145,14 +153,34 @@ void TaskDetailPage::SetupUI() {
     };
     raw_btn_ = makeModeBtn(QStringLiteral("原始信息"));
     analysis_btn_ = makeModeBtn(QStringLiteral("处理结果"));
+    quality_btn_ = makeModeBtn(QStringLiteral("数据质量评估"));
+    clean_eval_btn_ = makeModeBtn(QStringLiteral("清洗质量评估"));
     connect(raw_btn_, &QPushButton::clicked, this, &TaskDetailPage::OnShowRawInfo);
     connect(analysis_btn_, &QPushButton::clicked, this, &TaskDetailPage::OnShowAnalysis);
+    connect(quality_btn_, &QPushButton::clicked, this, &TaskDetailPage::OnShowQuality);
+    connect(clean_eval_btn_, &QPushButton::clicked, this, &TaskDetailPage::OnShowCleanQuality);
     analysis_btn_->setChecked(true);
+    quality_btn_->setEnabled(false);
+    clean_eval_btn_->setEnabled(false);
     mode_bar->addWidget(raw_btn_);
     mode_bar->addWidget(analysis_btn_);
+    mode_bar->addWidget(quality_btn_);
+    mode_bar->addWidget(clean_eval_btn_);
     mode_bar->addStretch();
 
-    csv_btn_ = new QPushButton(QStringLiteral("查看CSV"), this);
+    clean_btn_ = new QPushButton(QStringLiteral("数据清洗"), this);
+    clean_btn_->setCursor(Qt::PointingHandCursor);
+    clean_btn_->setEnabled(false);
+    clean_btn_->setStyleSheet(QString(
+        "QPushButton { background: %1; color: %2; border: 1px solid %3;"
+        "  border-radius: 4px; padding: 6px 16px; font-weight: bold; }"
+        "QPushButton:hover { background: %4; color: %2; }"
+        "QPushButton:disabled { color: #666; }")
+        .arg(tm.SurfaceBg(), tm.TextPrimary(), tm.Border(), tm.HoverBg()));
+    connect(clean_btn_, &QPushButton::clicked, this, &TaskDetailPage::OnCleanData);
+    mode_bar->addWidget(clean_btn_);
+
+    csv_btn_ = new QPushButton(QStringLiteral("查看原始CSV"), this);
     csv_btn_->setCursor(Qt::PointingHandCursor);
     csv_btn_->setStyleSheet(QString(
         "QPushButton { background: %1; color: %2; border: 1px solid %3;"
@@ -163,6 +191,20 @@ void TaskDetailPage::SetupUI() {
         if (task_id_ > 0) emit ViewCsvRequested(task_id_);
     });
     mode_bar->addWidget(csv_btn_);
+
+    clean_csv_btn_ = new QPushButton(QStringLiteral("查看清洗后CSV"), this);
+    clean_csv_btn_->setCursor(Qt::PointingHandCursor);
+    clean_csv_btn_->setStyleSheet(QString(
+        "QPushButton { background: %1; color: %2; border: 1px solid %3;"
+        "  border-radius: 4px; padding: 6px 16px; font-weight: bold; }"
+        "QPushButton:hover { background: %4; color: %2; }"
+        "QPushButton:disabled { color: #666; }")
+        .arg(tm.SurfaceBg(), tm.TextPrimary(), tm.Border(), tm.HoverBg()));
+    clean_csv_btn_->setEnabled(false);
+    connect(clean_csv_btn_, &QPushButton::clicked, this, [this]() {
+        if (task_id_ > 0) emit ViewCleanCsvRequested(task_id_);
+    });
+    mode_bar->addWidget(clean_csv_btn_);
     right_layout->addLayout(mode_bar);
 
     // ── Raw info panel ──────────────────────────────────────
@@ -287,6 +329,26 @@ void TaskDetailPage::SetupUI() {
     analysis_layout->setContentsMargins(0, 0, 0, 0);
     right_layout->addWidget(analysis_panel_, 1);
 
+    // ── Quality panel ───────────────────────────────────────
+
+    quality_scroll_area_ = new QScrollArea(this);
+    quality_scroll_area_->setVisible(false);
+    quality_scroll_area_->setWidgetResizable(true);
+    quality_scroll_area_->setStyleSheet(raw_scroll_area_->styleSheet());
+    quality_widget_ = new QualityReportWidget(quality_scroll_area_);
+    quality_scroll_area_->setWidget(quality_widget_);
+    right_layout->addWidget(quality_scroll_area_, 1);
+
+    // ── Clean quality panel ──────────────────────────────────
+
+    clean_quality_scroll_area_ = new QScrollArea(this);
+    clean_quality_scroll_area_->setVisible(false);
+    clean_quality_scroll_area_->setWidgetResizable(true);
+    clean_quality_scroll_area_->setStyleSheet(raw_scroll_area_->styleSheet());
+    clean_quality_widget_ = new QualityReportWidget(clean_quality_scroll_area_);
+    clean_quality_scroll_area_->setWidget(clean_quality_widget_);
+    right_layout->addWidget(clean_quality_scroll_area_, 1);
+
     splitter->addWidget(right);
     splitter->setStretchFactor(0, 3);
     splitter->setStretchFactor(1, 2);
@@ -319,11 +381,26 @@ void TaskDetailPage::ReapplyTheme() {
     };
     raw_btn_->setStyleSheet(modeBtnStyle());
     analysis_btn_->setStyleSheet(modeBtnStyle());
+    quality_btn_->setStyleSheet(modeBtnStyle());
+    clean_eval_btn_->setStyleSheet(modeBtnStyle());
+
+    clean_btn_->setStyleSheet(QString(
+        "QPushButton { background: %1; color: %2; border: 1px solid %3;"
+        "  border-radius: 4px; padding: 6px 16px; font-weight: bold; }"
+        "QPushButton:hover { background: %4; color: %2; }"
+        "QPushButton:disabled { color: #666; }")
+        .arg(tm.SurfaceBg(), tm.TextPrimary(), tm.Border(), tm.HoverBg()));
 
     csv_btn_->setStyleSheet(QString(
         "QPushButton { background: %1; color: %2; border: 1px solid %3;"
         "  border-radius: 4px; padding: 6px 16px; font-weight: bold; }"
         "QPushButton:hover { background: %4; color: %2; }")
+        .arg(tm.SurfaceBg(), tm.TextPrimary(), tm.Border(), tm.HoverBg()));
+    clean_csv_btn_->setStyleSheet(QString(
+        "QPushButton { background: %1; color: %2; border: 1px solid %3;"
+        "  border-radius: 4px; padding: 6px 16px; font-weight: bold; }"
+        "QPushButton:hover { background: %4; color: %2; }"
+        "QPushButton:disabled { color: #666; }")
         .arg(tm.SurfaceBg(), tm.TextPrimary(), tm.Border(), tm.HoverBg()));
 
     output_frame_label_->setStyleSheet(QString("QLabel { color: %1; font-size: 12px; padding: 2px; }").arg(tm.TextMuted()));
@@ -422,10 +499,53 @@ void TaskDetailPage::LoadTask(int64_t task_id) {
     analysis_btn_->setChecked(true);
     OnShowAnalysis();
 
+    quality_evaluated_ = false;
+    quality_widget_->Clear();
+    clean_quality_evaluated_ = false;
+    clean_quality_widget_->Clear();
+
     // Load CSV data into detail widget
     if (detail_widget_ && !task->csv_path.empty()) {
         detail_widget_->SetCsvPath(QString::fromStdString(task->csv_path));
         detail_widget_->LoadCsvData();
+        quality_btn_->setEnabled(true);
+
+        QString clean_csv = QString::fromStdString(task->csv_path);
+        clean_csv.replace(QStringLiteral(".csv"), QStringLiteral("_clean.csv"));
+        bool has_clean = QFile::exists(clean_csv);
+        clean_btn_->setEnabled(true);
+        clean_eval_btn_->setEnabled(has_clean);
+        clean_csv_btn_->setEnabled(has_clean);
+
+        // Run background quality evaluation for per-frame grade display
+        if (task->backend == "openface") {
+            auto* bg_eval = new quality::OpenFaceQualityEvaluator(nullptr);
+            QString main_csv = QString::fromStdString(task->csv_path);
+            QString quality_csv = main_csv;
+            quality_csv.replace(QStringLiteral(".csv"), QStringLiteral("_quality.csv"));
+            bg_eval->LoadCsv(main_csv, quality_csv);
+
+            connect(bg_eval, &quality::OpenFaceQualityEvaluator::Finished,
+                    this, [this, bg_eval](const quality::OpenFaceQualityReport& report) {
+                std::unordered_map<int, char> grades;
+                for (const auto& f : report.frames)
+                    grades[f.frame_number] = f.grade;
+                auto* ofw = qobject_cast<OpenFaceDetailWidget*>(detail_widget_);
+                if (ofw) ofw->SetFrameGrades(grades);
+                bg_eval->deleteLater();
+            }, Qt::QueuedConnection);
+
+            connect(bg_eval, &quality::OpenFaceQualityEvaluator::Error,
+                    this, [bg_eval](const QString&) {
+                bg_eval->deleteLater();
+            }, Qt::QueuedConnection);
+
+            (void)QtConcurrent::run([bg_eval]() { bg_eval->Evaluate(); });
+        }
+    } else {
+        quality_btn_->setEnabled(false);
+        clean_btn_->setEnabled(false);
+        clean_eval_btn_->setEnabled(false);
     }
 
     // Pass output directory (and aligned face dir for OpenFace)
@@ -514,21 +634,241 @@ void TaskDetailPage::OnShowRawInfo() {
     raw_scroll_area_->setVisible(true);
     raw_info_panel_->setVisible(true);
     if (analysis_panel_) analysis_panel_->setVisible(false);
+    if (quality_scroll_area_) quality_scroll_area_->setVisible(false);
+    if (clean_quality_scroll_area_) clean_quality_scroll_area_->setVisible(false);
     raw_btn_->setChecked(true);
     analysis_btn_->setChecked(false);
+    quality_btn_->setChecked(false);
+    clean_eval_btn_->setChecked(false);
 }
 
 void TaskDetailPage::OnShowAnalysis() {
     raw_scroll_area_->setVisible(false);
     raw_info_panel_->setVisible(false);
     if (analysis_panel_) analysis_panel_->setVisible(true);
+    if (quality_scroll_area_) quality_scroll_area_->setVisible(false);
+    if (clean_quality_scroll_area_) clean_quality_scroll_area_->setVisible(false);
     raw_btn_->setChecked(false);
     analysis_btn_->setChecked(true);
+    quality_btn_->setChecked(false);
+    clean_eval_btn_->setChecked(false);
+}
+
+void TaskDetailPage::OnShowQuality() {
+    SwitchToQualityPanel();
+
+    if (!quality_evaluated_ && detail_widget_) {
+        QString main_csv = detail_widget_->CsvPath();
+        QString quality_csv = main_csv;
+        quality_csv.replace(QStringLiteral(".csv"), QStringLiteral("_quality.csv"));
+        RunQualityEvaluation(main_csv, quality_csv, quality_widget_);
+    }
+}
+
+void TaskDetailPage::OnShowCleanQuality() {
+    SwitchToCleanQualityPanel();
+
+    if (!clean_quality_evaluated_ && detail_widget_) {
+        QString main_csv = detail_widget_->CsvPath();
+        QString clean_csv = main_csv;
+        clean_csv.replace(QStringLiteral(".csv"), QStringLiteral("_clean.csv"));
+        if (QFile::exists(clean_csv))
+            RunQualityEvaluation(clean_csv, QString(), clean_quality_widget_);
+    }
+}
+
+void TaskDetailPage::SwitchToQualityPanel() {
+    raw_scroll_area_->setVisible(false);
+    raw_info_panel_->setVisible(false);
+    if (analysis_panel_) analysis_panel_->setVisible(false);
+    if (quality_scroll_area_) quality_scroll_area_->setVisible(true);
+    if (clean_quality_scroll_area_) clean_quality_scroll_area_->setVisible(false);
+    raw_btn_->setChecked(false);
+    analysis_btn_->setChecked(false);
+    quality_btn_->setChecked(true);
+    clean_eval_btn_->setChecked(false);
+}
+
+void TaskDetailPage::SwitchToCleanQualityPanel() {
+    raw_scroll_area_->setVisible(false);
+    raw_info_panel_->setVisible(false);
+    if (analysis_panel_) analysis_panel_->setVisible(false);
+    if (quality_scroll_area_) quality_scroll_area_->setVisible(false);
+    if (clean_quality_scroll_area_) clean_quality_scroll_area_->setVisible(true);
+    raw_btn_->setChecked(false);
+    analysis_btn_->setChecked(false);
+    quality_btn_->setChecked(false);
+    clean_eval_btn_->setChecked(true);
+}
+
+void TaskDetailPage::RunQualityEvaluation(const QString& main_csv,
+                                           const QString& quality_csv,
+                                           QualityReportWidget* target) {
+    target->SetStatusMessage(QStringLiteral("正在评估中..."));
+    quality_btn_->setEnabled(false);
+    clean_eval_btn_->setEnabled(false);
+
+    auto* eval = new quality::OpenFaceQualityEvaluator(nullptr);
+    eval->LoadCsv(main_csv, quality_csv);
+
+    connect(eval, &quality::OpenFaceQualityEvaluator::Finished,
+            this, [this, eval, target](const quality::OpenFaceQualityReport& report) {
+        target->RenderReport(report);
+        if (target == quality_widget_)
+            quality_evaluated_ = true;
+        else
+            clean_quality_evaluated_ = true;
+        quality_btn_->setEnabled(true);
+        clean_eval_btn_->setEnabled(true);
+        eval->deleteLater();
+    }, Qt::QueuedConnection);
+
+    connect(eval, &quality::OpenFaceQualityEvaluator::Error,
+            this, [this, eval, target](const QString& msg) {
+        target->SetStatusMessage(
+            QStringLiteral("<p style='color:#F44336;'>评估失败: %1</p>").arg(msg));
+        quality_btn_->setEnabled(true);
+        clean_eval_btn_->setEnabled(true);
+        eval->deleteLater();
+    }, Qt::QueuedConnection);
+
+    (void)QtConcurrent::run([eval]() { eval->Evaluate(); });
+}
+
+void TaskDetailPage::OnCleanData() {
+    if (!detail_widget_) return;
+
+    QString main_csv = detail_widget_->CsvPath();
+    QString quality_csv = main_csv;
+    quality_csv.replace(QStringLiteral(".csv"), QStringLiteral("_quality.csv"));
+
+    QString clean_csv = main_csv;
+    clean_csv.replace(QStringLiteral(".csv"), QStringLiteral("_clean.csv"));
+
+    // ── Build config dialog ───────────────────────────────────
+
+    auto& tm = ThemeManager::Instance();
+
+    QDialog dlg(this);
+    dlg.setWindowTitle(QStringLiteral("数据清洗"));
+    dlg.setFixedSize(400, 200);
+    dlg.setStyleSheet(
+        QString("QDialog { background: %1; }").arg(tm.SurfaceBg()));
+
+    auto* root = new QVBoxLayout(&dlg);
+    root->setSpacing(16);
+    root->setContentsMargins(24, 20, 24, 20);
+
+    auto* title = new QLabel(QStringLiteral("选择保留的最低质量等级"), &dlg);
+    title->setStyleSheet(QString(
+        "QLabel { font-size: 14px; font-weight: bold; color: %1; }").arg(tm.TextPrimary()));
+    root->addWidget(title);
+
+    auto* desc = new QLabel(
+        QStringLiteral("帧质量等级由置信度、姿态、视线、AU 等 6 个维度综合评定。\n"
+                       "低于所选等级的帧将被剔除，输出 _clean.csv。"),
+        &dlg);
+    desc->setWordWrap(true);
+    desc->setStyleSheet(QString("QLabel { color: %1; font-size: 12px; }").arg(tm.TextMuted()));
+    root->addWidget(desc);
+
+    auto* grade_combo = new QComboBox(&dlg);
+    grade_combo->addItem(QStringLiteral("S 级 (≥93分) — 仅保留卓越帧"), static_cast<int>(clean::GradeCut::kS));
+    grade_combo->addItem(QStringLiteral("A 级 (≥85分) — 保留优秀及以上"), static_cast<int>(clean::GradeCut::kA));
+    grade_combo->addItem(QStringLiteral("B 级 (≥70分) — 保留良好及以上（推荐）"), static_cast<int>(clean::GradeCut::kB));
+    grade_combo->addItem(QStringLiteral("C 级 (≥50分) — 保留一般及以上"), static_cast<int>(clean::GradeCut::kC));
+    grade_combo->addItem(QStringLiteral("不限制 — 保留全部帧"), static_cast<int>(clean::GradeCut::kNone));
+    grade_combo->setCurrentIndex(2);  // default: B
+    grade_combo->setStyleSheet(QString(
+        "QComboBox { background: %1; color: %2; border: 1px solid %3;"
+        "  border-radius: 4px; padding: 6px 10px; font-size: 13px; }"
+        "QComboBox QAbstractItemView { background: %1; color: %2;"
+        "  selection-background-color: %4; }"
+        "QComboBox::drop-down { border: none; }")
+        .arg(tm.DeepBg(), tm.TextPrimary(), tm.Border(), tm.Primary()));
+    root->addWidget(grade_combo);
+
+    root->addStretch();
+
+    auto* btn_row = new QHBoxLayout();
+    btn_row->addStretch();
+
+    auto* cancel_btn = new QPushButton(QStringLiteral("取消"), &dlg);
+    cancel_btn->setStyleSheet(QString(
+        "QPushButton { background: %1; color: %2; border: 1px solid %3;"
+        "  border-radius: 4px; padding: 8px 24px; }"
+        "QPushButton:hover { background: %4; }")
+        .arg(tm.SurfaceBg(), tm.TextPrimary(), tm.Border(), tm.HoverBg()));
+    connect(cancel_btn, &QPushButton::clicked, &dlg, &QDialog::reject);
+    btn_row->addWidget(cancel_btn);
+
+    btn_row->addSpacing(12);
+
+    auto* ok_btn = new QPushButton(QStringLiteral("开始清洗"), &dlg);
+    ok_btn->setStyleSheet(QString(
+        "QPushButton { background: %1; color: %2; border: none;"
+        "  border-radius: 4px; padding: 8px 24px; font-weight: bold; }"
+        "QPushButton:hover { background: %3; }")
+        .arg(tm.Primary(), tm.White(), tm.PrimaryHover()));
+    connect(ok_btn, &QPushButton::clicked, &dlg, &QDialog::accept);
+    btn_row->addWidget(ok_btn);
+
+    btn_row->addStretch();
+    root->addLayout(btn_row);
+
+    if (dlg.exec() != QDialog::Accepted) return;
+
+    clean::CleanConfig cfg;
+    cfg.min_grade = static_cast<clean::GradeCut>(
+        grade_combo->currentData().toInt());
+
+    // ── Execute cleaning ──────────────────────────────────────
+
+    clean_btn_->setText(QStringLiteral("清洗中..."));
+    clean_btn_->setEnabled(false);
+
+    auto* cleaner = new clean::OpenFaceDataCleaner(nullptr);
+    if (!cleaner->LoadCsv(main_csv, quality_csv)) {
+        QMessageBox::warning(this,
+            QStringLiteral("数据清洗"),
+            QStringLiteral("加载CSV数据失败"));
+        clean_btn_->setText(QStringLiteral("数据清洗"));
+        clean_btn_->setEnabled(true);
+        delete cleaner;
+        return;
+    }
+
+    connect(cleaner, &clean::OpenFaceDataCleaner::Finished,
+            this, [this, clean_csv, cleaner](const clean::CleanResult& result) {
+        QMessageBox::information(this,
+            QStringLiteral("数据清洗完成"),
+            QString::fromStdString(result.summary_text)
+                + QStringLiteral("\n清洗文件: %1").arg(clean_csv));
+        clean_btn_->setText(QStringLiteral("数据清洗"));
+        clean_btn_->setEnabled(true);
+        clean_eval_btn_->setEnabled(true);
+        clean_eval_btn_->setChecked(false);
+        clean_csv_btn_->setEnabled(true);
+        clean_quality_evaluated_ = false;
+        clean_quality_widget_->Clear();
+        cleaner->deleteLater();
+    }, Qt::QueuedConnection);
+
+    connect(cleaner, &clean::OpenFaceDataCleaner::Error,
+            this, [this, cleaner](const QString& msg) {
+        QMessageBox::warning(this,
+            QStringLiteral("数据清洗失败"), msg);
+        clean_btn_->setText(QStringLiteral("数据清洗"));
+        clean_btn_->setEnabled(true);
+        cleaner->deleteLater();
+    }, Qt::QueuedConnection);
+
+    (void)QtConcurrent::run([cleaner, cfg]() { cleaner->Execute(cfg); });
 }
 
 void TaskDetailPage::OnOutputVideoPositionChanged(qint64 ms) {
     int videoFrame = static_cast<int>(ms * output_video_fps_ / 1000.0);
-    int csvFrame = videoFrame + 1;
+    int csvFrame = videoFrame;
     output_frame_label_->setText(QStringLiteral("帧号: %1").arg(videoFrame));
     if (detail_widget_)
         detail_widget_->UpdateForFrame(csvFrame);

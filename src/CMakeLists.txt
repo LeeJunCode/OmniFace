@@ -180,6 +180,33 @@ target_link_libraries(omniface_analysis_mefarg PUBLIC
 target_compile_features(omniface_analysis_mefarg PUBLIC cxx_std_20)
 
 # ============================================================
+# Quality evaluation module — post-processing CSV analysis
+# ============================================================
+add_library(omniface_quality STATIC
+    core/quality/openface/openface_quality_evaluator.cc
+    core/quality/openface/openface_data_cleaner.cc
+    ${PROJECT_SOURCE_DIR}/include/omniface/core/quality/base_quality_evaluator.h
+    ${PROJECT_SOURCE_DIR}/include/omniface/core/quality/quality_types.h
+    ${PROJECT_SOURCE_DIR}/include/omniface/core/quality/base_data_cleaner.h
+    ${PROJECT_SOURCE_DIR}/include/omniface/core/quality/openface/openface_quality_types.h
+    ${PROJECT_SOURCE_DIR}/include/omniface/core/quality/openface/openface_quality_evaluator.h
+    ${PROJECT_SOURCE_DIR}/include/omniface/core/quality/openface/openface_data_cleaner.h
+)
+
+target_include_directories(omniface_quality PUBLIC
+    ${PROJECT_SOURCE_DIR}/include
+)
+
+target_link_libraries(omniface_quality PUBLIC
+    Qt6::Core
+    spdlog::spdlog
+)
+
+set_target_properties(omniface_quality PROPERTIES AUTOMOC ON)
+
+target_compile_features(omniface_quality PUBLIC cxx_std_20)
+
+# ============================================================
 # Pipeline module — config + orchestration
 # ============================================================
 add_library(omniface_pipeline STATIC
@@ -275,6 +302,7 @@ add_library(omniface_ui STATIC
     ui/widgets/detail/mediapipe_detail_widget.cpp
     ui/widgets/detail/l2cs_detail_widget.cpp
     ui/widgets/detail/mefarg_au_detail_widget.cpp
+    ui/widgets/detail/quality_report_widget.cpp
     ${PROJECT_SOURCE_DIR}/include/omniface/ui/main_window.h
     ${PROJECT_SOURCE_DIR}/include/omniface/ui/theme.h
     ${PROJECT_SOURCE_DIR}/include/omniface/ui/pages/home_page.h
@@ -303,6 +331,7 @@ add_library(omniface_ui STATIC
     ${PROJECT_SOURCE_DIR}/include/omniface/ui/widgets/detail/mediapipe_detail_widget.h
     ${PROJECT_SOURCE_DIR}/include/omniface/ui/widgets/detail/l2cs_detail_widget.h
     ${PROJECT_SOURCE_DIR}/include/omniface/ui/widgets/detail/mefarg_au_detail_widget.h
+    ${PROJECT_SOURCE_DIR}/include/omniface/ui/widgets/detail/quality_report_widget.h
 )
 
 target_include_directories(omniface_ui PUBLIC
@@ -319,6 +348,7 @@ target_link_libraries(omniface_ui PUBLIC
     Qt6::Concurrent
     omniface_db
     omniface_pipeline
+    omniface_quality
 )
 
 target_compile_features(omniface_ui PUBLIC cxx_std_20)

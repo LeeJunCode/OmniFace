@@ -384,6 +384,8 @@ public:
         }
 
         decoder_.Stop();
+        if (modules_.face_analyzer)
+            modules_.face_analyzer->CloseWriter();
         if (!config_.behavior.headless) {
             cv::destroyAllWindows();
         }

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <fstream>
 #include <memory>
 #include <string>
 
@@ -30,6 +31,8 @@ public:
 private:
     std::unique_ptr<Utilities::RecorderOpenFace> recorder_;
     bool initialized_ = false;
+    std::ofstream quality_csv_;
+    bool eigenvalues_written_ = false;
 };
 
 }  // namespace omniface

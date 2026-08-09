@@ -111,7 +111,7 @@ void MediaPipeDetailWidget::UpdateForFrame(int videoFrameNumber) {
 
     const auto& d = frames_[it->second];
 
-    frame_no_label_->setText(QStringLiteral("当前帧: %1").arg(videoFrameNumber));
+    frame_no_label_->setText(QStringLiteral("当前帧: %1").arg(videoFrameNumber - 1));
 
     QString html;
     html += QStringLiteral("<h3 style='color:%1;margin-bottom:10px;'>MediaPipe FaceMesh 分析</h3>")

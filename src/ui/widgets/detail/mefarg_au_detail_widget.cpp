@@ -103,7 +103,7 @@ void MefargAuDetailWidget::UpdateForFrame(int videoFrameNumber) {
 
     const auto& au = frame_au_probs_[it->second];
 
-    frame_no_label_->setText(QStringLiteral("当前帧: %1").arg(videoFrameNumber));
+    frame_no_label_->setText(QStringLiteral("当前帧: %1").arg(videoFrameNumber - 1));
 
     QString html;
     html += QStringLiteral("<h3 style='color:%1;margin-bottom:10px;'>MEFARG-AU 表情分析</h3>")

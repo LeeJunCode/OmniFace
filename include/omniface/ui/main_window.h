@@ -51,6 +51,7 @@ private slots:
                                QString backend, double avg_fps, int total_frames,
                                QString output_dir, QString status);
     void OnViewCsv(int64_t task_id);
+    void OnViewCleanCsv(int64_t task_id);
 
 private:
     void SetupMenuBar();

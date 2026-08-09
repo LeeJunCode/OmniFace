@@ -80,6 +80,8 @@ struct FaceAnalysisResult {
 
     std::vector<float> pdm_nonrigid;
 
+    std::vector<float> pdm_eigenvalues;
+
     std::vector<float> eye_landmarks_2d;
 
     std::vector<float> eye_landmarks_3d;

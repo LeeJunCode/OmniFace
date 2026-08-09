@@ -287,6 +287,10 @@ public:
             result.pdm_nonrigid.assign(
                 clnf_->params_local.begin(), clnf_->params_local.end());
         }
+        if (!clnf_->pdm.eigen_values.empty()) {
+            result.pdm_eigenvalues.assign(
+                clnf_->pdm.eigen_values.begin(), clnf_->pdm.eigen_values.end());
+        }
         visualizer_.SetObservationPose(pose_vec, clnf_->detection_certainty);
 
         if (clnf_->eye_model) {

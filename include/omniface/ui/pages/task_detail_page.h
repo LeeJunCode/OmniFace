@@ -20,6 +20,7 @@ namespace ui {
 
 class VideoPlayerWidget;
 class BaseDetailWidget;
+class QualityReportWidget;
 
 class TaskDetailPage : public QWidget {
     Q_OBJECT
@@ -36,17 +37,25 @@ signals:
     void BackRequested();
     void EditRequested(int64_t task_id);
     void ViewCsvRequested(int64_t task_id);
+    void ViewCleanCsvRequested(int64_t task_id);
 
 private slots:
     void OnOutputVideoPositionChanged(qint64 ms);
     void OnSourceVideoPositionChanged(qint64 ms);
     void OnShowRawInfo();
     void OnShowAnalysis();
+    void OnShowQuality();
+    void OnShowCleanQuality();
+    void OnCleanData();
 
 private:
     void SetupUI();
     void PopulateRawInfo(const db::TaskRecord& task);
     void CreateBackendWidget(const std::string& backend);
+    void RunQualityEvaluation(const QString& main_csv, const QString& quality_csv,
+                              QualityReportWidget* target);
+    void SwitchToQualityPanel();
+    void SwitchToCleanQualityPanel();
 
     std::shared_ptr<db::TaskRepo> task_repo_;
     std::shared_ptr<db::VideoRepo> video_repo_;
@@ -61,9 +70,14 @@ private:
     // Right: mode buttons
     QPushButton* raw_btn_ = nullptr;
     QPushButton* analysis_btn_ = nullptr;
+    QPushButton* quality_btn_ = nullptr;
+    QPushButton* clean_eval_btn_ = nullptr;
+    QPushButton* clean_btn_ = nullptr;
     QWidget* raw_info_panel_ = nullptr;
     QScrollArea* raw_scroll_area_ = nullptr;
     QWidget* analysis_panel_ = nullptr;
+    QScrollArea* quality_scroll_area_ = nullptr;
+    QScrollArea* clean_quality_scroll_area_ = nullptr;
 
     // Raw info panel widgets
     VideoPlayerWidget* source_player_ = nullptr;
@@ -83,6 +97,7 @@ private:
     QLabel* raw_task_time_ = nullptr;
     QLabel* raw_task_status_ = nullptr;
     QPushButton* csv_btn_ = nullptr;
+    QPushButton* clean_csv_btn_ = nullptr;
 
     QPushButton* back_btn_ = nullptr;
     QPushButton* edit_btn_ = nullptr;
@@ -90,6 +105,10 @@ private:
     QSplitter* splitter_ = nullptr;
 
     BaseDetailWidget* detail_widget_ = nullptr;
+    QualityReportWidget* quality_widget_ = nullptr;
+    QualityReportWidget* clean_quality_widget_ = nullptr;
+    bool quality_evaluated_ = false;
+    bool clean_quality_evaluated_ = false;
 };
 
 }  // namespace ui

@@ -519,6 +519,10 @@ void MainWindow::SetupContentArea() {
             this, [this](int64_t task_id) {
         OnViewCsv(task_id);
     });
+    connect(task_detail_page_, &TaskDetailPage::ViewCleanCsvRequested,
+            this, [this](int64_t task_id) {
+        OnViewCleanCsv(task_id);
+    });
 
     // ── Edit task from history / detail page ──────────────────
 
@@ -771,6 +775,140 @@ void MainWindow::OnViewCsv(int64_t task_id) {
     connect(export_btn, &QPushButton::clicked, this, [this, csvPath]() {
         QString savePath = QFileDialog::getSaveFileName(
             this, QStringLiteral("导出CSV文件"),
+            QFileInfo(csvPath).fileName(),
+            QStringLiteral("CSV 文件 (*.csv)"));
+        if (savePath.isEmpty()) return;
+        if (!QFile::copy(csvPath, savePath)) {
+            QMessageBox::warning(this, QStringLiteral("导出失败"),
+                QStringLiteral("无法导出CSV文件到:\n%1").arg(savePath));
+        }
+    });
+    btn_row->addWidget(export_btn);
+
+    btn_row->addSpacing(8);
+
+    auto* field_ref_btn = new QPushButton(QStringLiteral("字段解释"), dlg);
+    field_ref_btn->setStyleSheet(QString(
+        "QPushButton { background: %1; color: %2; border: 1px solid %3;"
+        "  border-radius: 4px; padding: 8px 16px; }"
+        "QPushButton:hover { background: %4; }")
+        .arg(tm.SurfaceBg(), tm.TextPrimary(), tm.Primary(), tm.AccentBlueHover()));
+    QString backend = QString::fromStdString(task->backend);
+    connect(field_ref_btn, &QPushButton::clicked, this, [this, backend]() {
+        auto* ref_dlg = new CsvReferenceDialog(nullptr);
+        ref_dlg->setAttribute(Qt::WA_DeleteOnClose);
+        ref_dlg->SelectBackend(backend);
+        ref_dlg->show();
+    });
+    btn_row->addWidget(field_ref_btn);
+
+    btn_row->addSpacing(8);
+
+    auto* close_btn = new QPushButton(QStringLiteral("关闭"), dlg);
+    close_btn->setStyleSheet(QString(
+        "QPushButton { background: %1; color: %2; border: 1px solid %3;"
+        "  border-radius: 4px; padding: 8px 24px; }"
+        "QPushButton:hover { background: %4; }")
+        .arg(tm.SurfaceBg(), tm.TextPrimary(), tm.Border(), tm.HoverBg()));
+    connect(close_btn, &QPushButton::clicked, dlg, &QDialog::close);
+    btn_row->addWidget(close_btn);
+
+    btn_row->addStretch();
+    layout->addLayout(btn_row);
+
+    dlg->show();
+}
+
+void MainWindow::OnViewCleanCsv(int64_t task_id) {
+    auto task_repo = std::make_shared<db::TaskRepo>(database_->Get());
+    auto task = task_repo->FindById(task_id);
+    if (!task || task->csv_path.empty()) {
+        QMessageBox::information(this, QStringLiteral("CSV不可用"),
+            QStringLiteral("该任务没有CSV输出文件。"));
+        return;
+    }
+
+    QFileInfo fi(QString::fromStdString(task->csv_path));
+    QString clean_csv_path = fi.dir().filePath(fi.completeBaseName() + QStringLiteral("_clean.csv"));
+
+    QFile file(clean_csv_path);
+    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        QMessageBox::warning(this, QStringLiteral("打开失败"),
+            QStringLiteral("未找到清洗后CSV文件，请先执行数据清洗。\n\n%1").arg(clean_csv_path));
+        return;
+    }
+
+    QTextStream in(&file);
+    QStringList allLines;
+    int lineCount = 0;
+    while (!in.atEnd() && lineCount < 1000) {
+        allLines << in.readLine();
+        lineCount++;
+    }
+
+    auto* dlg = new QDialog(this);
+    dlg->setWindowTitle(QStringLiteral("清洗后CSV数据查看"));
+    dlg->resize(900, 500);
+    dlg->setMinimumSize(600, 400);
+    dlg->setAttribute(Qt::WA_DeleteOnClose);
+    dlg->setWindowFlags(dlg->windowFlags() | Qt::WindowMaximizeButtonHint);
+    auto& tm = ThemeManager::Instance();
+    dlg->setStyleSheet(
+        QString("QDialog { background: %1; }").arg(tm.SurfaceBg()));
+
+    auto* layout = new QVBoxLayout(dlg);
+
+    auto* info = new QLabel(QStringLiteral("清洗后文件: %1  (%2 行)")
+        .arg(clean_csv_path).arg(lineCount), dlg);
+    info->setStyleSheet(
+        QString("QLabel { color: %1; padding: 4px; }").arg(tm.TextMuted()));
+    layout->addWidget(info);
+
+    auto* table = new QTableView(dlg);
+    auto* model = new QStandardItemModel(table);
+
+    if (!allLines.isEmpty()) {
+        QStringList headers = allLines[0].split(QStringLiteral(","));
+        model->setColumnCount(headers.size());
+        for (int c = 0; c < headers.size(); ++c)
+            model->setHeaderData(c, Qt::Horizontal, headers[c].trimmed());
+
+        for (int r = 1; r < allLines.size(); ++r) {
+            QStringList cols = allLines[r].split(QStringLiteral(","));
+            for (int c = 0; c < cols.size() && c < headers.size(); ++c) {
+                auto* item = new QStandardItem(cols[c].trimmed());
+                item->setFlags(item->flags() & ~Qt::ItemIsEditable);
+                model->setItem(r - 1, c, item);
+            }
+        }
+    }
+
+    table->setModel(model);
+    table->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    table->setShowGrid(true);
+    table->setStyleSheet(QString(
+        "QTableView { background: %1; color: %2; border: 1px solid %3;"
+        "  gridline-color: %3; font-size: 11px;"
+        "  selection-background-color: %4; selection-color: %5; }"
+        "QHeaderView::section { background: %6; color: %7;"
+        "  border: none; border-bottom: 2px solid %3; padding: 4px 8px; }")
+        .arg(tm.DeepBg(), tm.TextPrimary(), tm.Border(),
+             tm.Primary(), tm.White(), tm.SurfaceBg(), tm.TextMuted()));
+    layout->addWidget(table, 1);
+
+    auto* btn_row = new QHBoxLayout();
+    btn_row->addStretch();
+
+    auto* export_btn = new QPushButton(QStringLiteral("导出CSV"), dlg);
+    export_btn->setStyleSheet(QString(
+        "QPushButton { background: %1; color: %2; border: 1px solid %3;"
+        "  border-radius: 4px; padding: 8px 16px; }"
+        "QPushButton:hover { background: %4; color: %5; }")
+        .arg(tm.SuccessBg(), tm.SuccessText(), tm.Success(), tm.SuccessHover(), tm.White()));
+    QString csvPath = clean_csv_path;
+    connect(export_btn, &QPushButton::clicked, this, [this, csvPath]() {
+        QString savePath = QFileDialog::getSaveFileName(
+            this, QStringLiteral("导出清洗后CSV文件"),
             QFileInfo(csvPath).fileName(),
             QStringLiteral("CSV 文件 (*.csv)"));
         if (savePath.isEmpty()) return;

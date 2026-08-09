@@ -197,6 +197,11 @@ int OpenFaceDetailWidget::TotalFrames() const {
     return static_cast<int>(frames_.size());
 }
 
+void OpenFaceDetailWidget::SetFrameGrades(
+    const std::unordered_map<int, char>& grades) {
+    frame_grades_ = grades;
+}
+
 void OpenFaceDetailWidget::UpdateForFrame(int videoFrameNumber) {
     auto& tm = ThemeManager::Instance();
     auto primary = tm.Primary();
@@ -215,7 +220,7 @@ void OpenFaceDetailWidget::UpdateForFrame(int videoFrameNumber) {
     }
 
     const auto& d = frames_[it->second];
-    frame_no_label_->setText(QStringLiteral("当前帧: %1").arg(videoFrameNumber));
+    frame_no_label_->setText(QStringLiteral("当前帧: %1").arg(videoFrameNumber - 1));
 
     // ── Aligned face image ──
     if (!aligned_face_dir_.isEmpty()) {
@@ -241,8 +246,29 @@ void OpenFaceDetailWidget::UpdateForFrame(int videoFrameNumber) {
     }
 
     QString html;
-    html += QStringLiteral("<h3 style='color:%1;margin-bottom:10px;'>OpenFace 面部分析</h3>")
+    html += QStringLiteral("<h3 style='color:%1;margin-bottom:6px;'>OpenFace 面部分析</h3>")
         .arg(primary);
+
+    // ── Quality grade badge ──
+    auto git = frame_grades_.find(d.frame_number);
+    if (git != frame_grades_.end()) {
+        char g = git->second;
+        QColor gc;
+        QString gLabel;
+        switch (g) {
+        case 'S': gc = QColor(0x21, 0x96, 0xF3); gLabel = QStringLiteral("S 卓越"); break;
+        case 'A': gc = QColor(0x4C, 0xAF, 0x50); gLabel = QStringLiteral("A 优秀"); break;
+        case 'B': gc = QColor(0xFF, 0x98, 0x00); gLabel = QStringLiteral("B 良好"); break;
+        case 'C': gc = QColor(0xFF, 0x57, 0x22); gLabel = QStringLiteral("C 一般"); break;
+        default:  gc = QColor(0xF4, 0x43, 0x36); gLabel = QStringLiteral("D 较差"); break;
+        }
+        html += QStringLiteral(
+            "<p style='margin-bottom:10px;'>"
+            "<span style='display:inline-block;background:%1;color:#fff;"
+            "  border-radius:4px;padding:2px 10px;font-weight:bold;font-size:13px;'>"
+            "%2</span></p>")
+            .arg(gc.name(), gLabel);
+    }
 
     // ── Head pose ──
     QString pLabel = PitchLabel(d.pose_rx);

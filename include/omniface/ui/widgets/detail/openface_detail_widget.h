@@ -32,6 +32,7 @@ public:
     void LoadCsvData() override;
     void UpdateForFrame(int frameIndex) override;
     int TotalFrames() const override;
+    void SetFrameGrades(const std::unordered_map<int, char>& grades);
 
 private:
     void SetupUI();
@@ -43,6 +44,7 @@ private:
 
     std::vector<OpenFaceFrameData> frames_;
     std::unordered_map<int, int> frame_to_index_;
+    std::unordered_map<int, char> frame_grades_;
 
     QLabel* face_image_label_ = nullptr;
     QTextEdit* text_display_ = nullptr;

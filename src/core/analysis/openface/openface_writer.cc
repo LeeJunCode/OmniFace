@@ -1,5 +1,7 @@
 #include "omniface/core/analysis/openface/openface_writer.h"
 
+#include <filesystem>
+#include <iomanip>
 #include <string>
 #include <vector>
 
@@ -35,6 +37,17 @@ void OpenFaceWriter::Initialize(const std::string& input_path,
     recorder_ = std::make_unique<Utilities::RecorderOpenFace>(
         input_path, rec_params, output_dir);
 
+    // Open quality CSV alongside the main CSV
+    namespace fs = std::filesystem;
+    std::string stem = fs::path(input_path).filename().replace_extension("").string();
+    std::string quality_path = (fs::path(output_dir) / (stem + "_quality.csv")).string();
+    quality_csv_.open(quality_path, std::ios_base::out);
+    if (quality_csv_.is_open()) {
+        quality_csv_ << std::fixed << std::setprecision(4);
+        quality_csv_ << "frame,quality_score,visible_landmarks\n";
+    }
+
+    eigenvalues_written_ = false;
     initialized_ = true;
 }
 
@@ -93,10 +106,25 @@ void OpenFaceWriter::WriteObservation(const FaceAnalysisResult& analysis,
         recorder_->SetObservationFaceAlign(aligned_face);
 
     recorder_->WriteObservation();
+
+    // Write quality CSV row
+    if (quality_csv_.is_open()) {
+        if (!eigenvalues_written_ && !analysis.pdm_eigenvalues.empty()) {
+            quality_csv_ << "#eigen_values";
+            for (float v : analysis.pdm_eigenvalues)
+                quality_csv_ << "," << v;
+            quality_csv_ << std::endl;
+            eigenvalues_written_ = true;
+        }
+        quality_csv_ << frame_index << ","
+                     << analysis.quality_score << ","
+                     << analysis.visible_landmarks << std::endl;
+    }
 }
 
 void OpenFaceWriter::Close() {
     if (recorder_) recorder_->Close();
+    if (quality_csv_.is_open()) quality_csv_.close();
     initialized_ = false;
 }
 
