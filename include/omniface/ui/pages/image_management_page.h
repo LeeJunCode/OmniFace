@@ -78,6 +78,7 @@ public:
     void Refresh();
     void TriggerImport();
     void ReapplyTheme();
+    void SetProcessingPage(class ProcessingPage* pp) { process_page_ = pp; }
 
 protected:
     void showEvent(QShowEvent* event) override { Refresh(); QWidget::showEvent(event); }
@@ -106,6 +107,7 @@ private:
     int64_t SelectedImageId() const;
 
     std::shared_ptr<db::ImageRepo> repo_;
+    class ProcessingPage* process_page_ = nullptr;
     QTableView* table_view_ = nullptr;
     QLineEdit* search_box_ = nullptr;
     QLabel* count_label_ = nullptr;

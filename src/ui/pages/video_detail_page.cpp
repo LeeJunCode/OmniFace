@@ -130,6 +130,11 @@ void VideoDetailPage::LoadVideo(int64_t video_id) {
     }
 }
 
+void VideoDetailPage::ReleaseResources() {
+    if (player_)
+        player_->Stop();
+}
+
 void VideoDetailPage::Populate(const db::VideoRecord& rec) {
     name_label_->setText(QString::fromStdString(rec.name));
     description_label_->setText(rec.description.empty() ? QStringLiteral("—") : QString::fromStdString(rec.description));

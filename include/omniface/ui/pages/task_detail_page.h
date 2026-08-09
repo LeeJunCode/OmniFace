@@ -31,6 +31,7 @@ public:
                             QWidget* parent = nullptr);
 
     void LoadTask(int64_t task_id);
+    void ReleaseResources();
     void ReapplyTheme();
 
 signals:
@@ -62,6 +63,7 @@ private:
     std::shared_ptr<db::ImageRepo> image_repo_;
     int64_t task_id_ = 0;
     double output_video_fps_ = 24.0;
+    int output_total_frames_ = 0;
 
     // Left: output video
     VideoPlayerWidget* output_player_ = nullptr;

@@ -23,6 +23,7 @@ public:
     explicit VideoDetailPage(std::shared_ptr<db::VideoRepo> repo, QWidget* parent = nullptr);
 
     void LoadVideo(int64_t video_id);
+    void ReleaseResources();
     void ReapplyTheme();
 
 signals:

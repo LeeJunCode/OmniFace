@@ -19,6 +19,9 @@ struct PoseEstimationResult {
     cv::Mat rvec;
     cv::Mat tvec;
     cv::Mat camera_matrix;
+    float score = 0.0f;
+    float reproj_rms = 0.0f;
+    float nose_proj_err = 0.0f;
     bool valid = false;
 };
 

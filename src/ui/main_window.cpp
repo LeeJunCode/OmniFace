@@ -373,6 +373,8 @@ void MainWindow::SetupContentArea() {
     process_page_ = new ProcessingPage(video_repo, image_repo, this);
     video_page_   = new VideoManagementPage(video_repo, this);
     image_page_   = new ImageManagementPage(image_repo, this);
+    video_page_->SetProcessingPage(process_page_);
+    image_page_->SetProcessingPage(process_page_);
     history_page_ = new TaskHistoryPage(task_repo, video_repo, image_repo, this);
 
     // Load persisted config if available
@@ -575,10 +577,19 @@ void MainWindow::ShowDetailPage(QWidget* page) {
 }
 
 void MainWindow::OnBackFromDetail() {
+    // Release resources on the detail page being left so files can be deleted.
+    int detailIndex = content_stack_->currentIndex();
+    if (detailIndex == 7)
+        task_detail_page_->ReleaseResources();
+    else if (detailIndex == 5)
+        video_detail_page_->ReleaseResources();
     content_stack_->setCurrentIndex(previous_page_index_);
 }
 
 void MainWindow::OnPageChanged(int index) {
+    int prev = content_stack_->currentIndex();
+    if (prev == 1)  // Leaving processing page
+        process_page_->ReleaseMediaResources();
     content_stack_->setCurrentIndex(index);
 }
 

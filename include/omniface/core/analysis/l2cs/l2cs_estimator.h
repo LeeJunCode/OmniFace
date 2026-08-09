@@ -16,6 +16,8 @@ namespace omniface::analysis::l2cs {
 struct L2csEstimationResult {
     float yaw = 0.0f;
     float pitch = 0.0f;
+    float yaw_maxp = 0.0f;
+    float pitch_maxp = 0.0f;
     cv::Vec3f gaze_vector;
     bool valid = false;
 };

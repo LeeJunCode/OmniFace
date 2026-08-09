@@ -28,13 +28,21 @@ void Softmax(std::vector<float>& v) {
     for (float& x : v) x /= sum;
 }
 
-float DecodeAngle(const float* logits, int num_bins) {
+struct DecodeResult {
+    float angle = 0.0f;
+    float max_prob = 0.0f;
+};
+
+DecodeResult DecodeAngle(const float* logits, int num_bins) {
     std::vector<float> probs(logits, logits + num_bins);
     Softmax(probs);
     float expected = 0.0f;
-    for (int i = 0; i < num_bins; ++i)
+    float maxp = 0.0f;
+    for (int i = 0; i < num_bins; ++i) {
         expected += probs[i] * static_cast<float>(i);
-    return expected * 4.0f - 180.0f;
+        maxp = std::max(maxp, probs[i]);
+    }
+    return {expected * 4.0f - 180.0f, maxp};
 }
 
 cv::Vec3f GazeTo3D(float yaw_rad, float pitch_rad) {
@@ -171,8 +179,10 @@ L2csEstimationResult L2csEstimator::Estimate(const cv::Mat& bgr_frame,
 
     if (outputs.size() < 2) return result;
 
-    float yaw_deg = DecodeAngle(outputs[0].GetTensorData<float>(), 90);
-    float pitch_deg = DecodeAngle(outputs[1].GetTensorData<float>(), 90);
+    auto yaw_decoded = DecodeAngle(outputs[0].GetTensorData<float>(), 90);
+    auto pitch_decoded = DecodeAngle(outputs[1].GetTensorData<float>(), 90);
+    float yaw_deg = yaw_decoded.angle;
+    float pitch_deg = pitch_decoded.angle;
 
     // gaze EMA 平滑
     if (!impl_->smooth_init_ || target_changed) {
@@ -191,6 +201,8 @@ L2csEstimationResult L2csEstimator::Estimate(const cv::Mat& bgr_frame,
 
     result.yaw = impl_->smooth_yaw_;
     result.pitch = impl_->smooth_pitch_;
+    result.yaw_maxp = yaw_decoded.max_prob;
+    result.pitch_maxp = pitch_decoded.max_prob;
     result.gaze_vector = GazeTo3D(yaw_rad, pitch_rad);
     result.valid = true;
 
@@ -228,7 +240,7 @@ void L2csEstimator::EnsureCsvOpen(const std::string& output_dir) {
     std::string csv_path = output_dir + "/l2cs_analysis.csv";
     impl_->csv_.open(csv_path);
     if (impl_->csv_.is_open()) {
-        impl_->csv_ << "frame,timestamp,gaze_yaw,gaze_pitch,gaze_x,gaze_y,gaze_z\n";
+        impl_->csv_ << "frame,timestamp,yaw_maxp,pitch_maxp,gaze_yaw,gaze_pitch,gaze_x,gaze_y,gaze_z\n";
         impl_->csv_initialized_ = true;
         spdlog::info("L2CS CSV output: {}", csv_path);
     }
@@ -238,6 +250,7 @@ void L2csEstimator::WriteCsvRow(int frame_index, double timestamp,
                                  const L2csEstimationResult& result) {
     if (!impl_->csv_.is_open()) return;
     impl_->csv_ << frame_index << "," << timestamp << ","
+                << result.yaw_maxp << "," << result.pitch_maxp << ","
                 << result.yaw << "," << result.pitch << ","
                 << result.gaze_vector[0] << ","
                 << result.gaze_vector[1] << ","

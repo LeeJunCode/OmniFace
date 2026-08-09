@@ -345,9 +345,7 @@ void ProcessWorker::ProcessLoop() {
     // the task record (and its output_video_path) is saved.
     if (pipeline_) pipeline_->FinalizeOutput();
 
-    int total = total_frames_;
-    int processed = processed_frames_;
-    if (total > 0 && processed >= total - 1)
+    if (processed_frames_ > 0)
         emit ProcessingFinished();
     else
         emit ProcessingStopped();
@@ -1365,6 +1363,17 @@ void ProcessingPage::SetConfig(const PipelineConfig& config) {
 void ProcessingPage::OnStart() {
     if (!CheckReady()) return;
 
+    if (selected_video_path_.isEmpty() || !QFile::exists(selected_video_path_)) {
+        QMessageBox::warning(this, QStringLiteral("无法开始处理"),
+            QStringLiteral("视频文件不存在，请重新选择视频。"));
+        return;
+    }
+    if (selected_image_path_.isEmpty() || !QFile::exists(selected_image_path_)) {
+        QMessageBox::warning(this, QStringLiteral("无法开始处理"),
+            QStringLiteral("参考图片文件不存在，请重新选择图片。"));
+        return;
+    }
+
     state_ = State::Running;
     total_frame_count_ = 0;
     last_processed_frame_ = 0;
@@ -1407,6 +1416,7 @@ void ProcessingPage::OnStop() {
     progress_bar_->setValue(0);
     progress_bar_->setFormat(QStringLiteral("已停止"));
     worker_->Stop();
+    ReleaseMediaResources();
 }
 
 // ─── Worker callbacks ─────────────────────────────────────────
@@ -1479,6 +1489,24 @@ void ProcessingPage::OnWorkerStopped() {
     elapsed_timer_->stop();
     progress_bar_->setValue(0);
     progress_bar_->setFormat(QStringLiteral("已停止"));
+    ReleaseMediaResources();
+
+    // Destroy old worker to release pipeline resources (CSV file handles, etc.)
+    delete worker_;
+    worker_ = new ProcessWorker(this);
+    worker_->SetConfig(config_);
+    if (!selected_video_path_.isEmpty())
+        worker_->SetVideoPath(selected_video_path_);
+    if (selected_embedding_.valid)
+        worker_->SetReference(selected_embedding_);
+    connect(worker_, &ProcessWorker::FrameProcessed, this, &ProcessingPage::OnFrameProcessed);
+    connect(worker_, &ProcessWorker::ProcessingStarted, this, &ProcessingPage::OnWorkerStarted);
+    connect(worker_, &ProcessWorker::ProcessingPaused, this, &ProcessingPage::OnWorkerPaused);
+    connect(worker_, &ProcessWorker::ProcessingStopped, this, &ProcessingPage::OnWorkerStopped);
+    connect(worker_, &ProcessWorker::ProcessingFinished, this, &ProcessingPage::OnWorkerFinished);
+    connect(worker_, &ProcessWorker::ProcessingError, this, [this](const QString& msg) {
+        QMessageBox::critical(this, QStringLiteral("处理错误"), msg);
+    });
 }
 
 void ProcessingPage::OnWorkerFinished() {
@@ -1494,13 +1522,45 @@ void ProcessingPage::OnWorkerFinished() {
         AnalysisBackendToString(config_.analysis_backend));
     QString output_dir = QString::fromStdString(worker_->GetOutputDir());
 
-    int total_frames = total_frame_count_;
+    int total_frames = last_processed_frame_;
     double avg_fps = pipeline_fps_label_->text().toDouble();
 
     emit ProcessingActive(false);
     emit ProcessingCompleted(selected_video_id_, selected_image_id_,
                              backend, avg_fps, total_frames,
                              output_dir, QStringLiteral("completed"));
+    ReleaseMediaResources();
+
+    // Destroy old worker to release pipeline resources (CSV file handles, etc.)
+    delete worker_;
+    worker_ = new ProcessWorker(this);
+    worker_->SetConfig(config_);
+    if (!selected_video_path_.isEmpty())
+        worker_->SetVideoPath(selected_video_path_);
+    if (selected_embedding_.valid)
+        worker_->SetReference(selected_embedding_);
+    connect(worker_, &ProcessWorker::FrameProcessed, this, &ProcessingPage::OnFrameProcessed);
+    connect(worker_, &ProcessWorker::ProcessingStarted, this, &ProcessingPage::OnWorkerStarted);
+    connect(worker_, &ProcessWorker::ProcessingPaused, this, &ProcessingPage::OnWorkerPaused);
+    connect(worker_, &ProcessWorker::ProcessingStopped, this, &ProcessingPage::OnWorkerStopped);
+    connect(worker_, &ProcessWorker::ProcessingFinished, this, &ProcessingPage::OnWorkerFinished);
+    connect(worker_, &ProcessWorker::ProcessingError, this, [this](const QString& msg) {
+        QMessageBox::critical(this, QStringLiteral("处理错误"), msg);
+    });
+}
+
+void ProcessingPage::ReleaseMediaResources() {
+    if (IsProcessing()) return;
+    if (media_video_player_)
+        media_video_player_->Stop();
+}
+
+bool ProcessingPage::IsVideoLocked(int64_t video_id) const {
+    return IsProcessing() && selected_video_id_ == video_id && video_id > 0;
+}
+
+bool ProcessingPage::IsImageLocked(int64_t image_id) const {
+    return IsProcessing() && selected_image_id_ == image_id && image_id > 0;
 }
 
 std::string ProcessingPage::GetWorkerOutputDir() const {

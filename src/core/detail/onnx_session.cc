@@ -156,6 +156,13 @@ OnnxSession::OnnxSession(const std::string& model_path, const char* log_tag,
     for (auto& name : output_names_) {
         output_ptrs_.push_back(name.c_str());
     }
+
+    std::string names_str;
+    for (const auto& n : output_names_) {
+        if (!names_str.empty()) names_str += ", ";
+        names_str += n;
+    }
+    spdlog::info("{} ONNX outputs ({}): [{}]", log_tag, output_names_.size(), names_str);
 }
 
 std::vector<Ort::Value> OnnxSession::RunWithIoBinding(

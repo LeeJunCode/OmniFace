@@ -85,6 +85,10 @@ int MefargAuDetailWidget::TotalFrames() const {
     return static_cast<int>(frame_au_probs_.size());
 }
 
+void MefargAuDetailWidget::SetFrameGrades(const std::unordered_map<int, char>& grades) {
+    frame_grades_ = grades;
+}
+
 void MefargAuDetailWidget::UpdateForFrame(int videoFrameNumber) {
     auto& tm = ThemeManager::Instance();
     auto primary = tm.Primary();
@@ -103,7 +107,7 @@ void MefargAuDetailWidget::UpdateForFrame(int videoFrameNumber) {
 
     const auto& au = frame_au_probs_[it->second];
 
-    frame_no_label_->setText(QStringLiteral("当前帧: %1").arg(videoFrameNumber - 1));
+    frame_no_label_->setText(QStringLiteral("当前帧: %1").arg(videoFrameNumber));
 
     QString html;
     html += QStringLiteral("<h3 style='color:%1;margin-bottom:10px;'>MEFARG-AU 表情分析</h3>")

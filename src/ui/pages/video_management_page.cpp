@@ -1,4 +1,5 @@
 #include "omniface/ui/pages/video_management_page.h"
+#include "omniface/ui/pages/processing_page.h"
 
 #include <QDate>
 #include <QDir>
@@ -648,9 +649,15 @@ void VideoManagementPage::OnDeleteVideo() {
 
     if (result != QMessageBox::Yes) return;
 
+    if (process_page_ && process_page_->IsVideoLocked(vid)) {
+        QMessageBox::warning(this, QStringLiteral("无法删除"),
+            QStringLiteral("该视频正在处理中，请先停止处理后再删除。"));
+        return;
+    }
+
     if (!repo_->Delete(vid)) {
         QMessageBox::warning(this, QStringLiteral("删除失败"),
-            QStringLiteral("无法删除视频记录。"));
+            QStringLiteral("无法删除：该视频有关联的处理任务，请先删除对应任务。"));
         return;
     }
     if (!rec->saved_path.empty()) {

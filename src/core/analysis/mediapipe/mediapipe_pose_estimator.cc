@@ -8,6 +8,8 @@
 #include <onnxruntime_cxx_api.h>
 #include <opencv2/calib3d.hpp>
 
+#include <spdlog/spdlog.h>
+
 #include "omniface/core/detail/onnx_session.h"
 #include "omniface/core/detail/preprocess.h"
 
@@ -181,6 +183,7 @@ PoseEstimationResult MediaPipePoseEstimator::EstimatePose(const cv::Mat& bgr_ima
 
     for (size_t i = 0; i < impl_->session_.OutputCount(); ++i) {
         const auto& name = impl_->session_.OutputNameStrs()[i];
+
         if (name == "score" || name.find("score") != std::string::npos) {
             score = outputs[i].GetTensorData<float>()[0];
         } else if (name == "final_landmarks" ||
@@ -227,8 +230,21 @@ PoseEstimationResult MediaPipePoseEstimator::EstimatePose(const cv::Mat& bgr_ima
     std::vector<cv::Point2f> nose_proj;
     cv::projectPoints(nose_pts, rvec, tvec, K, dist, nose_proj);
     result.nose_tip = nose_proj[0];
+    result.nose_proj_err = static_cast<float>(cv::norm(nose_proj[0] - image_pts[1]));
+
+    // PnP reprojection RMS: project all 468 canonical points and compare
+    std::vector<cv::Point2f> all_proj;
+    cv::projectPoints(object_pts, rvec, tvec, K, dist, all_proj);
+    float rms = 0;
+    for (int i = 0; i < 468; ++i) {
+        float dx = all_proj[i].x - image_pts[i].x;
+        float dy = all_proj[i].y - image_pts[i].y;
+        rms += dx * dx + dy * dy;
+    }
+    result.reproj_rms = std::sqrt(rms / 468.0f);
     result.valid = true;
 
+    result.score = score;
     result.landmarks = std::move(image_pts);
     result.rvec = rvec.clone();
     result.tvec = tvec.clone();
@@ -342,8 +358,20 @@ PoseEstimationResult MediaPipePoseEstimator::EstimatePoseFromCrop(const cv::Mat&
     std::vector<cv::Point2f> nose_proj;
     cv::projectPoints(nose_pts, rvec, tvec, K, dist, nose_proj);
     result.nose_tip = nose_proj[0];
+    result.nose_proj_err = static_cast<float>(cv::norm(nose_proj[0] - image_pts[1]));
+
+    std::vector<cv::Point2f> all_proj;
+    cv::projectPoints(object_pts, rvec, tvec, K, dist, all_proj);
+    float rms = 0;
+    for (int i = 0; i < 468; ++i) {
+        float dx = all_proj[i].x - image_pts[i].x;
+        float dy = all_proj[i].y - image_pts[i].y;
+        rms += dx * dx + dy * dy;
+    }
+    result.reproj_rms = std::sqrt(rms / 468.0f);
     result.valid = true;
 
+    result.score = score;
     result.landmarks = std::move(image_pts);
     result.rvec = rvec.clone();
     result.tvec = tvec.clone();

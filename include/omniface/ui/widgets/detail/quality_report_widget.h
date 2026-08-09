@@ -1,5 +1,8 @@
 #pragma once
 
+#include "omniface/core/quality/l2cs/l2cs_quality_types.h"
+#include "omniface/core/quality/mediapipe/mediapipe_quality_types.h"
+#include "omniface/core/quality/mefarg_au/mefarg_au_quality_types.h"
 #include "omniface/core/quality/openface/openface_quality_types.h"
 
 #include <QLabel>
@@ -19,6 +22,9 @@ public:
     explicit QualityReportWidget(QWidget* parent = nullptr);
 
     void RenderReport(const quality::OpenFaceQualityReport& report);
+    void RenderMediaPipeReport(const quality::MediaPipeQualityReport& report);
+    void RenderL2csReport(const quality::L2csQualityReport& report);
+    void RenderMefargAuReport(const quality::MefargAuQualityReport& report);
     void SetStatusMessage(const QString& msg);
     void Clear();
 

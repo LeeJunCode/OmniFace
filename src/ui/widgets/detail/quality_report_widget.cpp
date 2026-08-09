@@ -560,4 +560,500 @@ void QualityReportWidget::BuildScorecard(const quality::OpenFaceQualityReport& r
     content_widget_->layout()->addWidget(edit);
 }
 
+void QualityReportWidget::RenderMediaPipeReport(const quality::MediaPipeQualityReport& r) {
+    Clear();
+
+    auto& tm = ThemeManager::Instance();
+
+    auto pct = [&](int c) { return (r.total_frames > 0) ? 100.0f * c / r.total_frames : 0; };
+
+    float mean_score = 0;
+    for (const auto& f : r.frames) mean_score += f.score;
+    if (r.total_frames > 0) mean_score /= r.total_frames;
+
+    char grade;
+    if (mean_score >= 93.0f)       grade = 'S';
+    else if (mean_score >= 85.0f)  grade = 'A';
+    else if (mean_score >= 70.0f)  grade = 'B';
+    else if (mean_score >= 50.0f)  grade = 'C';
+    else                            grade = 'D';
+
+    QColor grColor = GradeColor(grade);
+
+    summary_label_->setText(QStringLiteral(
+        "<h2 style='margin:0;color:%1;'>综合评分: %2 (均分 %3/100)</h2>"
+        "<p style='margin:4px 0;'>总帧数: %4 | NRE: %5% | 重投影: %6px | 姿态异常: %7帧</p>")
+        .arg(grColor.name(), GradeLabel(grade))
+        .arg(mean_score, 0, 'f', 1)
+        .arg(r.total_frames)
+        .arg(r.mean_nre, 0, 'f', 2)
+        .arg(r.mean_reproj_rms, 0, 'f', 2)
+        .arg(r.frames_pose_anomaly));
+
+    grade_dist_label_->setText(QStringLiteral(
+        "<span style='color:#2196F3;'>S级: %1 (%2%)</span>  "
+        "<span style='color:#4CAF50;'>A级: %3 (%4%)</span>  "
+        "<span style='color:#FF9800;'>B级: %5 (%6%)</span>  "
+        "<span style='color:#FF5722;'>C级: %7 (%8%)</span>  "
+        "<span style='color:#F44336;'>D级: %9 (%10%)</span>")
+        .arg(r.grade_s).arg(pct(r.grade_s), 0, 'f', 1)
+        .arg(r.grade_a).arg(pct(r.grade_a), 0, 'f', 1)
+        .arg(r.grade_b).arg(pct(r.grade_b), 0, 'f', 1)
+        .arg(r.grade_c).arg(pct(r.grade_c), 0, 'f', 1)
+        .arg(r.grade_d).arg(pct(r.grade_d), 0, 'f', 1));
+
+    auto* layout = content_widget_->layout();
+
+    auto* stretch = layout->itemAt(layout->count() - 1);
+    if (stretch && stretch->spacerItem()) {
+        layout->takeAt(layout->count() - 1);
+        delete stretch;
+    }
+
+    // Build MediaPipe-specific report as HTML
+    auto* edit = new QTextEdit(content_widget_);
+    edit->setReadOnly(true);
+
+    QString html;
+    html += QStringLiteral("<h3 style='color:%1;margin:12px 0 6px;'>维度评分明细</h3>").arg(tm.Primary());
+    html += QStringLiteral("<table style='width:100%;border-collapse:collapse;color:%1;font-size:12px;'>")
+        .arg(tm.TextPrimary());
+    html += QStringLiteral("<tr style='background:rgba(255,255,255,0.04);'>"
+        "<th style='padding:6px 8px;text-align:left;'>评估维度</th>"
+        "<th style='padding:6px 8px;text-align:right;'>满分</th>"
+        "<th style='padding:6px 8px;text-align:right;'>均值</th>"
+        "<th style='padding:6px 8px;text-align:right;'>得分率</th></tr>");
+
+    auto row = [&](const QString& name, int max_score, float mean) {
+        float rate = (max_score > 0) ? 100.0f * mean / max_score : 0;
+        QString color = (rate >= 90) ? "#4CAF50" : (rate >= 70) ? "#FFC107" : "#F44336";
+        html += QStringLiteral("<tr><td style='padding:6px 8px;'>%1</td>"
+            "<td style='padding:6px 8px;text-align:right;'>%2</td>"
+            "<td style='padding:6px 8px;text-align:right;'>%3</td>"
+            "<td style='padding:6px 8px;text-align:right;color:%4;'>%5%</td></tr>")
+            .arg(name).arg(max_score).arg(mean, 0, 'f', 1).arg(color).arg(rate, 0, 'f', 0);
+    };
+
+    row(QStringLiteral("几何精度 (NRE)"), 50, r.mean_score_geo);
+    row(QStringLiteral("姿态合理性 (范围+角速度)"), 50, r.mean_score_pose);
+    html += QStringLiteral("</table>");
+
+    // Metrics detail table
+    html += QStringLiteral("<h3 style='color:%1;margin:16px 0 6px;'>关键指标统计</h3>").arg(tm.Primary());
+    html += QStringLiteral("<table style='width:100%;border-collapse:collapse;color:%1;font-size:12px;'>")
+        .arg(tm.TextPrimary());
+
+    auto met = [&](const QString& name, const QString& value, const QString& comment) {
+        html += QStringLiteral("<tr><td style='padding:4px 8px;'>%1</td>"
+            "<td style='padding:4px 8px;text-align:right;font-weight:bold;'>%2</td>"
+            "<td style='padding:4px 8px;color:%3;font-size:11px;'>%4</td></tr>")
+            .arg(name, value, tm.TextMuted(), comment);
+    };
+
+    met(QStringLiteral("几何精度均分"), QString::number(r.mean_score_geo, 'f', 1) + QStringLiteral("/50"),
+        r.mean_score_geo >= 40.0f ? QStringLiteral("优秀") : r.mean_score_geo >= 25.0f ? QStringLiteral("良好") : QStringLiteral("较差"));
+    met(QStringLiteral("姿态合理性均分"), QString::number(r.mean_score_pose, 'f', 1) + QStringLiteral("/50"),
+        r.mean_score_pose >= 40.0f ? QStringLiteral("优秀") : r.mean_score_pose >= 25.0f ? QStringLiteral("正常") : QStringLiteral("需关注"));
+    met(QStringLiteral("平均NRE"), QString::number(r.mean_nre, 'f', 2) + QStringLiteral("%"),
+        r.mean_nre < 1.0f ? QStringLiteral("几何精度高") : r.mean_nre < 2.0f ? QStringLiteral("几何精度良好") : r.mean_nre < 3.5f ? QStringLiteral("几何精度一般") : QStringLiteral("几何精度差"));
+    met(QStringLiteral("平均重投影误差"), QString::number(r.mean_reproj_rms, 'f', 2) + QStringLiteral("px"),
+        r.mean_reproj_rms < 3.0f ? QStringLiteral("几何精度高") : r.mean_reproj_rms < 8.0f ? QStringLiteral("几何精度一般") : QStringLiteral("几何精度差"));
+    met(QStringLiteral("最大重投影误差"), QString::number(r.max_reproj_rms, 'f', 2) + QStringLiteral("px"), QString());
+    met(QStringLiteral("最大NRE"), QString::number(r.max_nre, 'f', 2) + QStringLiteral("%"), QString());
+    met(QStringLiteral("平均角速度"), QString::number(r.mean_angular_velocity, 'f', 1) + QStringLiteral("°/s"),
+        r.mean_angular_velocity < 120.0f ? QStringLiteral("姿态平滑") : QStringLiteral("姿态抖动"));
+    met(QStringLiteral("最大角速度"), QString::number(r.max_angular_velocity, 'f', 1) + QStringLiteral("°/s"), QString());
+    met(QStringLiteral("姿态异常帧"), QString::number(r.frames_pose_anomaly)
+        + QStringLiteral(" (%1%)").arg(pct(r.frames_pose_anomaly), 0, 'f', 1),
+        r.frames_pose_anomaly == 0 ? QStringLiteral("无异常") : QStringLiteral("需关注"));
+    html += QStringLiteral("</table>");
+
+    edit->setHtml(html);
+    edit->setStyleSheet(QStringLiteral(
+        "QTextEdit { background: transparent; border: none; }"));
+    layout->addWidget(edit);
+
+    static_cast<QVBoxLayout*>(layout)->addStretch();
+}
+
+void QualityReportWidget::RenderL2csReport(const quality::L2csQualityReport& r) {
+    Clear();
+
+    auto& tm = ThemeManager::Instance();
+
+    auto pct = [&](int c) { return (r.total_frames > 0) ? 100.0f * c / r.total_frames : 0; };
+
+    float mean_score = 0;
+    for (const auto& f : r.frames) mean_score += f.score;
+    if (r.total_frames > 0) mean_score /= r.total_frames;
+
+    char grade;
+    if (mean_score >= 93.0f)       grade = 'S';
+    else if (mean_score >= 85.0f)  grade = 'A';
+    else if (mean_score >= 70.0f)  grade = 'B';
+    else if (mean_score >= 50.0f)  grade = 'C';
+    else                            grade = 'D';
+
+    QColor grColor = GradeColor(grade);
+
+    summary_label_->setText(QStringLiteral(
+        "<h2 style='margin:0;color:%1;'>综合评分: %2 (均分 %3/100)</h2>"
+        "<p style='margin:4px 0;'>总帧数: %4 | 平均max_prob: %5 | 平均角速度: %6/s</p>")
+        .arg(grColor.name(), GradeLabel(grade))
+        .arg(mean_score, 0, 'f', 1)
+        .arg(r.total_frames)
+        .arg(r.mean_maxp, 0, 'f', 3)
+        .arg(r.mean_angular_velocity, 0, 'f', 1));
+
+    grade_dist_label_->setText(QStringLiteral(
+        "<span style='color:#2196F3;'>S级: %1 (%2%)</span>  "
+        "<span style='color:#4CAF50;'>A级: %3 (%4%)</span>  "
+        "<span style='color:#FF9800;'>B级: %5 (%6%)</span>  "
+        "<span style='color:#FF5722;'>C级: %7 (%8%)</span>  "
+        "<span style='color:#F44336;'>D级: %9 (%10%)</span>")
+        .arg(r.grade_s).arg(pct(r.grade_s), 0, 'f', 1)
+        .arg(r.grade_a).arg(pct(r.grade_a), 0, 'f', 1)
+        .arg(r.grade_b).arg(pct(r.grade_b), 0, 'f', 1)
+        .arg(r.grade_c).arg(pct(r.grade_c), 0, 'f', 1)
+        .arg(r.grade_d).arg(pct(r.grade_d), 0, 'f', 1));
+
+    auto* layout = content_widget_->layout();
+
+    auto* stretch = layout->itemAt(layout->count() - 1);
+    if (stretch && stretch->spacerItem()) {
+        layout->takeAt(layout->count() - 1);
+        delete stretch;
+    }
+
+    // Build maxp time series chart
+    {
+        auto* yawSeries = new QLineSeries();
+        yawSeries->setName(QStringLiteral("yaw_maxp"));
+        yawSeries->setColor(ChartLine(0));
+        auto* pitchSeries = new QLineSeries();
+        pitchSeries->setName(QStringLiteral("pitch_maxp"));
+        pitchSeries->setColor(ChartLine(1));
+        for (const auto& f : r.frames) {
+            yawSeries->append(f.frame_number, f.yaw_maxp);
+            pitchSeries->append(f.frame_number, f.pitch_maxp);
+        }
+
+        auto* chart = new QChart();
+        chart->addSeries(yawSeries);
+        chart->addSeries(pitchSeries);
+        chart->createDefaultAxes();
+        chart->setTitle(QStringLiteral("Softmax 峰值概率时间线"));
+
+        auto* gb = new QGroupBox(content_widget_);
+        auto* gl = new QVBoxLayout(gb);
+        gl->addWidget(MakeChartView(chart));
+        gl->addWidget(MakeExplainLabel(QStringLiteral(
+            "说明：yaw_maxp和pitch_maxp是90-bin softmax分布的峰值概率。"
+            "注意90分类的均匀分布基线 ≈ 0.011（1/90），因此0.15就已将概率质量集中了约13倍。"
+            "不同模型（MobileNetV2、ResNet50、MobileOne-S0）的max_prob分布差异较大，"
+            "质量评级采用百分位阈值自动适配，无需关心具体数值。"), gb));
+        layout->addWidget(gb);
+    }
+
+    // Build gaze time series chart
+    {
+        auto* yawSeries = new QLineSeries();
+        yawSeries->setName(QStringLiteral("gaze_yaw"));
+        yawSeries->setColor(ChartLine(0));
+        auto* pitchSeries = new QLineSeries();
+        pitchSeries->setName(QStringLiteral("gaze_pitch"));
+        pitchSeries->setColor(ChartLine(1));
+        for (const auto& f : r.frames) {
+            yawSeries->append(f.frame_number, f.yaw_deg);
+            pitchSeries->append(f.frame_number, f.pitch_deg);
+        }
+
+        auto* chart = new QChart();
+        chart->addSeries(yawSeries);
+        chart->addSeries(pitchSeries);
+        chart->createDefaultAxes();
+        chart->setTitle(QStringLiteral("视线角度时间线 (度)"));
+
+        auto* gb = new QGroupBox(content_widget_);
+        auto* gl = new QVBoxLayout(gb);
+        gl->addWidget(MakeChartView(chart));
+        gl->addWidget(MakeExplainLabel(QStringLiteral(
+            "说明：gaze_yaw（水平偏转角）和gaze_pitch（垂直偏转角）经过双重EMA平滑"
+            "（bbox α=0.25 + gaze α=0.2）。注意模型输出是视线方向（gaze direction），"
+            "而非头部姿态。生理范围约|yaw|<60°, |pitch|<50°。"), gb));
+        layout->addWidget(gb);
+    }
+
+    // Build angular velocity chart
+    {
+        auto* series = new QLineSeries();
+        series->setName(QStringLiteral("视线角速度"));
+        series->setColor(ChartLine(2));
+        for (const auto& f : r.frames)
+            series->append(f.frame_number, f.angular_velocity);
+
+        auto* chart = new QChart();
+        chart->addSeries(series);
+        chart->createDefaultAxes();
+        chart->setTitle(QStringLiteral("视线角速度 (°/s)"));
+
+        auto* gb = new QGroupBox(content_widget_);
+        auto* gl = new QVBoxLayout(gb);
+        gl->addWidget(MakeChartView(chart));
+        gl->addWidget(MakeExplainLabel(QStringLiteral(
+            "说明：视线角速度反映相邻帧之间视线方向的变化速率。低角速度表示视线稳定，"
+            "高角速度可能表示快速扫视（saccade）或模型输出噪声。"
+            "EMA平滑会导致角速度被低估约5帧（α=0.2时）。"), gb));
+        layout->addWidget(gb);
+    }
+
+    // Scorecard HTML
+    {
+        auto* edit = new QTextEdit(content_widget_);
+        edit->setReadOnly(true);
+
+        QString html;
+        html += QStringLiteral("<h3 style='color:%1;margin:12px 0 6px;'>维度评分明细</h3>").arg(tm.Primary());
+        html += QStringLiteral("<table style='width:100%;border-collapse:collapse;color:%1;font-size:12px;'>")
+            .arg(tm.TextPrimary());
+        html += QStringLiteral("<tr style='background:rgba(255,255,255,0.04);'>"
+            "<th style='padding:6px 8px;text-align:left;'>评估维度</th>"
+            "<th style='padding:6px 8px;text-align:right;'>满分</th>"
+            "<th style='padding:6px 8px;text-align:right;'>均值</th>"
+            "<th style='padding:6px 8px;text-align:right;'>得分率</th></tr>");
+
+        auto row = [&](const QString& name, int max_score, float mean) {
+            float rate = (max_score > 0) ? 100.0f * mean / max_score : 0;
+            QString color = (rate >= 90) ? "#4CAF50" : (rate >= 70) ? "#FFC107" : "#F44336";
+            html += QStringLiteral("<tr><td style='padding:6px 8px;'>%1</td>"
+                "<td style='padding:6px 8px;text-align:right;'>%2</td>"
+                "<td style='padding:6px 8px;text-align:right;'>%3</td>"
+                "<td style='padding:6px 8px;text-align:right;color:%4;'>%5%</td></tr>")
+                .arg(name).arg(max_score).arg(mean, 0, 'f', 1).arg(color).arg(rate, 0, 'f', 0);
+        };
+
+        row(QStringLiteral("预测置信度 (max_prob)"), 50, r.mean_score_conf);
+        row(QStringLiteral("视线稳定性 (角速度+范围)"), 50, r.mean_score_stab);
+        html += QStringLiteral("</table>");
+
+        html += QStringLiteral("<h3 style='color:%1;margin:16px 0 6px;'>关键指标统计</h3>").arg(tm.Primary());
+        html += QStringLiteral("<table style='width:100%;border-collapse:collapse;color:%1;font-size:12px;'>")
+            .arg(tm.TextPrimary());
+
+        auto met = [&](const QString& name, const QString& value, const QString& comment) {
+            html += QStringLiteral("<tr><td style='padding:4px 8px;'>%1</td>"
+                "<td style='padding:4px 8px;text-align:right;font-weight:bold;'>%2</td>"
+                "<td style='padding:4px 8px;color:%3;font-size:11px;'>%4</td></tr>")
+                .arg(name, value, tm.TextMuted(), comment);
+        };
+
+        met(QStringLiteral("置信度均分"), QString::number(r.mean_score_conf, 'f', 1) + QStringLiteral("/50"),
+            r.mean_score_conf >= 40.0f ? QStringLiteral("优秀") : r.mean_score_conf >= 25.0f ? QStringLiteral("良好") : QStringLiteral("较差"));
+        met(QStringLiteral("稳定性均分"), QString::number(r.mean_score_stab, 'f', 1) + QStringLiteral("/50"),
+            r.mean_score_stab >= 40.0f ? QStringLiteral("优秀") : r.mean_score_stab >= 25.0f ? QStringLiteral("正常") : QStringLiteral("需关注"));
+        met(QStringLiteral("平均max_prob"), QString::number(r.mean_maxp, 'f', 3),
+            r.mean_maxp >= 0.3f ? QStringLiteral("预测置信度高") : r.mean_maxp >= 0.1f ? QStringLiteral("中等") : QStringLiteral("低置信度"));
+        met(QStringLiteral("平均视线角速度"), QString::number(r.mean_angular_velocity, 'f', 1) + QStringLiteral("°/s"),
+            r.mean_angular_velocity < 60.0f ? QStringLiteral("视线稳定") : QStringLiteral("视线波动"));
+        met(QStringLiteral("最大视线角速度"), QString::number(r.max_angular_velocity, 'f', 1) + QStringLiteral("°/s"), QString());
+        html += QStringLiteral("</table>");
+
+        edit->setHtml(html);
+        edit->setStyleSheet(QStringLiteral(
+            "QTextEdit { background: transparent; border: none; }"));
+        layout->addWidget(edit);
+    }
+
+    static_cast<QVBoxLayout*>(layout)->addStretch();
+}
+
+void QualityReportWidget::RenderMefargAuReport(const quality::MefargAuQualityReport& r) {
+    Clear();
+
+    auto& tm = ThemeManager::Instance();
+
+    auto pct = [&](int c) { return (r.total_frames > 0) ? 100.0f * c / r.total_frames : 0; };
+
+    float mean_score = 0;
+    for (const auto& f : r.frames) mean_score += f.score;
+    if (r.total_frames > 0) mean_score /= r.total_frames;
+
+    char grade;
+    if (mean_score >= 93.0f)       grade = 'S';
+    else if (mean_score >= 85.0f)  grade = 'A';
+    else if (mean_score >= 70.0f)  grade = 'B';
+    else if (mean_score >= 50.0f)  grade = 'C';
+    else                            grade = 'D';
+
+    QColor grColor = GradeColor(grade);
+
+    summary_label_->setText(QStringLiteral(
+        "<h2 style='margin:0;color:%1;'>综合评分: %2 (均分 %3/100)</h2>"
+        "<p style='margin:4px 0;'>总帧数: %4 | 平均判决策略距离: %5 | AU翻转率: %6 | 脉冲帧: %7</p>")
+        .arg(grColor.name(), GradeLabel(grade))
+        .arg(mean_score, 0, 'f', 1)
+        .arg(r.total_frames)
+        .arg(r.mean_decision_margin, 0, 'f', 3)
+        .arg(r.overall_au_flip_rate, 0, 'f', 3)
+        .arg(r.total_spike_frames));
+
+    grade_dist_label_->setText(QStringLiteral(
+        "<span style='color:#2196F3;'>S级: %1 (%2%)</span>  "
+        "<span style='color:#4CAF50;'>A级: %3 (%4%)</span>  "
+        "<span style='color:#FF9800;'>B级: %5 (%6%)</span>  "
+        "<span style='color:#FF5722;'>C级: %7 (%8%)</span>  "
+        "<span style='color:#F44336;'>D级: %9 (%10%)</span>")
+        .arg(r.grade_s).arg(pct(r.grade_s), 0, 'f', 1)
+        .arg(r.grade_a).arg(pct(r.grade_a), 0, 'f', 1)
+        .arg(r.grade_b).arg(pct(r.grade_b), 0, 'f', 1)
+        .arg(r.grade_c).arg(pct(r.grade_c), 0, 'f', 1)
+        .arg(r.grade_d).arg(pct(r.grade_d), 0, 'f', 1));
+
+    auto* layout = content_widget_->layout();
+
+    auto* stretch = layout->itemAt(layout->count() - 1);
+    if (stretch && stretch->spacerItem()) {
+        layout->takeAt(layout->count() - 1);
+        delete stretch;
+    }
+
+    // Decision margin time series
+    {
+        auto* series = new QLineSeries();
+        series->setName(QStringLiteral("判决策略距离"));
+        series->setColor(ChartLine(0));
+        for (const auto& f : r.frames)
+            series->append(f.frame_number, f.mean_decision_margin);
+
+        auto* threshold = new QLineSeries();
+        threshold->setPen(QPen(QColor(0xF4, 0x43, 0x36), 1, Qt::DashLine));
+        if (!r.frames.empty()) {
+            threshold->append(r.frames.front().frame_number, 0.1f);
+            threshold->append(r.frames.back().frame_number, 0.1f);
+        }
+
+        auto* chart = new QChart();
+        chart->addSeries(series);
+        chart->addSeries(threshold);
+        chart->createDefaultAxes();
+        chart->setTitle(QStringLiteral("判决策略距离时间线 |cosine - 0.5|"));
+
+        auto* gb = new QGroupBox(content_widget_);
+        auto* gl = new QVBoxLayout(gb);
+        gl->addWidget(MakeChartView(chart));
+        gl->addWidget(MakeExplainLabel(QStringLiteral(
+            "说明：判决策略距离 = |cosine - 0.5|（41个AU的均值），反映余弦相似度到激活阈值0.5的几何距离。"
+            "值越大表示AU激活判定越确定。红色虚线标注0.1（低置信度阈值）。"
+            "接近0表示余弦值在阈值附近，AU激活判定对输入噪声高度敏感。"), gb));
+        layout->addWidget(gb);
+    }
+
+    // Active AU count time series
+    {
+        auto* series = new QLineSeries();
+        series->setName(QStringLiteral("激活AU数"));
+        series->setColor(ChartLine(1));
+        for (const auto& f : r.frames)
+            series->append(f.frame_number, f.active_au_count);
+
+        auto* chart = new QChart();
+        chart->addSeries(series);
+        chart->createDefaultAxes();
+        chart->setTitle(QStringLiteral("每帧激活AU数量"));
+
+        auto* gb = new QGroupBox(content_widget_);
+        auto* gl = new QVBoxLayout(gb);
+        gl->addWidget(MakeChartView(chart));
+        gl->addWidget(MakeExplainLabel(QStringLiteral(
+            "说明：每帧激活的AU数量（余弦值≥0.5）。正常表情通常激活2-8个AU。"
+            "0-1个表示中性脸或检测失效；>15个极可能是过检测/噪声。"
+            "帧间大幅跳变（>10个AU变化）被标记为脉冲噪声。"), gb));
+        layout->addWidget(gb);
+    }
+
+    // AU flips chart
+    {
+        auto* series = new QLineSeries();
+        series->setName(QStringLiteral("AU翻转数"));
+        series->setColor(ChartLine(2));
+        for (const auto& f : r.frames)
+            series->append(f.frame_number, f.au_flips);
+
+        auto* chart = new QChart();
+        chart->addSeries(series);
+        chart->createDefaultAxes();
+        chart->setTitle(QStringLiteral("帧间AU状态翻转数"));
+
+        auto* gb = new QGroupBox(content_widget_);
+        auto* gl = new QVBoxLayout(gb);
+        gl->addWidget(MakeChartView(chart));
+        gl->addWidget(MakeExplainLabel(QStringLiteral(
+            "说明：相邻帧之间AU激活状态发生变化的数量（近似）。高翻转数表示AU检测"
+            "存在严重的\"开关效应\"——模型在连续帧间反复改变判定。正常表情变化"
+            "通常每帧只有0-3个AU状态翻转。"), gb));
+        layout->addWidget(gb);
+    }
+
+    // Scorecard HTML
+    {
+        auto* edit = new QTextEdit(content_widget_);
+        edit->setReadOnly(true);
+
+        QString html;
+        html += QStringLiteral("<h3 style='color:%1;margin:12px 0 6px;'>维度评分明细</h3>").arg(tm.Primary());
+        html += QStringLiteral("<table style='width:100%;border-collapse:collapse;color:%1;font-size:12px;'>")
+            .arg(tm.TextPrimary());
+        html += QStringLiteral("<tr style='background:rgba(255,255,255,0.04);'>"
+            "<th style='padding:6px 8px;text-align:left;'>评估维度</th>"
+            "<th style='padding:6px 8px;text-align:right;'>满分</th>"
+            "<th style='padding:6px 8px;text-align:right;'>均值</th>"
+            "<th style='padding:6px 8px;text-align:right;'>得分率</th></tr>");
+
+        auto row = [&](const QString& name, int max_score, float mean) {
+            float rate = (max_score > 0) ? 100.0f * mean / max_score : 0;
+            QString color = (rate >= 90) ? "#4CAF50" : (rate >= 70) ? "#FFC107" : "#F44336";
+            html += QStringLiteral("<tr><td style='padding:6px 8px;'>%1</td>"
+                "<td style='padding:6px 8px;text-align:right;'>%2</td>"
+                "<td style='padding:6px 8px;text-align:right;'>%3</td>"
+                "<td style='padding:6px 8px;text-align:right;color:%4;'>%5%</td></tr>")
+                .arg(name).arg(max_score).arg(mean, 0, 'f', 1).arg(color).arg(rate, 0, 'f', 0);
+        };
+
+        row(QStringLiteral("预测置信度 (decision_margin)"), 50, r.mean_score_conf);
+        row(QStringLiteral("时序稳定性 (翻转+脉冲)"), 50, r.mean_score_stab);
+        html += QStringLiteral("</table>");
+
+        html += QStringLiteral("<h3 style='color:%1;margin:16px 0 6px;'>关键指标统计</h3>").arg(tm.Primary());
+        html += QStringLiteral("<table style='width:100%;border-collapse:collapse;color:%1;font-size:12px;'>")
+            .arg(tm.TextPrimary());
+
+        auto met = [&](const QString& name, const QString& value, const QString& comment) {
+            html += QStringLiteral("<tr><td style='padding:4px 8px;'>%1</td>"
+                "<td style='padding:4px 8px;text-align:right;font-weight:bold;'>%2</td>"
+                "<td style='padding:4px 8px;color:%3;font-size:11px;'>%4</td></tr>")
+                .arg(name, value, tm.TextMuted(), comment);
+        };
+
+        met(QStringLiteral("置信度均分"), QString::number(r.mean_score_conf, 'f', 1) + QStringLiteral("/50"),
+            r.mean_score_conf >= 40.0f ? QStringLiteral("优秀") : r.mean_score_conf >= 25.0f ? QStringLiteral("良好") : QStringLiteral("较差"));
+        met(QStringLiteral("稳定性均分"), QString::number(r.mean_score_stab, 'f', 1) + QStringLiteral("/50"),
+            r.mean_score_stab >= 40.0f ? QStringLiteral("优秀") : r.mean_score_stab >= 25.0f ? QStringLiteral("正常") : QStringLiteral("需关注"));
+        met(QStringLiteral("平均判决策略距离"), QString::number(r.mean_decision_margin, 'f', 3),
+            r.mean_decision_margin >= 0.2f ? QStringLiteral("判定置信度高") : r.mean_decision_margin >= 0.1f ? QStringLiteral("中等") : QStringLiteral("边界模糊"));
+        met(QStringLiteral("AU翻转率"), QString::number(r.overall_au_flip_rate, 'f', 3),
+            r.overall_au_flip_rate < 0.05f ? QStringLiteral("时序稳定") : r.overall_au_flip_rate < 0.15f ? QStringLiteral("正常波动") : QStringLiteral("振荡严重"));
+        met(QStringLiteral("脉冲噪声帧"), QString::number(r.total_spike_frames)
+            + QStringLiteral(" (%1%)").arg(pct(r.total_spike_frames), 0, 'f', 1),
+            r.total_spike_frames == 0 ? QStringLiteral("无噪声") : QStringLiteral("需关注"));
+        html += QStringLiteral("</table>");
+
+        edit->setHtml(html);
+        edit->setStyleSheet(QStringLiteral(
+            "QTextEdit { background: transparent; border: none; }"));
+        layout->addWidget(edit);
+    }
+
+    static_cast<QVBoxLayout*>(layout)->addStretch();
+}
+
 }  // namespace omniface::ui

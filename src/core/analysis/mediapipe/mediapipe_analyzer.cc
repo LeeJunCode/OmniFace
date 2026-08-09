@@ -123,7 +123,7 @@ void MediaPipeAnalyzer::EnsureCsvOpen(const std::string& output_dir) {
     std::string csv_path = output_dir + "/mediapipe_analysis.csv";
     csv_.open(csv_path);
     if (csv_.is_open()) {
-        csv_ << "frame,timestamp,pitch,yaw,roll";
+        csv_ << "frame,timestamp,reproj_rms,nose_proj_err,pitch,yaw,roll";
         for (int i = 0; i < 468; ++i)
             csv_ << ",x_" << i << ",y_" << i;
         csv_ << "\n";
@@ -136,6 +136,8 @@ void MediaPipeAnalyzer::WriteCsvRow(int frame_index, double timestamp,
                                      const MediaPipeAnalysisResult& result) {
     if (!csv_.is_open()) return;
     csv_ << frame_index << "," << timestamp << ","
+         << result.pose.reproj_rms << ","
+         << result.pose.nose_proj_err << ","
          << result.pose.pose.pitch << ","
          << result.pose.pose.yaw << ","
          << result.pose.pose.roll;

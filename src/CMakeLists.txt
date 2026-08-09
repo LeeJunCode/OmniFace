@@ -185,12 +185,27 @@ target_compile_features(omniface_analysis_mefarg PUBLIC cxx_std_20)
 add_library(omniface_quality STATIC
     core/quality/openface/openface_quality_evaluator.cc
     core/quality/openface/openface_data_cleaner.cc
+    core/quality/mediapipe/mediapipe_quality_evaluator.cc
+    core/quality/mediapipe/mediapipe_data_cleaner.cc
+    core/quality/l2cs/l2cs_quality_evaluator.cc
+    core/quality/l2cs/l2cs_data_cleaner.cc
+    core/quality/mefarg_au/mefarg_au_quality_evaluator.cc
+    core/quality/mefarg_au/mefarg_au_data_cleaner.cc
     ${PROJECT_SOURCE_DIR}/include/omniface/core/quality/base_quality_evaluator.h
     ${PROJECT_SOURCE_DIR}/include/omniface/core/quality/quality_types.h
     ${PROJECT_SOURCE_DIR}/include/omniface/core/quality/base_data_cleaner.h
     ${PROJECT_SOURCE_DIR}/include/omniface/core/quality/openface/openface_quality_types.h
     ${PROJECT_SOURCE_DIR}/include/omniface/core/quality/openface/openface_quality_evaluator.h
     ${PROJECT_SOURCE_DIR}/include/omniface/core/quality/openface/openface_data_cleaner.h
+    ${PROJECT_SOURCE_DIR}/include/omniface/core/quality/mediapipe/mediapipe_quality_types.h
+    ${PROJECT_SOURCE_DIR}/include/omniface/core/quality/mediapipe/mediapipe_quality_evaluator.h
+    ${PROJECT_SOURCE_DIR}/include/omniface/core/quality/mediapipe/mediapipe_data_cleaner.h
+    ${PROJECT_SOURCE_DIR}/include/omniface/core/quality/l2cs/l2cs_quality_types.h
+    ${PROJECT_SOURCE_DIR}/include/omniface/core/quality/l2cs/l2cs_quality_evaluator.h
+    ${PROJECT_SOURCE_DIR}/include/omniface/core/quality/l2cs/l2cs_data_cleaner.h
+    ${PROJECT_SOURCE_DIR}/include/omniface/core/quality/mefarg_au/mefarg_au_quality_types.h
+    ${PROJECT_SOURCE_DIR}/include/omniface/core/quality/mefarg_au/mefarg_au_quality_evaluator.h
+    ${PROJECT_SOURCE_DIR}/include/omniface/core/quality/mefarg_au/mefarg_au_data_cleaner.h
 )
 
 target_include_directories(omniface_quality PUBLIC

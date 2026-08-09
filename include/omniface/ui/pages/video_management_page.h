@@ -96,6 +96,7 @@ public:
     void Refresh();
     void TriggerImport();
     void ReapplyTheme();
+    void SetProcessingPage(class ProcessingPage* pp) { process_page_ = pp; }
 
 protected:
     void showEvent(QShowEvent* event) override { Refresh(); QWidget::showEvent(event); }
@@ -127,6 +128,7 @@ private:
     int64_t SelectedVideoId() const;
 
     std::shared_ptr<db::VideoRepo> repo_;
+    class ProcessingPage* process_page_ = nullptr;
     QTableView* table_view_ = nullptr;
     QLineEdit* search_box_ = nullptr;
     DatePicker* date_from_ = nullptr;

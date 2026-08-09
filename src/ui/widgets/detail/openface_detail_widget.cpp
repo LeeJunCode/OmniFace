@@ -220,7 +220,7 @@ void OpenFaceDetailWidget::UpdateForFrame(int videoFrameNumber) {
     }
 
     const auto& d = frames_[it->second];
-    frame_no_label_->setText(QStringLiteral("当前帧: %1").arg(videoFrameNumber - 1));
+    frame_no_label_->setText(QStringLiteral("当前帧: %1").arg(videoFrameNumber));
 
     // ── Aligned face image ──
     if (!aligned_face_dir_.isEmpty()) {

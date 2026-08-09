@@ -20,8 +20,14 @@
 
 #include <opencv2/videoio.hpp>
 
-#include "omniface/core/quality/openface/openface_quality_evaluator.h"
+#include "omniface/core/quality/l2cs/l2cs_data_cleaner.h"
+#include "omniface/core/quality/l2cs/l2cs_quality_evaluator.h"
+#include "omniface/core/quality/mediapipe/mediapipe_data_cleaner.h"
+#include "omniface/core/quality/mediapipe/mediapipe_quality_evaluator.h"
+#include "omniface/core/quality/mefarg_au/mefarg_au_data_cleaner.h"
+#include "omniface/core/quality/mefarg_au/mefarg_au_quality_evaluator.h"
 #include "omniface/core/quality/openface/openface_data_cleaner.h"
+#include "omniface/core/quality/openface/openface_quality_evaluator.h"
 #include "omniface/db/image_repo.h"
 #include "omniface/db/task_repo.h"
 #include "omniface/db/video_repo.h"
@@ -473,6 +479,7 @@ void TaskDetailPage::LoadTask(int64_t task_id) {
     cv::VideoCapture cap(output_video_path.toStdString());
     if (cap.isOpened()) {
         output_video_fps_ = cap.get(cv::CAP_PROP_FPS);
+        output_total_frames_ = static_cast<int>(cap.get(cv::CAP_PROP_FRAME_COUNT));
         cap.release();
     }
     if (output_video_fps_ <= 0) output_video_fps_ = 24.0;
@@ -541,6 +548,67 @@ void TaskDetailPage::LoadTask(int64_t task_id) {
             }, Qt::QueuedConnection);
 
             (void)QtConcurrent::run([bg_eval]() { bg_eval->Evaluate(); });
+        } else if (task->backend == "mediapipe") {
+            auto* bg_eval = new quality::MediaPipeQualityEvaluator(nullptr);
+            QString main_csv = QString::fromStdString(task->csv_path);
+            bg_eval->LoadCsv(main_csv, QString());
+
+            connect(bg_eval, &quality::MediaPipeQualityEvaluator::Finished,
+                    this, [this, bg_eval](const quality::MediaPipeQualityReport& report) {
+                std::unordered_map<int, char> grades;
+                for (const auto& f : report.frames)
+                    grades[f.frame_number] = f.grade;
+                auto* mpw = qobject_cast<MediaPipeDetailWidget*>(detail_widget_);
+                if (mpw) mpw->SetFrameGrades(grades);
+                bg_eval->deleteLater();
+            }, Qt::QueuedConnection);
+
+            connect(bg_eval, &quality::MediaPipeQualityEvaluator::Error,
+                    this, [bg_eval](const QString&) {
+                bg_eval->deleteLater();
+            }, Qt::QueuedConnection);
+
+            (void)QtConcurrent::run([bg_eval]() { bg_eval->Evaluate(); });
+        } else if (task->backend == "l2cs") {
+            auto* bg_eval = new quality::L2csQualityEvaluator(nullptr);
+            bg_eval->LoadCsv(QString::fromStdString(task->csv_path), QString());
+
+            connect(bg_eval, &quality::L2csQualityEvaluator::Finished,
+                    this, [this, bg_eval](const quality::L2csQualityReport& report) {
+                std::unordered_map<int, char> grades;
+                for (const auto& f : report.frames)
+                    grades[f.frame_number] = f.grade;
+                auto* lw = qobject_cast<L2csDetailWidget*>(detail_widget_);
+                if (lw) lw->SetFrameGrades(grades);
+                bg_eval->deleteLater();
+            }, Qt::QueuedConnection);
+
+            connect(bg_eval, &quality::L2csQualityEvaluator::Error,
+                    this, [bg_eval](const QString&) {
+                bg_eval->deleteLater();
+            }, Qt::QueuedConnection);
+
+            (void)QtConcurrent::run([bg_eval]() { bg_eval->Evaluate(); });
+        } else if (task->backend == "mefarg_au") {
+            auto* bg_eval = new quality::MefargAuQualityEvaluator(nullptr);
+            bg_eval->LoadCsv(QString::fromStdString(task->csv_path), QString());
+
+            connect(bg_eval, &quality::MefargAuQualityEvaluator::Finished,
+                    this, [this, bg_eval](const quality::MefargAuQualityReport& report) {
+                std::unordered_map<int, char> grades;
+                for (const auto& f : report.frames)
+                    grades[f.frame_number] = f.grade;
+                auto* mw = qobject_cast<MefargAuDetailWidget*>(detail_widget_);
+                if (mw) mw->SetFrameGrades(grades);
+                bg_eval->deleteLater();
+            }, Qt::QueuedConnection);
+
+            connect(bg_eval, &quality::MefargAuQualityEvaluator::Error,
+                    this, [bg_eval](const QString&) {
+                bg_eval->deleteLater();
+            }, Qt::QueuedConnection);
+
+            (void)QtConcurrent::run([bg_eval]() { bg_eval->Evaluate(); });
         }
     } else {
         quality_btn_->setEnabled(false);
@@ -560,6 +628,13 @@ void TaskDetailPage::LoadTask(int64_t task_id) {
         }
     }
 
+}
+
+void TaskDetailPage::ReleaseResources() {
+    if (output_player_)
+        output_player_->Stop();
+    if (source_player_)
+        source_player_->Stop();
 }
 
 void TaskDetailPage::PopulateRawInfo(const db::TaskRecord& task) {
@@ -708,31 +783,114 @@ void TaskDetailPage::RunQualityEvaluation(const QString& main_csv,
     quality_btn_->setEnabled(false);
     clean_eval_btn_->setEnabled(false);
 
-    auto* eval = new quality::OpenFaceQualityEvaluator(nullptr);
-    eval->LoadCsv(main_csv, quality_csv);
+    auto task = task_repo_->FindById(task_id_);
+    std::string backend = task ? task->backend : "";
 
-    connect(eval, &quality::OpenFaceQualityEvaluator::Finished,
-            this, [this, eval, target](const quality::OpenFaceQualityReport& report) {
-        target->RenderReport(report);
-        if (target == quality_widget_)
-            quality_evaluated_ = true;
-        else
-            clean_quality_evaluated_ = true;
-        quality_btn_->setEnabled(true);
-        clean_eval_btn_->setEnabled(true);
-        eval->deleteLater();
-    }, Qt::QueuedConnection);
+    if (backend == "mediapipe") {
+        auto* eval = new quality::MediaPipeQualityEvaluator(nullptr);
+        eval->LoadCsv(main_csv, quality_csv);
 
-    connect(eval, &quality::OpenFaceQualityEvaluator::Error,
-            this, [this, eval, target](const QString& msg) {
-        target->SetStatusMessage(
-            QStringLiteral("<p style='color:#F44336;'>评估失败: %1</p>").arg(msg));
-        quality_btn_->setEnabled(true);
-        clean_eval_btn_->setEnabled(true);
-        eval->deleteLater();
-    }, Qt::QueuedConnection);
+        connect(eval, &quality::MediaPipeQualityEvaluator::Finished,
+                this, [this, eval, target](const quality::MediaPipeQualityReport& report) {
+            target->RenderMediaPipeReport(report);
+            if (target == quality_widget_)
+                quality_evaluated_ = true;
+            else
+                clean_quality_evaluated_ = true;
+            quality_btn_->setEnabled(true);
+            clean_eval_btn_->setEnabled(true);
+            eval->deleteLater();
+        }, Qt::QueuedConnection);
 
-    (void)QtConcurrent::run([eval]() { eval->Evaluate(); });
+        connect(eval, &quality::MediaPipeQualityEvaluator::Error,
+                this, [this, eval, target](const QString& msg) {
+            target->SetStatusMessage(
+                QStringLiteral("<p style='color:#F44336;'>评估失败: %1</p>").arg(msg));
+            quality_btn_->setEnabled(true);
+            clean_eval_btn_->setEnabled(true);
+            eval->deleteLater();
+        }, Qt::QueuedConnection);
+
+        (void)QtConcurrent::run([eval]() { eval->Evaluate(); });
+    } else if (backend == "l2cs") {
+        auto* eval = new quality::L2csQualityEvaluator(nullptr);
+        eval->LoadCsv(main_csv, quality_csv);
+
+        connect(eval, &quality::L2csQualityEvaluator::Finished,
+                this, [this, eval, target](const quality::L2csQualityReport& report) {
+            target->RenderL2csReport(report);
+            if (target == quality_widget_)
+                quality_evaluated_ = true;
+            else
+                clean_quality_evaluated_ = true;
+            quality_btn_->setEnabled(true);
+            clean_eval_btn_->setEnabled(true);
+            eval->deleteLater();
+        }, Qt::QueuedConnection);
+
+        connect(eval, &quality::L2csQualityEvaluator::Error,
+                this, [this, eval, target](const QString& msg) {
+            target->SetStatusMessage(
+                QStringLiteral("<p style='color:#F44336;'>评估失败: %1</p>").arg(msg));
+            quality_btn_->setEnabled(true);
+            clean_eval_btn_->setEnabled(true);
+            eval->deleteLater();
+        }, Qt::QueuedConnection);
+
+        (void)QtConcurrent::run([eval]() { eval->Evaluate(); });
+    } else if (backend == "mefarg_au") {
+        auto* eval = new quality::MefargAuQualityEvaluator(nullptr);
+        eval->LoadCsv(main_csv, quality_csv);
+
+        connect(eval, &quality::MefargAuQualityEvaluator::Finished,
+                this, [this, eval, target](const quality::MefargAuQualityReport& report) {
+            target->RenderMefargAuReport(report);
+            if (target == quality_widget_)
+                quality_evaluated_ = true;
+            else
+                clean_quality_evaluated_ = true;
+            quality_btn_->setEnabled(true);
+            clean_eval_btn_->setEnabled(true);
+            eval->deleteLater();
+        }, Qt::QueuedConnection);
+
+        connect(eval, &quality::MefargAuQualityEvaluator::Error,
+                this, [this, eval, target](const QString& msg) {
+            target->SetStatusMessage(
+                QStringLiteral("<p style='color:#F44336;'>评估失败: %1</p>").arg(msg));
+            quality_btn_->setEnabled(true);
+            clean_eval_btn_->setEnabled(true);
+            eval->deleteLater();
+        }, Qt::QueuedConnection);
+
+        (void)QtConcurrent::run([eval]() { eval->Evaluate(); });
+    } else {
+        auto* eval = new quality::OpenFaceQualityEvaluator(nullptr);
+        eval->LoadCsv(main_csv, quality_csv);
+
+        connect(eval, &quality::OpenFaceQualityEvaluator::Finished,
+                this, [this, eval, target](const quality::OpenFaceQualityReport& report) {
+            target->RenderReport(report);
+            if (target == quality_widget_)
+                quality_evaluated_ = true;
+            else
+                clean_quality_evaluated_ = true;
+            quality_btn_->setEnabled(true);
+            clean_eval_btn_->setEnabled(true);
+            eval->deleteLater();
+        }, Qt::QueuedConnection);
+
+        connect(eval, &quality::OpenFaceQualityEvaluator::Error,
+                this, [this, eval, target](const QString& msg) {
+            target->SetStatusMessage(
+                QStringLiteral("<p style='color:#F44336;'>评估失败: %1</p>").arg(msg));
+            quality_btn_->setEnabled(true);
+            clean_eval_btn_->setEnabled(true);
+            eval->deleteLater();
+        }, Qt::QueuedConnection);
+
+        (void)QtConcurrent::run([eval]() { eval->Evaluate(); });
+    }
 }
 
 void TaskDetailPage::OnCleanData() {
@@ -764,10 +922,24 @@ void TaskDetailPage::OnCleanData() {
         "QLabel { font-size: 14px; font-weight: bold; color: %1; }").arg(tm.TextPrimary()));
     root->addWidget(title);
 
-    auto* desc = new QLabel(
-        QStringLiteral("帧质量等级由置信度、姿态、视线、AU 等 6 个维度综合评定。\n"
-                       "低于所选等级的帧将被剔除，输出 _clean.csv。"),
-        &dlg);
+    auto task = task_repo_->FindById(task_id_);
+    std::string backend = task ? task->backend : "";
+    bool is_openface = (backend != "mediapipe" && backend != "l2cs" && backend != "mefarg_au");
+
+    QString desc_text;
+    if (backend == "mediapipe")
+        desc_text = QStringLiteral("帧质量等级由几何精度和姿态合理性两个维度综合评定。\n"
+                                   "低于所选等级的帧将被剔除，输出 _clean.csv。");
+    else if (backend == "l2cs")
+        desc_text = QStringLiteral("帧质量等级由预测置信度（softmax峰值概率）和视线稳定性两个维度综合评定。\n"
+                                   "低于所选等级的帧将被剔除，输出 _clean.csv。");
+    else if (backend == "mefarg_au")
+        desc_text = QStringLiteral("帧质量等级由判决策略距离和时序稳定性两个维度综合评定。\n"
+                                   "低于所选等级的帧将被剔除，输出 _clean.csv。");
+    else
+        desc_text = QStringLiteral("帧质量等级由置信度、姿态、视线、AU 等 6 个维度综合评定。\n"
+                                   "低于所选等级的帧将被剔除，输出 _clean.csv。");
+    auto* desc = new QLabel(desc_text, &dlg);
     desc->setWordWrap(true);
     desc->setStyleSheet(QString("QLabel { color: %1; font-size: 12px; }").arg(tm.TextMuted()));
     root->addWidget(desc);
@@ -827,47 +999,166 @@ void TaskDetailPage::OnCleanData() {
     clean_btn_->setText(QStringLiteral("清洗中..."));
     clean_btn_->setEnabled(false);
 
-    auto* cleaner = new clean::OpenFaceDataCleaner(nullptr);
-    if (!cleaner->LoadCsv(main_csv, quality_csv)) {
-        QMessageBox::warning(this,
-            QStringLiteral("数据清洗"),
-            QStringLiteral("加载CSV数据失败"));
-        clean_btn_->setText(QStringLiteral("数据清洗"));
-        clean_btn_->setEnabled(true);
-        delete cleaner;
-        return;
+    if (backend == "mediapipe") {
+        auto* cleaner = new clean::MediaPipeDataCleaner(nullptr);
+        if (!cleaner->LoadCsv(main_csv, quality_csv)) {
+            QMessageBox::warning(this,
+                QStringLiteral("数据清洗"),
+                QStringLiteral("加载CSV数据失败"));
+            clean_btn_->setText(QStringLiteral("数据清洗"));
+            clean_btn_->setEnabled(true);
+            delete cleaner;
+            return;
+        }
+
+        connect(cleaner, &clean::MediaPipeDataCleaner::Finished,
+                this, [this, clean_csv, cleaner](const clean::CleanResult& result) {
+            QMessageBox::information(this,
+                QStringLiteral("数据清洗完成"),
+                QString::fromStdString(result.summary_text)
+                    + QStringLiteral("\n清洗文件: %1").arg(clean_csv));
+            clean_btn_->setText(QStringLiteral("数据清洗"));
+            clean_btn_->setEnabled(true);
+            clean_eval_btn_->setEnabled(true);
+            clean_eval_btn_->setChecked(false);
+            clean_csv_btn_->setEnabled(true);
+            clean_quality_evaluated_ = false;
+            clean_quality_widget_->Clear();
+            cleaner->deleteLater();
+        }, Qt::QueuedConnection);
+
+        connect(cleaner, &clean::MediaPipeDataCleaner::Error,
+                this, [this, cleaner](const QString& msg) {
+            QMessageBox::warning(this,
+                QStringLiteral("数据清洗失败"), msg);
+            clean_btn_->setText(QStringLiteral("数据清洗"));
+            clean_btn_->setEnabled(true);
+            cleaner->deleteLater();
+        }, Qt::QueuedConnection);
+
+        (void)QtConcurrent::run([cleaner, cfg]() { cleaner->Execute(cfg); });
+    } else if (backend == "l2cs") {
+        auto* cleaner = new clean::L2csDataCleaner(nullptr);
+        if (!cleaner->LoadCsv(main_csv, quality_csv)) {
+            QMessageBox::warning(this,
+                QStringLiteral("数据清洗"),
+                QStringLiteral("加载CSV数据失败"));
+            clean_btn_->setText(QStringLiteral("数据清洗"));
+            clean_btn_->setEnabled(true);
+            delete cleaner;
+            return;
+        }
+
+        connect(cleaner, &clean::L2csDataCleaner::Finished,
+                this, [this, clean_csv, cleaner](const clean::CleanResult& result) {
+            QMessageBox::information(this,
+                QStringLiteral("数据清洗完成"),
+                QString::fromStdString(result.summary_text)
+                    + QStringLiteral("\n清洗文件: %1").arg(clean_csv));
+            clean_btn_->setText(QStringLiteral("数据清洗"));
+            clean_btn_->setEnabled(true);
+            clean_eval_btn_->setEnabled(true);
+            clean_eval_btn_->setChecked(false);
+            clean_csv_btn_->setEnabled(true);
+            clean_quality_evaluated_ = false;
+            clean_quality_widget_->Clear();
+            cleaner->deleteLater();
+        }, Qt::QueuedConnection);
+
+        connect(cleaner, &clean::L2csDataCleaner::Error,
+                this, [this, cleaner](const QString& msg) {
+            QMessageBox::warning(this,
+                QStringLiteral("数据清洗失败"), msg);
+            clean_btn_->setText(QStringLiteral("数据清洗"));
+            clean_btn_->setEnabled(true);
+            cleaner->deleteLater();
+        }, Qt::QueuedConnection);
+
+        (void)QtConcurrent::run([cleaner, cfg]() { cleaner->Execute(cfg); });
+    } else if (backend == "mefarg_au") {
+        auto* cleaner = new clean::MefargAuDataCleaner(nullptr);
+        if (!cleaner->LoadCsv(main_csv, quality_csv)) {
+            QMessageBox::warning(this,
+                QStringLiteral("数据清洗"),
+                QStringLiteral("加载CSV数据失败"));
+            clean_btn_->setText(QStringLiteral("数据清洗"));
+            clean_btn_->setEnabled(true);
+            delete cleaner;
+            return;
+        }
+
+        connect(cleaner, &clean::MefargAuDataCleaner::Finished,
+                this, [this, clean_csv, cleaner](const clean::CleanResult& result) {
+            QMessageBox::information(this,
+                QStringLiteral("数据清洗完成"),
+                QString::fromStdString(result.summary_text)
+                    + QStringLiteral("\n清洗文件: %1").arg(clean_csv));
+            clean_btn_->setText(QStringLiteral("数据清洗"));
+            clean_btn_->setEnabled(true);
+            clean_eval_btn_->setEnabled(true);
+            clean_eval_btn_->setChecked(false);
+            clean_csv_btn_->setEnabled(true);
+            clean_quality_evaluated_ = false;
+            clean_quality_widget_->Clear();
+            cleaner->deleteLater();
+        }, Qt::QueuedConnection);
+
+        connect(cleaner, &clean::MefargAuDataCleaner::Error,
+                this, [this, cleaner](const QString& msg) {
+            QMessageBox::warning(this,
+                QStringLiteral("数据清洗失败"), msg);
+            clean_btn_->setText(QStringLiteral("数据清洗"));
+            clean_btn_->setEnabled(true);
+            cleaner->deleteLater();
+        }, Qt::QueuedConnection);
+
+        (void)QtConcurrent::run([cleaner, cfg]() { cleaner->Execute(cfg); });
+    } else {
+        auto* cleaner = new clean::OpenFaceDataCleaner(nullptr);
+        if (!cleaner->LoadCsv(main_csv, quality_csv)) {
+            QMessageBox::warning(this,
+                QStringLiteral("数据清洗"),
+                QStringLiteral("加载CSV数据失败"));
+            clean_btn_->setText(QStringLiteral("数据清洗"));
+            clean_btn_->setEnabled(true);
+            delete cleaner;
+            return;
+        }
+
+        connect(cleaner, &clean::OpenFaceDataCleaner::Finished,
+                this, [this, clean_csv, cleaner](const clean::CleanResult& result) {
+            QMessageBox::information(this,
+                QStringLiteral("数据清洗完成"),
+                QString::fromStdString(result.summary_text)
+                    + QStringLiteral("\n清洗文件: %1").arg(clean_csv));
+            clean_btn_->setText(QStringLiteral("数据清洗"));
+            clean_btn_->setEnabled(true);
+            clean_eval_btn_->setEnabled(true);
+            clean_eval_btn_->setChecked(false);
+            clean_csv_btn_->setEnabled(true);
+            clean_quality_evaluated_ = false;
+            clean_quality_widget_->Clear();
+            cleaner->deleteLater();
+        }, Qt::QueuedConnection);
+
+        connect(cleaner, &clean::OpenFaceDataCleaner::Error,
+                this, [this, cleaner](const QString& msg) {
+            QMessageBox::warning(this,
+                QStringLiteral("数据清洗失败"), msg);
+            clean_btn_->setText(QStringLiteral("数据清洗"));
+            clean_btn_->setEnabled(true);
+            cleaner->deleteLater();
+        }, Qt::QueuedConnection);
+
+        (void)QtConcurrent::run([cleaner, cfg]() { cleaner->Execute(cfg); });
     }
-
-    connect(cleaner, &clean::OpenFaceDataCleaner::Finished,
-            this, [this, clean_csv, cleaner](const clean::CleanResult& result) {
-        QMessageBox::information(this,
-            QStringLiteral("数据清洗完成"),
-            QString::fromStdString(result.summary_text)
-                + QStringLiteral("\n清洗文件: %1").arg(clean_csv));
-        clean_btn_->setText(QStringLiteral("数据清洗"));
-        clean_btn_->setEnabled(true);
-        clean_eval_btn_->setEnabled(true);
-        clean_eval_btn_->setChecked(false);
-        clean_csv_btn_->setEnabled(true);
-        clean_quality_evaluated_ = false;
-        clean_quality_widget_->Clear();
-        cleaner->deleteLater();
-    }, Qt::QueuedConnection);
-
-    connect(cleaner, &clean::OpenFaceDataCleaner::Error,
-            this, [this, cleaner](const QString& msg) {
-        QMessageBox::warning(this,
-            QStringLiteral("数据清洗失败"), msg);
-        clean_btn_->setText(QStringLiteral("数据清洗"));
-        clean_btn_->setEnabled(true);
-        cleaner->deleteLater();
-    }, Qt::QueuedConnection);
-
-    (void)QtConcurrent::run([cleaner, cfg]() { cleaner->Execute(cfg); });
 }
 
 void TaskDetailPage::OnOutputVideoPositionChanged(qint64 ms) {
-    int videoFrame = static_cast<int>(ms * output_video_fps_ / 1000.0);
+    int videoFrame = static_cast<int>(ms * output_video_fps_ / 1000.0) + 1;
+    if (output_total_frames_ > 0 && videoFrame > output_total_frames_)
+        videoFrame = output_total_frames_;
+    if (videoFrame < 1) videoFrame = 1;
     int csvFrame = videoFrame;
     output_frame_label_->setText(QStringLiteral("帧号: %1").arg(videoFrame));
     if (detail_widget_)
@@ -886,7 +1177,7 @@ void TaskDetailPage::OnSourceVideoPositionChanged(qint64 ms) {
         }
     }
     if (fps <= 0) fps = 24.0;
-    int frame = static_cast<int>(ms * fps / 1000.0);
+    int frame = static_cast<int>(ms * fps / 1000.0) + 1;
     source_frame_label_->setText(QStringLiteral("帧号: %1").arg(frame));
 }
 

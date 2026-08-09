@@ -126,6 +126,10 @@ public slots:
     std::string GetWorkerOutputDir() const;
     std::string GetWorkerOutputVideoPath() const;
 
+    void ReleaseMediaResources();
+    bool IsVideoLocked(int64_t video_id) const;
+    bool IsImageLocked(int64_t image_id) const;
+
 public slots:
     void OnStop();
     void ReapplyTheme();

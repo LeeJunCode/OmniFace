@@ -1,4 +1,5 @@
 #include "omniface/ui/pages/image_management_page.h"
+#include "omniface/ui/pages/processing_page.h"
 
 #include <QDir>
 #include <QFile>
@@ -523,9 +524,15 @@ void ImageManagementPage::OnDeleteImage() {
 
     if (result != QMessageBox::Yes) return;
 
+    if (process_page_ && process_page_->IsImageLocked(img_id)) {
+        QMessageBox::warning(this, QStringLiteral("无法删除"),
+            QStringLiteral("该图片正在处理中使用，请先停止处理后再删除。"));
+        return;
+    }
+
     if (!repo_->Delete(img_id)) {
         QMessageBox::warning(this, QStringLiteral("删除失败"),
-            QStringLiteral("无法删除图片记录。"));
+            QStringLiteral("无法删除：该图片有关联的处理任务，请先删除对应任务。"));
         return;
     }
     if (!rec->saved_path.empty()) {

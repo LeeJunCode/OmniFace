@@ -69,15 +69,17 @@ void L2csDetailWidget::LoadCsvData() {
         QString line = in.readLine().trimmed();
         if (line.isEmpty()) continue;
         QStringList cols = line.split(QStringLiteral(","));
-        // CSV: frame,timestamp,gaze_yaw,gaze_pitch,gaze_x,gaze_y,gaze_z
-        if (cols.size() < 7) continue;
+        // CSV: frame,timestamp,yaw_maxp,pitch_maxp,gaze_yaw,gaze_pitch,gaze_x,gaze_y,gaze_z
+        if (cols.size() < 9) continue;
         L2csFrameData d;
         d.frame_number = cols.value(0).toInt();
-        d.yaw    = cols.value(2).toFloat();
-        d.pitch  = cols.value(3).toFloat();
-        d.gaze_x = cols.value(4).toFloat();
-        d.gaze_y = cols.value(5).toFloat();
-        d.gaze_z = cols.value(6).toFloat();
+        d.yaw_maxp  = cols.value(2).toFloat();
+        d.pitch_maxp = cols.value(3).toFloat();
+        d.yaw    = cols.value(4).toFloat();
+        d.pitch  = cols.value(5).toFloat();
+        d.gaze_x = cols.value(6).toFloat();
+        d.gaze_y = cols.value(7).toFloat();
+        d.gaze_z = cols.value(8).toFloat();
         frame_to_index_[d.frame_number] = static_cast<int>(frames_.size());
         frames_.push_back(d);
     }
@@ -85,6 +87,10 @@ void L2csDetailWidget::LoadCsvData() {
 
 int L2csDetailWidget::TotalFrames() const {
     return static_cast<int>(frames_.size());
+}
+
+void L2csDetailWidget::SetFrameGrades(const std::unordered_map<int, char>& grades) {
+    frame_grades_ = grades;
 }
 
 void L2csDetailWidget::UpdateForFrame(int videoFrameNumber) {
@@ -104,11 +110,27 @@ void L2csDetailWidget::UpdateForFrame(int videoFrameNumber) {
 
     const auto& d = frames_[it->second];
 
-    frame_no_label_->setText(QStringLiteral("当前帧: %1").arg(videoFrameNumber - 1));
+    frame_no_label_->setText(QStringLiteral("当前帧: %1").arg(videoFrameNumber));
+
+    // Grade badge
+    QString grade_str;
+    auto git = frame_grades_.find(videoFrameNumber);
+    if (git != frame_grades_.end()) {
+        QString color;
+        switch (git->second) {
+        case 'S': color = QStringLiteral("#2196F3"); break;
+        case 'A': color = QStringLiteral("#4CAF50"); break;
+        case 'B': color = QStringLiteral("#FF9800"); break;
+        case 'C': color = QStringLiteral("#FF5722"); break;
+        default:  color = QStringLiteral("#F44336"); break;
+        }
+        grade_str = QStringLiteral(" <span style='color:%1;font-size:12px;'>[%2级]</span>")
+            .arg(color).arg(QChar(git->second));
+    }
 
     QString html;
-    html += QStringLiteral("<h3 style='color:%1;margin-bottom:10px;'>L2CS-Net 视线分析</h3>")
-        .arg(primary);
+    html += QStringLiteral("<h3 style='color:%1;margin-bottom:10px;'>L2CS-Net 视线分析%2</h3>")
+        .arg(primary, grade_str);
 
     // ── Gaze direction ──
     QString xLabel = GazeXLabel(d.yaw);
@@ -117,17 +139,35 @@ void L2csDetailWidget::UpdateForFrame(int videoFrameNumber) {
     html += QStringLiteral("<p style='margin-bottom:8px;'><b style='color:%1;'>视线方向：</b>")
         .arg(textPrimary);
     if (xLabel.isEmpty() && yLabel.isEmpty()) {
-        html += QStringLiteral("视线正视前方。");
+        html += QStringLiteral("正视前方");
     } else {
         QStringList parts;
         if (!yLabel.isEmpty()) parts << yLabel;
         if (!xLabel.isEmpty()) parts << xLabel;
         html += parts.join(QStringLiteral("，"));
     }
-    html += QStringLiteral(" <span style='color:%1;font-size:11px;'>"
-        "(yaw: %2°, pitch: %3°)</span></p>")
-        .arg(textDim)
-        .arg(d.yaw, 0, 'f', 1).arg(d.pitch, 0, 'f', 1);
+    html += QStringLiteral("</p>");
+
+    html += QStringLiteral("<table style='color:%1;font-size:12px;margin-bottom:8px;'>"
+        "<tr><td>水平偏转角 (yaw)：</td><td style='color:%2;text-align:right;'>%3°</td></tr>"
+        "<tr><td>垂直偏转角 (pitch)：</td><td style='color:%2;text-align:right;'>%4°</td></tr>"
+        "</table>")
+        .arg(textPrimary, textDim)
+        .arg(d.yaw, 0, 'f', 1)
+        .arg(d.pitch, 0, 'f', 1);
+
+    // ── Confidence ──
+    float mean_maxp = (d.yaw_maxp + d.pitch_maxp) * 0.5f;
+    html += QStringLiteral("<p style='margin-bottom:4px;'><b style='color:%1;'>预测置信度：</b></p>").arg(textPrimary);
+    html += QStringLiteral("<table style='color:%1;font-size:12px;'>"
+        "<tr><td>yaw max_prob：</td><td style='color:%2;text-align:right;'>%3</td></tr>"
+        "<tr><td>pitch max_prob：</td><td style='color:%2;text-align:right;'>%4</td></tr>"
+        "<tr><td>均值：</td><td style='color:%2;text-align:right;'>%5</td></tr>"
+        "</table>")
+        .arg(textPrimary, textDim)
+        .arg(d.yaw_maxp, 0, 'f', 4)
+        .arg(d.pitch_maxp, 0, 'f', 4)
+        .arg(mean_maxp, 0, 'f', 4);
 
     text_display_->setHtml(html);
 }

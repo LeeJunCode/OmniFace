@@ -72,19 +72,39 @@ void MediaPipeDetailWidget::LoadCsvData() {
     if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) return;
 
     QTextStream in(&file);
-    in.readLine(); // skip header: frame,timestamp,pitch,yaw,roll,x_0,y_0,...,x_467,y_467
+    QString header = in.readLine();
+    // Detect format:
+    //   v3: frame,timestamp,reproj_rms,nose_proj_err,pitch,yaw,roll,...
+    //   v2: frame,timestamp,score,reproj_rms,nose_proj_err,pitch,yaw,roll,...
+    //   v1: frame,timestamp,score,pitch,yaw,roll,...
+    //   v0: frame,timestamp,pitch,yaw,roll,...
+    QStringList header_cols = header.split(QStringLiteral(","));
+    bool has_reproj_v3 = (header_cols.size() > 2 && header_cols[2].trimmed() == QStringLiteral("reproj_rms"));
+    bool has_reproj_v2 = (header_cols.size() > 3 && header_cols[3].trimmed() == QStringLiteral("reproj_rms"));
+    bool has_score  = !has_reproj_v3 && !has_reproj_v2 && (header_cols.size() > 2 && header_cols[2].trimmed() == QStringLiteral("score"));
+    int pitch_idx, yaw_idx, roll_idx, min_cols, lm_offset;
+    if (has_reproj_v3) {
+        pitch_idx = 4; yaw_idx = 5; roll_idx = 6; min_cols = 7; lm_offset = 7;
+    } else if (has_reproj_v2) {
+        pitch_idx = 5; yaw_idx = 6; roll_idx = 7; min_cols = 8; lm_offset = 8;
+    } else if (has_score) {
+        pitch_idx = 3; yaw_idx = 4; roll_idx = 5; min_cols = 6; lm_offset = 6;
+    } else {
+        pitch_idx = 2; yaw_idx = 3; roll_idx = 4; min_cols = 5; lm_offset = 5;
+    }
+
     while (!in.atEnd()) {
         QString line = in.readLine().trimmed();
         if (line.isEmpty()) continue;
         QStringList cols = line.split(QStringLiteral(","));
-        if (cols.size() < 5) continue;
+        if (cols.size() < min_cols) continue;
         MediaPipeFrameData d;
         d.frame_number = cols.value(0).toInt();
-        d.pitch = cols.value(2).toFloat();
-        d.yaw   = cols.value(3).toFloat();
-        d.roll  = cols.value(4).toFloat();
-        d.landmark_count = (cols.size() >= 5 + 468*2)
-            ? 468 : ((cols.size() - 5) / 2);
+        d.pitch = cols.value(pitch_idx).toFloat();
+        d.yaw   = cols.value(yaw_idx).toFloat();
+        d.roll  = cols.value(roll_idx).toFloat();
+        d.landmark_count = (cols.size() >= lm_offset + 468*2)
+            ? 468 : ((cols.size() - lm_offset) / 2);
         frame_to_index_[d.frame_number] = static_cast<int>(frames_.size());
         frames_.push_back(d);
     }
@@ -92,6 +112,10 @@ void MediaPipeDetailWidget::LoadCsvData() {
 
 int MediaPipeDetailWidget::TotalFrames() const {
     return static_cast<int>(frames_.size());
+}
+
+void MediaPipeDetailWidget::SetFrameGrades(const std::unordered_map<int, char>& grades) {
+    frame_grades_ = grades;
 }
 
 void MediaPipeDetailWidget::UpdateForFrame(int videoFrameNumber) {
@@ -111,7 +135,7 @@ void MediaPipeDetailWidget::UpdateForFrame(int videoFrameNumber) {
 
     const auto& d = frames_[it->second];
 
-    frame_no_label_->setText(QStringLiteral("当前帧: %1").arg(videoFrameNumber - 1));
+    frame_no_label_->setText(QStringLiteral("当前帧: %1").arg(videoFrameNumber));
 
     QString html;
     html += QStringLiteral("<h3 style='color:%1;margin-bottom:10px;'>MediaPipe FaceMesh 分析</h3>")
@@ -137,6 +161,23 @@ void MediaPipeDetailWidget::UpdateForFrame(int videoFrameNumber) {
         "(pitch: %2°, yaw: %3°, roll: %4°)</span></p>")
         .arg(textDim)
         .arg(d.pitch, 0, 'f', 1).arg(d.yaw, 0, 'f', 1).arg(d.roll, 0, 'f', 1);
+
+    // Grade display
+    auto git = frame_grades_.find(d.frame_number);
+    if (git != frame_grades_.end()) {
+        QString grade_color;
+        QString grade_text;
+        switch (git->second) {
+        case 'S': grade_color = "#4CAF50"; grade_text = QStringLiteral("卓越"); break;
+        case 'A': grade_color = "#8BC34A"; grade_text = QStringLiteral("优秀"); break;
+        case 'B': grade_color = "#FFC107"; grade_text = QStringLiteral("良好"); break;
+        case 'C': grade_color = "#FF9800"; grade_text = QStringLiteral("一般"); break;
+        default:  grade_color = "#F44336"; grade_text = QStringLiteral("较差"); break;
+        }
+        html += QStringLiteral("<p style='margin-top:4px;'><b style='color:%1;'>质量等级: </b>"
+            "<span style='color:%2;font-weight:bold;'>%3 (%4)</span></p>")
+            .arg(textPrimary, grade_color).arg(git->second).arg(grade_text);
+    }
 
     text_display_->setHtml(html);
 }
