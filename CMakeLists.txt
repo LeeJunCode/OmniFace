@@ -60,7 +60,7 @@ qt_standard_project_setup()
 # Detect MSVC for platform-specific settings
 if(MSVC)
     add_compile_options(/W3 /utf-8 /wd4828)
-    add_compile_definitions(NOMINMAX)
+    add_compile_definitions(NOMINMAX _CRT_SECURE_NO_WARNINGS)
 else()
     add_compile_options(-Wall -Wextra -Wpedantic)
 endif()

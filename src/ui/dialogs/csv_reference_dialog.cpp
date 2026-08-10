@@ -15,7 +15,7 @@ CsvReferenceDialog::CsvReferenceDialog(QWidget* parent)
     setWindowTitle(QStringLiteral("CSV 数据参考 — 全量字段说明与映射关系"));
     resize(960, 680);
     setMinimumSize(860, 560);
-    setWindowFlags(windowFlags() | Qt::WindowMaximizeButtonHint);
+    setWindowFlags(windowFlags() | Qt::WindowMaximizeButtonHint | Qt::WindowMinimizeButtonHint);
     setStyleSheet(QStringLiteral(
         "QDialog { background: %1; color: %2; }"
         "QPushButton {"
@@ -308,10 +308,12 @@ static QTextEdit* BuildMediaPipeFieldDoc() {
         "<b>角度单位：</b>所有姿态角度均为<b>度 (°)</b><br>"
         "<b>方向描述原则：</b>以下「左/右/上/下」均从<b>被拍摄人物自身视角</b>出发。"));
 
-    html += H2(QStringLiteral("1. 基本检测信息（5 列）"));
+    html += H2(QStringLiteral("1. 基本检测信息（7 列）"));
     html += FieldTable({
         " frame", "帧序号（从 1 开始）",
         " timestamp", "时间戳（秒）。计算公式：timestamp = (frame - 1) / 帧率",
+        " reproj_rms", QString::fromUtf8("重投影 RMS 误差（像素）。EPnP 姿态解算后，将 3D 规范模型投影回 2D 的均方根误差。<b>值越小姿态越可靠</b>，通常 < 3.0 表示姿态估计准确"),
+        " nose_proj_err", QString::fromUtf8("鼻尖投影误差（像素）。仅鼻尖顶点（FaceMesh 索引 1）的重投影误差。<b>对鼻尖追踪质量敏感</b>，用于快速判断姿态解算是否异常"),
         " pitch", QString::fromUtf8("俯仰角（度）。<b>正值 = 下俯</b>（低头），<b>负值 = 上扬</b>（抬头）"),
         " yaw", QString::fromUtf8("偏航角（度）。<b>正值 = 人物向左转</b>，<b>负值 = 人物向右转</b>。<b>与 OpenFace 符号约定完全一致</b>"),
         " roll", QString::fromUtf8("翻滚角（度）。<b>正值 = 头部右倾</b>，<b>负值 = 头部左倾</b>"),
@@ -331,7 +333,7 @@ static QTextEdit* BuildMediaPipeFieldDoc() {
         "• 133-209（77 个）：左眼及左眉（含虹膜位置）<br>"
         "• 210-276（67 个）：右眼及右眉<br>"
         "• 277-467（191 个）：前额、鼻梁及面颊<br><br>"
-        "<b>总列数 = 5（元数据）+ 468×2（坐标对）= 941 列</b>"));
+        "<b>总列数 = 7（元数据） + 468×2（坐标对）= 943 列</b>"));
 
     html += Note(QStringLiteral("<b>适用场景：</b>虚拟化妆、AR 面具、面部表情动作捕捉等。"
         "MediaPipe 本身不提供视线方向或 AU 信息。"));
@@ -346,12 +348,15 @@ static QTextEdit* BuildL2csFieldDoc() {
     html += Note(QStringLiteral("<b>概述：</b>L2CS-Net（L2 Coordinate System Network）是专门用于视线方向估计的深度学习模型。"
         "以 MobileNetV2 为主干网络，输入 448×448 的人脸裁剪图像，直接输出视线俯仰角和偏航角。"
         "与 OpenFace 的眼球跟踪不同，L2CS-Net 直接从整张面部图像预测视线方向，不需要检测眼球关键点。"
-        "CSV 文件共 7 列。"));
+        "CSV 文件共 9 列。"));
 
     // ── Direction convention ──
     html += H2(QStringLiteral("坐标与方向约定"));
     html += Note(QStringLiteral(
-        "<b>注意：L2CS-Net 的视线方向符号约定与 OpenFace 不同！</b>这是各自数学模型决定的，不是错误。"));
+        "<b>注意：L2CS-Net 的视线角度符号约定与 OpenFace 相反。</b>"
+        "这是各自数学模型决定的，不是错误。<b>在实际 UI 中，系统已针对每个后端正确映射，"
+        "视线方向的文字描述是一致的</b>（例如人物向左看时，两个后端的详情界面都会显示\"向左看\"）。"
+        "但如果直接对比两个后端的原始 CSV 数值，需要注意符号含义不同。"));
 
     auto& tm = ThemeManager::Instance();
     html += Note(QStringLiteral(
@@ -367,16 +372,21 @@ static QTextEdit* BuildL2csFieldDoc() {
         .arg(tm.HoverBg(), tm.Warning()));
 
     html += Note(QStringLiteral(
-        "差异源于 GazeTo3D 公式：<code>gaze = (-cos(pitch)·sin(yaw), -sin(pitch), -cos(pitch)·cos(yaw))</code><br>"
-        "公式中的负号使 3D 向量 X 分量与 yaw 反号。"
-        "而 OpenFace 的 <code>gaze_angle_x = atan2(gaze.x, -gaze.z)</code> 与 gaze.x 同号。"
-        "因此同一注视方向在两个后端中记录的<b>符号恰好相反</b>。<br>"
+        "差异源于 L2CS-Net 的 GazeTo3D 公式：<code>gaze = (-cos(pitch)·sin(yaw), -sin(pitch), -cos(pitch)·cos(yaw))</code><br>"
+        "公式中的负号使 3D 向量 X/Y 分量与 yaw/pitch 角度值反号。"
+        "而 OpenFace 的 <code>gaze_angle_x = atan2(gaze.x, -gaze.z)</code> 与 3D 向量分量同号。<br>"
+        "因此同一注视方向在两个后端的<b>角度字段</b>（gaze_yaw vs gaze_angle_x）中符号恰好相反。"
+        "但<b>3D 视线向量</b>（gaze_x/gaze_y/gaze_z）在两者中使用相同的相机坐标系，符号约定一致。<br>"
         "<b>角度单位：度 (°)</b>。<b>方向描述：</b>均从被拍摄人物自身视角出发。"));
 
-    html += H2(QStringLiteral("1. 基本检测信息（7 列）"));
+    html += H2(QStringLiteral("1. 基本检测信息（9 列）"));
     html += FieldTable({
         " frame", "帧序号（从 1 开始）",
         " timestamp", "时间戳（秒）",
+        " yaw_maxp",
+            QString::fromUtf8("偏航角预测的最大 softmax 概率。90-bin 分类中最高置信度 bin 的概率值。<b>值越大表示模型对偏航角预测越确定</b>。可用于过滤低置信度帧"),
+        " pitch_maxp",
+            QString::fromUtf8("俯仰角预测的最大 softmax 概率。<b>值越大表示模型对俯仰角预测越确定</b>。若 yaw_maxp 和 pitch_maxp 均 < 0.3，该帧视线预测可能不可靠"),
         " gaze_yaw",
             QString::fromUtf8("视线偏航角（度）。经 EMA 平滑（α=0.20）。<b>正值 = 人物向右看</b>，<b>负值 = 人物向左看</b>。<br>"
             "通过 90-bin 分类回归解码：<code>Σ(p[i] × i) × 4.0 - 180.0</code>"),
@@ -563,7 +573,19 @@ static QTextEdit* BuildMediaPipeMappingDoc() {
         "roll（翻滚）", "> 15°", "明显右倾",
     });
 
-    html += H2(QStringLiteral("2. 468 个关键点坐标说明"));
+    html += H2(QStringLiteral("2. 姿态质量指标映射"));
+    html += Note(QStringLiteral("<b>用途：</b>评估 EPnP 头部姿态解算的可靠性。"));
+    html += MappingTable({
+        "reproj_rms", "< 1.5", "优秀 — 姿态解算精度极高，3D 模型与 2D 关键点高度吻合",
+        "reproj_rms", "1.5 ~ 3.0", "良好 — 姿态估计可靠，可用于后续分析",
+        "reproj_rms", "3.0 ~ 5.0", "一般 — 存在一定偏差，姿态数据建议谨慎使用",
+        "reproj_rms", "> 5.0", "较差 — 重投影误差较大，该帧姿态可能不准确",
+        "nose_proj_err", "< 2.0", "正常 — 鼻尖定位准确，姿态数据可靠",
+        "nose_proj_err", "2.0 ~ 5.0", "偏低 — 鼻尖位置可能有抖动或遮挡",
+        "nose_proj_err", "> 5.0", "异常 — 鼻尖投影严重偏离，姿态数据不可信",
+    });
+
+    html += H2(QStringLiteral("3. 468 个关键点坐标说明"));
     html += Note(QStringLiteral(
         "<b>说明：</b>468 个 FaceMesh 关键点的 x/y 坐标（像素）<b>不进行数值→文字的映射</b>，"
         "而是直接用于可视化目的：在图像上绘制面部线框网格、面颊轮廓曲线、"
@@ -584,9 +606,10 @@ static QTextEdit* BuildL2csMappingDoc() {
     QString html;
     html += QStringLiteral("<h2 style='color:%1;'>L2CS-Net — 数值 → 文字描述对照</h2>").arg(ThemeManager::Instance().Primary());
     html += Note(QStringLiteral("<b>方向描述均从被拍摄人物自身视角出发。所有角度单位为度 (°)。</b><br>"
-        "<b>注意：L2CS-Net 的视线方向符号约定与 OpenFace 相反！</b>"
+        "<b>注意：L2CS-Net 的视线角度符号约定与 OpenFace 相反。</b>"
         "同一注视方向，L2CS 的 gaze_yaw 正值 = 向右看，而 OpenFace 的 gaze_angle_x 正值 = 向左看。"
-        "这是各自数学模型（GazeTo3D 公式 vs atan2 分解）决定的，不是错误。详见字段含义标签页。"));
+        "但<b>在实际 UI 中，两个后端的视线方向文字描述是一致的</b>（系统已针对各自的符号约定正确映射）。"
+        "差异源于各自数学模型（GazeTo3D 公式 vs atan2 分解），不是错误。详见字段含义标签页。"));
 
     html += H2(QStringLiteral("1. 视线方向（角度值）映射"));
     html += Note(QStringLiteral("<b>用途：</b>最直观地判断被观察者正在看哪里。"));
@@ -609,18 +632,27 @@ static QTextEdit* BuildL2csMappingDoc() {
         "向量分量的大小直接反映视线在各个方向上的偏转程度。"));
     html += MappingTable({
         "gaze_x", "≈ 0（范围 -0.1 ~ 0.1）", "水平方向无偏转，正视前方",
-        "gaze_x", "> 0.2", "视线偏右（相机 X 轴正方向）",
-        "gaze_x", "< -0.2", "视线偏左（相机 X 轴负方向）",
+        "gaze_x", "> 0.2", "视线偏左（注视方向指向相机 +X = 画面右侧，人物自身视角下为向左看）",
+        "gaze_x", "< -0.2", "视线偏右（注视方向指向相机 -X = 画面左侧，人物自身视角下为向右看）",
         "gaze_y", "≈ 0（范围 -0.1 ~ 0.1）", "垂直方向无偏转，平视",
-        "gaze_y", "> 0.2", "视线偏下（相机 Y 轴正方向）",
-        "gaze_y", "< -0.2", "视线偏上（相机 Y 轴负方向）",
+        "gaze_y", "> 0.2", "视线偏下（注视方向指向相机 +Y = 画面下方）",
+        "gaze_y", "< -0.2", "视线偏上（注视方向指向相机 -Y = 画面上方）",
         "gaze_z", "≈ -1", "视线朝前（相机 Z 轴负方向 = 朝向相机）",
     });
     html += Note(QStringLiteral("<b>提示：</b>3D 向量三个分量满足 x² + y² + z² ≈ 1（单位向量）。"
         "大多数帧的 gaze_z 都在 -0.95 到 -1.0 之间（几乎完全朝前），"
         "这是因为人类大多数的注视方向都接近正前方。"));
 
-    html += H2(QStringLiteral("3. 综合判断规则"));
+    html += H2(QStringLiteral("3. 预测置信度映射"));
+    html += Note(QStringLiteral("<b>用途：</b>基于 softmax 最大概率值判断视线预测的可靠性。"));
+    html += MappingTable({
+        "yaw_maxp / pitch_maxp", "> 0.7", "高置信度 — 模型对角度预测非常确定，视线数据可靠",
+        "yaw_maxp / pitch_maxp", "0.4 ~ 0.7", "中等置信度 — 预测有一定把握，视线数据基本可用",
+        "yaw_maxp / pitch_maxp", "0.2 ~ 0.4", "低置信度 — 模型不确定，视线方向可能存在较大偏差",
+        "yaw_maxp / pitch_maxp", "< 0.2", "极低置信度 — 该帧视线预测不可靠，建议过滤",
+    });
+
+    html += H2(QStringLiteral("4. 综合判断规则"));
     html += Note(QStringLiteral(
         "<b>综合判断规则：</b><br>"
         "• gaze_yaw 和 gaze_pitch 都在 ±8° 以内 → 被观察者<b>正视画面中央</b><br>"

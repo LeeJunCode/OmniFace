@@ -1,6 +1,7 @@
 #include "omniface/ui/pages/task_detail_page.h"
 
 #include <QComboBox>
+#include <QDateTime>
 #include <QDialog>
 #include <QFile>
 #include <QFileInfo>
@@ -666,6 +667,11 @@ void TaskDetailPage::PopulateRawInfo(const db::TaskRecord& task) {
 
     if (!task.start_time.empty()) {
         auto fmtTs = [](const std::string& iso) {
+            if (iso.empty()) return QStringLiteral("—");
+            QDateTime dt = QDateTime::fromString(QString::fromStdString(iso), Qt::ISODateWithMs);
+            if (dt.isValid())
+                return dt.toLocalTime().toString(QStringLiteral("yyyy-MM-dd HH:mm:ss"));
+            // Fallback
             QString s = QString::fromStdString(iso);
             s.replace(QStringLiteral("T"), QStringLiteral(" "));
             int dot = s.lastIndexOf(QStringLiteral("."));

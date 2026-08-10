@@ -228,11 +228,29 @@ void MainWindow::SetupMenuBar() {
         image_page_->TriggerImport();
     });
 
-    file_menu->addSeparator();
+    auto* process_menu = menuBar()->addMenu(QStringLiteral("处理"));
+    auto* goto_process = process_menu->addAction(QStringLiteral("开始处理"));
+    connect(goto_process, &QAction::triggered, this, [this]() {
+        nav_buttons_->button(1)->setChecked(true);
+        OnPageChanged(1);
+    });
 
-    auto* exit_action = file_menu->addAction(QStringLiteral("退出"));
-    exit_action->setShortcut(QKeySequence(QStringLiteral("Alt+F4")));
-    connect(exit_action, &QAction::triggered, this, &QWidget::close);
+    auto* data_menu = menuBar()->addMenu(QStringLiteral("数据"));
+    auto* goto_videos = data_menu->addAction(QStringLiteral("视频管理"));
+    connect(goto_videos, &QAction::triggered, this, [this]() {
+        nav_buttons_->button(2)->setChecked(true);
+        OnPageChanged(2);
+    });
+    auto* goto_images = data_menu->addAction(QStringLiteral("图片管理"));
+    connect(goto_images, &QAction::triggered, this, [this]() {
+        nav_buttons_->button(3)->setChecked(true);
+        OnPageChanged(3);
+    });
+    auto* goto_tasks = data_menu->addAction(QStringLiteral("任务历史"));
+    connect(goto_tasks, &QAction::triggered, this, [this]() {
+        nav_buttons_->button(4)->setChecked(true);
+        OnPageChanged(4);
+    });
 
     auto* settings_menu = menuBar()->addMenu(QStringLiteral("设置"));
     auto* settings_action = settings_menu->addAction(QStringLiteral("参数设置..."));
@@ -293,6 +311,10 @@ void MainWindow::SetupMenuBar() {
         AboutDialog dlg(this);
         dlg.exec();
     });
+
+    auto* exit_action = menuBar()->addAction(QStringLiteral("退出"));
+    exit_action->setShortcut(QKeySequence(QStringLiteral("Alt+F4")));
+    connect(exit_action, &QAction::triggered, this, &QWidget::close);
 }
 
 QPushButton* MainWindow::CreateSidebarButton(const QIcon& icon, const QString& tooltip) {
@@ -726,7 +748,7 @@ void MainWindow::OnViewCsv(int64_t task_id) {
     dlg->resize(900, 500);
     dlg->setMinimumSize(600, 400);
     dlg->setAttribute(Qt::WA_DeleteOnClose);
-    dlg->setWindowFlags(dlg->windowFlags() | Qt::WindowMaximizeButtonHint);
+    dlg->setWindowFlags(dlg->windowFlags() | Qt::WindowMaximizeButtonHint | Qt::WindowMinimizeButtonHint);
     auto& tm = ThemeManager::Instance();
     dlg->setStyleSheet(
         QString("QDialog { background: %1; }").arg(tm.SurfaceBg()));
@@ -862,7 +884,7 @@ void MainWindow::OnViewCleanCsv(int64_t task_id) {
     dlg->resize(900, 500);
     dlg->setMinimumSize(600, 400);
     dlg->setAttribute(Qt::WA_DeleteOnClose);
-    dlg->setWindowFlags(dlg->windowFlags() | Qt::WindowMaximizeButtonHint);
+    dlg->setWindowFlags(dlg->windowFlags() | Qt::WindowMaximizeButtonHint | Qt::WindowMinimizeButtonHint);
     auto& tm = ThemeManager::Instance();
     dlg->setStyleSheet(
         QString("QDialog { background: %1; }").arg(tm.SurfaceBg()));

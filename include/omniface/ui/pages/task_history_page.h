@@ -70,6 +70,7 @@ private:
     static QString FormatDate(const std::string& iso);
     static QString StatusText(const std::string& status);
     static QString FormatFrameCount(int frames);
+    static QString FormatOutputTypes(const std::string& json);
 
     std::vector<TaskDisplayInfo> records_;
     QSet<int> checked_rows_;
@@ -84,6 +85,7 @@ public:
     void SetStatusFilter(const QString& status);
     void SetDateFrom(const QDate& date);
     void SetDateTo(const QDate& date);
+    void SetTextFilter(const QString& text);
 
 protected:
     bool filterAcceptsRow(int sourceRow, const QModelIndex& sourceParent) const override;
@@ -93,6 +95,7 @@ private:
     QString status_filter_;
     QDate date_from_;
     QDate date_to_;
+    QString text_filter_;
 };
 
 class TaskHistoryPage : public QWidget {
@@ -119,6 +122,7 @@ private slots:
     void OnStatusFilterChanged(int index);
     void OnDateFromChanged(const QDate& date);
     void OnDateToChanged(const QDate& date);
+    void OnSearchTextChanged(const QString& text);
     void OnContextMenu(const QPoint& pos);
     void OnDoubleClicked(const QModelIndex& index);
     void OnDeleteTask();
@@ -144,6 +148,7 @@ private:
     QComboBox* status_combo_ = nullptr;
     DatePicker* date_from_ = nullptr;
     DatePicker* date_to_ = nullptr;
+    QLineEdit* search_box_ = nullptr;
     QLabel* count_label_ = nullptr;
     QPushButton* reset_btn_ = nullptr;
     QPushButton* refresh_btn_ = nullptr;

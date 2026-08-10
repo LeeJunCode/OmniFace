@@ -76,7 +76,6 @@ void ImageSelectionDialog::SetupUI() {
     hdr->resizeSection(ImageTableModel::ColName,        140);
     hdr->resizeSection(ImageTableModel::ColDescription, 120);
     hdr->resizeSection(ImageTableModel::ColNotes,       100);
-    hdr->resizeSection(ImageTableModel::ColHasFace,     80);
     hdr->resizeSection(ImageTableModel::ColConfidence,  80);
     hdr->resizeSection(ImageTableModel::ColSavedPath,   200);
 

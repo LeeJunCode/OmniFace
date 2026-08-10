@@ -1,6 +1,7 @@
 #include "omniface/ui/pages/image_management_page.h"
 #include "omniface/ui/pages/processing_page.h"
 
+#include <QDateTime>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -69,7 +70,6 @@ QVariant ImageTableModel::data(const QModelIndex& index, int role) const {
         case ColName:       return QString::fromStdString(rec.name);
         case ColDescription:return QString::fromStdString(rec.description);
         case ColNotes:      return QString::fromStdString(rec.notes);
-        case ColHasFace:    return QStringLiteral("是");
         case ColConfidence: return QStringLiteral("%1%").arg(rec.face_confidence * 100.0, 0, 'f', 1);
         case ColSavedPath:  return QString::fromStdString(rec.saved_path);
         case ColCreatedAt:  return FormatTimestamp(rec.created_at);
@@ -77,9 +77,15 @@ QVariant ImageTableModel::data(const QModelIndex& index, int role) const {
     }
 
     if (role == Qt::TextAlignmentRole) {
-        if (index.column() == ColCheck) return static_cast<int>(Qt::AlignCenter);
-        if (index.column() == ColHasFace || index.column() == ColConfidence)
+        switch (index.column()) {
+        case ColName:
+        case ColDescription:
+        case ColNotes:
+        case ColSavedPath:
+            return static_cast<int>(Qt::AlignLeft | Qt::AlignVCenter);
+        default:
             return Qt::AlignCenter;
+        }
     }
 
     if (role == Qt::UserRole) {
@@ -118,7 +124,6 @@ QVariant ImageTableModel::headerData(int section, Qt::Orientation orientation, i
     case ColName:       return QStringLiteral("图片名称");
     case ColDescription:return QStringLiteral("描述");
     case ColNotes:      return QStringLiteral("备注");
-    case ColHasFace:    return QStringLiteral("是否有人脸");
     case ColConfidence: return QStringLiteral("人脸置信度");
     case ColSavedPath:  return QStringLiteral("保存路径");
     case ColCreatedAt:  return QStringLiteral("上传时间");
@@ -147,6 +152,10 @@ void ImageTableModel::ToggleAll(bool checked) {
 
 QString ImageTableModel::FormatTimestamp(const std::string& iso) {
     if (iso.empty()) return QStringLiteral("—");
+    QDateTime dt = QDateTime::fromString(QString::fromStdString(iso), Qt::ISODateWithMs);
+    if (dt.isValid())
+        return dt.toLocalTime().toString(QStringLiteral("yyyy-MM-dd HH:mm:ss"));
+    // Fallback
     QString s = QString::fromStdString(iso);
     s.replace(QStringLiteral("T"), QStringLiteral(" "));
     int dot = s.lastIndexOf(QStringLiteral("."));
@@ -280,13 +289,12 @@ void ImageManagementPage::SetupUI() {
     auto* hdr = table_view_->horizontalHeader();
     hdr->setStretchLastSection(true);
     hdr->setSectionResizeMode(QHeaderView::Interactive);
-    hdr->setDefaultAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+    hdr->setDefaultAlignment(Qt::AlignCenter);
     hdr->setMinimumSectionSize(60);
     hdr->resizeSection(ImageTableModel::ColCheck,      30);
     hdr->resizeSection(ImageTableModel::ColName,       140);
     hdr->resizeSection(ImageTableModel::ColDescription,120);
     hdr->resizeSection(ImageTableModel::ColNotes,      100);
-    hdr->resizeSection(ImageTableModel::ColHasFace,    80);
     hdr->resizeSection(ImageTableModel::ColConfidence, 80);
     hdr->resizeSection(ImageTableModel::ColSavedPath,  200);
 

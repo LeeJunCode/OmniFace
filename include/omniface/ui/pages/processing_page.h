@@ -104,8 +104,8 @@ private:
     int analysis_success_count_ = 0;
     float latest_similarity_ = 0.0f;
     float peak_similarity_ = 0.0f;
-    double det_rec_latency_sum_ = 0.0;
-    double analysis_latency_sum_ = 0.0;
+    double avg_det_rec_latency_ = 0.0;
+    double avg_analysis_latency_ = 0.0;
 };
 
 class ProcessingPage : public QWidget {

@@ -27,7 +27,6 @@ public:
         ColName,
         ColDescription,
         ColNotes,
-        ColHasFace,
         ColConfidence,
         ColSavedPath,
         ColCreatedAt,

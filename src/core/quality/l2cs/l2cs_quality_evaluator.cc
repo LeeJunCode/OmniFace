@@ -152,39 +152,25 @@ void L2csQualityEvaluator::Evaluate() {
 void L2csQualityEvaluator::AssignFrameGrades() {
     auto& frames = report_.frames;
 
-    // Compute percentile thresholds for mean_maxp from actual data.
-    // This makes scoring model-agnostic — different L2CS backends
-    // (MobileNetV2, ResNet50, MobileOne-S0) have different confidence
-    // calibration ranges.
-    std::vector<float> maxp_values;
-    maxp_values.reserve(frames.size());
-    for (const auto& f : frames)
-        maxp_values.push_back((f.yaw_maxp + f.pitch_maxp) * 0.5f);
-    std::sort(maxp_values.begin(), maxp_values.end());
-
-    auto pct = [&](float p) -> float {
-        int idx = static_cast<int>(maxp_values.size() * p);
-        if (idx >= static_cast<int>(maxp_values.size()))
-            idx = static_cast<int>(maxp_values.size()) - 1;
-        return maxp_values[idx];
-    };
-
-    float p90 = pct(0.90f);
-    float p70 = pct(0.70f);
-    float p40 = pct(0.40f);
-    float p10 = pct(0.10f);
+    // Fixed thresholds based on 90-bin softmax semantics:
+    //   uniform distribution → max_prob ≈ 1/90 ≈ 0.011
+    //   ≥ 0.50 → dominant single bin (highly confident)
+    //   ≥ 0.30 → mass concentrated in few bins
+    //   ≥ 0.15 → ~13× uniform baseline, moderate concentration
+    //   ≥ 0.05 → just above near-uniform, weakly structured
+    // These are absolute interpretations — independent of backbone model.
 
     float sum_conf = 0, sum_stab = 0;
 
     for (auto& f : frames) {
         int sc = 0, ss = 0;
 
-        // Confidence — mean max_prob, scored by percentile (max 50)
+        // Confidence — mean max_prob (max 50)
         float mean_maxp = (f.yaw_maxp + f.pitch_maxp) * 0.5f;
-        if (mean_maxp >= p90)            sc = 50;
-        else if (mean_maxp >= p70)       sc = 40;
-        else if (mean_maxp >= p40)       sc = 25;
-        else if (mean_maxp >= p10)       sc = 12;
+        if (mean_maxp >= 0.50f)          sc = 50;
+        else if (mean_maxp >= 0.30f)     sc = 40;
+        else if (mean_maxp >= 0.15f)     sc = 25;
+        else if (mean_maxp >= 0.05f)     sc = 12;
         else                              sc = 0;
 
         // Stability — angular velocity + gaze range (max 50)

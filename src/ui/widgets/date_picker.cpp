@@ -27,6 +27,7 @@ void DatePicker::BuildUI() {
 
     line_edit_ = new QLineEdit(this);
     line_edit_->setReadOnly(true);
+    line_edit_->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
     line_edit_->setStyleSheet(QStringLiteral(
         "QLineEdit {"
         "  background: %1; border: 1px solid %2;"

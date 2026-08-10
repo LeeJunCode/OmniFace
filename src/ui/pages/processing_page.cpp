@@ -273,8 +273,8 @@ void ProcessWorker::ProcessLoop() {
     analysis_success_count_ = 0;
     latest_similarity_ = 0.0f;
     peak_similarity_ = 0.0f;
-    det_rec_latency_sum_ = 0.0;
-    analysis_latency_sum_ = 0.0;
+    avg_det_rec_latency_ = 0.0;
+    avg_analysis_latency_ = 0.0;
     elapsed_.start();
 
     cv::Mat frame;
@@ -295,9 +295,12 @@ void ProcessWorker::ProcessLoop() {
         int match_count = 0;
         int analysis_ok = 0;
 
+        double cur_analysis_ms = 0.0;
+
         if (pipeline_) {
             processed_frames_++;
             FrameResult result = pipeline_->ProcessFrame(frame, processed_frames_);
+            cur_analysis_ms = result.analysis_latency_ms;
             face_count = result.face_count;
             for (const auto& m : result.match_results) {
                 if (m.is_match) match_count++;
@@ -312,8 +315,21 @@ void ProcessWorker::ProcessLoop() {
                     latest_similarity_ = m.similarity;
             }
 
-            det_rec_latency_sum_ += result.recognition_latency_ms;
-            analysis_latency_sum_ += result.analysis_latency_ms;
+            constexpr double kAlpha = 0.05;
+            if (avg_det_rec_latency_ == 0.0) {
+                avg_det_rec_latency_ = result.recognition_latency_ms;
+            } else {
+                avg_det_rec_latency_ = kAlpha * result.recognition_latency_ms
+                    + (1.0 - kAlpha) * avg_det_rec_latency_;
+            }
+            if (result.analysis_latency_ms > 0.5) {
+                if (avg_analysis_latency_ == 0.0) {
+                    avg_analysis_latency_ = result.analysis_latency_ms;
+                } else {
+                    avg_analysis_latency_ = kAlpha * result.analysis_latency_ms
+                        + (1.0 - kAlpha) * avg_analysis_latency_;
+                }
+            }
             analysis_ok = 1;
         }
 
@@ -323,10 +339,11 @@ void ProcessWorker::ProcessLoop() {
 
         double elapsed = elapsed_.elapsed() / 1000.0;
         double avgFps = (elapsed > 0) ? processed_frames_ / elapsed : 0.0;
-        double detRecFps = (det_rec_latency_sum_ > 0)
-            ? (processed_frames_ * 1000.0 / det_rec_latency_sum_) : 0.0;
-        double analysisFps = (analysis_latency_sum_ > 0)
-            ? (processed_frames_ * 1000.0 / analysis_latency_sum_) : 0.0;
+        double detRecFps = (processed_frames_ >= 10 && avg_det_rec_latency_ > 0.0)
+            ? 1000.0 / avg_det_rec_latency_ : 0.0;
+        double analysisFps = 0.0;
+        if (cur_analysis_ms > 0.5 && avg_analysis_latency_ > 0.0)
+            analysisFps = 1000.0 / avg_analysis_latency_;
 
         cv::Mat bgr;
         if (!frame.empty())

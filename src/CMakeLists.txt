@@ -372,7 +372,7 @@ target_compile_features(omniface_ui PUBLIC cxx_std_20)
 # ============================================================
 # OmniFace executable
 # ============================================================
-qt_add_executable(OmniFace
+qt_add_executable(OmniFace WIN32
     ui/main.cpp
     ${PROJECT_SOURCE_DIR}/resources/omniface.rc
     ${PROJECT_SOURCE_DIR}/resources/ui/resources.qrc
@@ -415,22 +415,20 @@ if(OMNIFACE_ONNXRUNTIME_ROOT)
     )
 endif()
 
-# Post-build: copy OpenFace model files
-# NOTE: OpenFace is pre-built in Release config; if building Debug, update the
-# source path or build OpenFace in the matching configuration first.
-set(OFACE_BIN_DIR "${CMAKE_SOURCE_DIR}/third_party/OpenFace/build/bin/$<CONFIG>")
+# Post-build: copy OpenFace model files from source tree
+set(OFACE_SRC "${CMAKE_SOURCE_DIR}/third_party/OpenFace")
 add_custom_command(TARGET OmniFace POST_BUILD
     COMMAND "${CMAKE_COMMAND}" -E make_directory
         "$<TARGET_FILE_DIR:OmniFace>/openface_model"
     COMMAND "${CMAKE_COMMAND}" -E copy_directory
-        "${OFACE_BIN_DIR}/model"
+        "${OFACE_SRC}/lib/local/LandmarkDetector/model"
         "$<TARGET_FILE_DIR:OmniFace>/openface_model/model"
     COMMAND "${CMAKE_COMMAND}" -E copy_directory
-        "${OFACE_BIN_DIR}/classifiers"
-        "$<TARGET_FILE_DIR:OmniFace>/openface_model/classifiers"
-    COMMAND "${CMAKE_COMMAND}" -E copy_directory
-        "${OFACE_BIN_DIR}/AU_predictors"
+        "${OFACE_SRC}/lib/local/FaceAnalyser/AU_predictors"
         "$<TARGET_FILE_DIR:OmniFace>/openface_model/AU_predictors"
+    COMMAND "${CMAKE_COMMAND}" -E copy_directory
+        "${OFACE_SRC}/lib/3rdParty/OpenCV/classifiers"
+        "$<TARGET_FILE_DIR:OmniFace>/openface_model/classifiers"
     COMMENT "Deploying OpenFace model files"
 )
 

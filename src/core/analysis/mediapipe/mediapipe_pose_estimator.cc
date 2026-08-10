@@ -46,17 +46,21 @@ std::vector<cv::Point3f> ParseCanonicalModel(const std::string& path) {
 HeadPose RotationToEuler(const cv::Mat& R) {
     HeadPose pose;
 
-    float cy = std::sqrt(R.at<double>(2, 1) * R.at<double>(2, 1) +
-                         R.at<double>(2, 2) * R.at<double>(2, 2));
+    float cy = std::sqrt(static_cast<float>(
+        R.at<double>(2, 1) * R.at<double>(2, 1) +
+        R.at<double>(2, 2) * R.at<double>(2, 2)));
 
-    if (cy > 1e-6) {
-        pose.pitch = std::atan2(R.at<double>(2, 1), R.at<double>(2, 2));
-        pose.yaw   = std::atan2(-R.at<double>(2, 0), cy);
-        pose.roll  = std::atan2(R.at<double>(1, 0), R.at<double>(0, 0));
+    if (cy > 1e-6f) {
+        pose.pitch = std::atan2(static_cast<float>(R.at<double>(2, 1)),
+                                static_cast<float>(R.at<double>(2, 2)));
+        pose.yaw   = std::atan2(static_cast<float>(-R.at<double>(2, 0)), cy);
+        pose.roll  = std::atan2(static_cast<float>(R.at<double>(1, 0)),
+                                static_cast<float>(R.at<double>(0, 0)));
     } else {
         pose.pitch = 0.0f;
-        pose.yaw   = std::atan2(-R.at<double>(2, 0), cy);
-        pose.roll  = std::atan2(-R.at<double>(0, 1), R.at<double>(1, 1));
+        pose.yaw   = std::atan2(static_cast<float>(-R.at<double>(2, 0)), cy);
+        pose.roll  = std::atan2(static_cast<float>(-R.at<double>(0, 1)),
+                                static_cast<float>(R.at<double>(1, 1)));
     }
 
     constexpr float kRadToDeg = 180.0f / static_cast<float>(CV_PI);

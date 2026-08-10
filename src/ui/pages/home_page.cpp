@@ -77,17 +77,17 @@ void HomePage::SetupUI() {
     connect(proc_btn, &QPushButton::clicked, this, &HomePage::NavigateToProcessing);
     actions_layout->addWidget(proc_btn);
 
-    auto* image_btn = makeActionBtn(QStringLiteral("\u56FE\u7247\u7BA1\u7406"), QStringLiteral("\U0001F5BC"),
-                                     tm.Success());
-    image_btn_ = image_btn;
-    connect(image_btn, &QPushButton::clicked, this, &HomePage::NavigateToImages);
-    actions_layout->addWidget(image_btn);
-
     auto* video_btn = makeActionBtn(QStringLiteral("\u89C6\u9891\u7BA1\u7406"), QStringLiteral("\U0001F3AC"),
                                      tm.AccentBlue());
     video_btn_ = video_btn;
     connect(video_btn, &QPushButton::clicked, this, &HomePage::NavigateToVideos);
     actions_layout->addWidget(video_btn);
+
+    auto* image_btn = makeActionBtn(QStringLiteral("\u56FE\u7247\u7BA1\u7406"), QStringLiteral("\U0001F5BC"),
+                                     tm.Success());
+    image_btn_ = image_btn;
+    connect(image_btn, &QPushButton::clicked, this, &HomePage::NavigateToImages);
+    actions_layout->addWidget(image_btn);
 
     auto* history_btn = makeActionBtn(QStringLiteral("\u4EFB\u52A1\u5386\u53F2"), QStringLiteral("\U0001F4CB"),
                                        tm.PurpleText());
@@ -126,8 +126,8 @@ void HomePage::ReapplyTheme() {
             .arg(tm.SurfaceBg(), color, tm.Border(), tm.HoverBg()));
     };
     styleBtn(proc_btn_, tm.Primary());
-    styleBtn(image_btn_, tm.Success());
     styleBtn(video_btn_, tm.AccentBlue());
+    styleBtn(image_btn_, tm.Success());
     styleBtn(history_btn_, tm.PurpleText());
 }
 

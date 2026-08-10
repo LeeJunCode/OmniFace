@@ -1,5 +1,6 @@
 #include "omniface/ui/dialogs/edit_task_dialog.h"
 
+#include <QDateTime>
 #include <QFormLayout>
 #include <QGroupBox>
 #include <QHBoxLayout>
@@ -21,6 +22,10 @@ namespace {
 
 QString FormatDateTime(const std::string& iso) {
     if (iso.empty()) return QStringLiteral("—");
+    QDateTime dt = QDateTime::fromString(QString::fromStdString(iso), Qt::ISODateWithMs);
+    if (dt.isValid())
+        return dt.toLocalTime().toString(QStringLiteral("yyyy-MM-dd HH:mm:ss"));
+    // Fallback
     QString s = QString::fromStdString(iso);
     if (s.length() >= 19)
         return s.left(10) + QStringLiteral(" ") + s.mid(11, 8);

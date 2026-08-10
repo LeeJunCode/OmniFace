@@ -750,8 +750,8 @@ void QualityReportWidget::RenderL2csReport(const quality::L2csQualityReport& r) 
         gl->addWidget(MakeExplainLabel(QStringLiteral(
             "说明：yaw_maxp和pitch_maxp是90-bin softmax分布的峰值概率。"
             "注意90分类的均匀分布基线 ≈ 0.011（1/90），因此0.15就已将概率质量集中了约13倍。"
-            "不同模型（MobileNetV2、ResNet50、MobileOne-S0）的max_prob分布差异较大，"
-            "质量评级采用百分位阈值自动适配，无需关心具体数值。"), gb));
+            "质量评级采用固定阈值：≥0.50（概率集中于单个bin，高置信度）、≥0.30（集中于少数bin）、"
+            "≥0.15（中等集中）、≥0.05（弱结构）、<0.05（接近均匀分布，模型不确定）。"), gb));
         layout->addWidget(gb);
     }
 

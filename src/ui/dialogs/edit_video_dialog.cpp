@@ -34,15 +34,20 @@ void EditVideoDialog::SetupUI(const db::VideoRecord& rec) {
     setMinimumWidth(480);
     setStyleSheet(QStringLiteral(
         "QDialog { background: %1; color: %2; }"
-        "QLineEdit {"
-        "  background: %3; border: 1px solid %4;"
-        "  border-radius: 4px; padding: 6px 8px; color: %2;"
-        "}"
-        "QLineEdit:focus { border-color: %5; }"
-        "QGroupBox { color: %6; border: 1px solid %4;"
+        "QGroupBox { color: %3; border: 1px solid %4;"
         "  border-radius: 4px; margin-top: 8px; padding-top: 14px; }"
         "QGroupBox::title { subcontrol-origin: margin; left: 10px; padding: 0 4px; }")
-        .arg(tm.SurfaceBg(), tm.TextPrimary(), tm.DeepBg(), tm.Border(), tm.Primary(), tm.TextMuted()));
+        .arg(tm.SurfaceBg(), tm.TextPrimary(), tm.TextMuted(), tm.Border()));
+
+    auto makeEdit = [this, &tm](const QString& placeholder) {
+        auto* edit = new QLineEdit(this);
+        edit->setPlaceholderText(placeholder);
+        edit->setStyleSheet(QString(
+            "QLineEdit { background: %1; border: 1px solid %2;"
+            "  border-radius: 4px; padding: 6px 8px; color: %3; }"
+            "QLineEdit:focus { border-color: %4; }").arg(tm.DeepBg(), tm.Border(), tm.TextPrimary(), tm.Primary()));
+        return edit;
+    };
 
     auto* root = new QVBoxLayout(this);
 
@@ -51,28 +56,28 @@ void EditVideoDialog::SetupUI(const db::VideoRecord& rec) {
     form->setSpacing(10);
 
     name_edit_ = new QLineEdit(QString::fromStdString(rec.name), this);
+    name_edit_->setStyleSheet(QString(
+        "QLineEdit { background: %1; border: 1px solid %2;"
+        "  border-radius: 4px; padding: 6px 8px; color: %3; }"
+        "QLineEdit:focus { border-color: %4; }").arg(tm.DeepBg(), tm.Border(), tm.TextPrimary(), tm.Primary()));
     form->addRow(QStringLiteral("视频名称:"), name_edit_);
 
-    description_edit_ = new QLineEdit(QString::fromStdString(rec.description), this);
-    description_edit_->setPlaceholderText(QStringLiteral("视频描述（可选）"));
+    description_edit_ = makeEdit(QStringLiteral("视频描述（可选）"));
     form->addRow(QStringLiteral("描述:"), description_edit_);
 
-    notes_edit_ = new QLineEdit(QString::fromStdString(rec.notes), this);
-    notes_edit_->setPlaceholderText(QStringLiteral("备注（可选）"));
+    notes_edit_ = makeEdit(QStringLiteral("备注（可选）"));
     form->addRow(QStringLiteral("备注:"), notes_edit_);
 
     record_time_edit_ = new DatePicker(this);
     record_time_edit_->setDisplayFormat(QStringLiteral("yyyy-MM-dd"));
     record_time_edit_->setDate(QDate::currentDate());
-    record_time_edit_->setFixedHeight(28);
     if (!rec.record_time.empty()) {
         auto d = QDate::fromString(QString::fromStdString(rec.record_time).left(10), QStringLiteral("yyyy-MM-dd"));
         if (d.isValid()) record_time_edit_->setDate(d);
     }
     form->addRow(QStringLiteral("录制时间:"), record_time_edit_);
 
-    location_edit_ = new QLineEdit(QString::fromStdString(rec.record_location), this);
-    location_edit_->setPlaceholderText(QStringLiteral("请输入录制地点"));
+    location_edit_ = makeEdit(QStringLiteral("请输入录制地点"));
     form->addRow(QStringLiteral("录制地点:"), location_edit_);
 
     root->addWidget(group);

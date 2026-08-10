@@ -1,10 +1,14 @@
 #include "omniface/ui/pages/task_history_page.h"
 
+#include <QDateTime>
 #include <QDir>
 #include <QFileInfo>
 #include <QHBoxLayout>
 #include <QHeaderView>
+#include <QJsonArray>
+#include <QJsonDocument>
 #include <QLabel>
+#include <QLineEdit>
 #include <QMenu>
 #include <QMessageBox>
 #include <QProcess>
@@ -73,10 +77,7 @@ QVariant TaskTableModel::data(const QModelIndex& index, int role) const {
         case ColVideoName:   return info.video_name.isEmpty() ? QStringLiteral("—") : info.video_name;
         case ColImageName:   return info.image_name.isEmpty() ? QStringLiteral("—") : info.image_name;
         case ColBackend:     return QString::fromStdString(t.backend);
-        case ColOutputTypes: {
-            QString types = QString::fromStdString(t.output_types);
-            return types.isEmpty() ? QStringLiteral("—") : types;
-        }
+        case ColOutputTypes: return FormatOutputTypes(t.output_types);
         case ColStatus:      return StatusText(t.status);
         case ColFrames:      return FormatFrameCount(t.total_frames);
         case ColAvgFps:      return t.avg_fps > 0.0 ? QStringLiteral("%1").arg(t.avg_fps, 0, 'f', 1) : QStringLiteral("—");
@@ -92,9 +93,16 @@ QVariant TaskTableModel::data(const QModelIndex& index, int role) const {
     }
 
     if (role == Qt::TextAlignmentRole) {
-        if (index.column() == ColFrames || index.column() == ColAvgFps ||
-            index.column() == ColStatus || index.column() == ColCheck)
+        switch (index.column()) {
+        case ColName:
+        case ColVideoName:
+        case ColImageName:
+        case ColDescription:
+        case ColNotes:
+            return static_cast<int>(Qt::AlignLeft | Qt::AlignVCenter);
+        default:
             return Qt::AlignCenter;
+        }
     }
 
     if (role == Qt::UserRole) {
@@ -157,6 +165,10 @@ void TaskTableModel::ToggleAll(bool checked) {
 
 QString TaskTableModel::FormatDate(const std::string& iso) {
     if (iso.empty()) return QStringLiteral("—");
+    QDateTime dt = QDateTime::fromString(QString::fromStdString(iso), Qt::ISODateWithMs);
+    if (dt.isValid())
+        return dt.toLocalTime().toString(QStringLiteral("yyyy-MM-dd HH:mm:ss"));
+    // Fallback
     QString s = QString::fromStdString(iso);
     if (s.length() >= 19)
         return s.left(10) + QStringLiteral(" ") + s.mid(11, 8);
@@ -178,6 +190,36 @@ QString TaskTableModel::FormatFrameCount(int frames) {
     if (frames >= 10000)
         return QStringLiteral("%1万").arg(frames / 10000.0, 0, 'f', 1);
     return QString::number(frames);
+}
+
+QString TaskTableModel::FormatOutputTypes(const std::string& json) {
+    if (json.empty()) return QStringLiteral("—");
+
+    static const QHash<QString, QString> kNames = {
+        {"openface_native", QStringLiteral("OpenFace原生")},
+        {"aligned_faces", QStringLiteral("对齐人脸")},
+        {"landmarks_68", QStringLiteral("68点关键点")},
+        {"head_pose", QStringLiteral("头部姿态")},
+        {"gaze", QStringLiteral("视线估计")},
+        {"au", QStringLiteral("AU")},
+        {"landmarks_468", QStringLiteral("468点关键点")},
+        {"gaze_yaw_pitch", QStringLiteral("视线偏航/俯仰")},
+        {"gaze_3d_vector", QStringLiteral("3D视线向量")},
+        {"au_41", QStringLiteral("41个AU")},
+        {"face_detection", QStringLiteral("人脸检测")},
+        {"tracking", QStringLiteral("人脸跟踪")},
+        {"recognition", QStringLiteral("人脸识别")},
+    };
+
+    QJsonDocument doc = QJsonDocument::fromJson(QString::fromStdString(json).toUtf8());
+    if (!doc.isArray()) return QString::fromStdString(json);
+
+    QStringList names;
+    for (const auto& v : doc.array()) {
+        QString key = v.toString();
+        names.append(kNames.value(key, key));
+    }
+    return names.isEmpty() ? QStringLiteral("—") : names.join(QStringLiteral("、"));
 }
 
 QVariant TaskTableModel::headerData(int section, Qt::Orientation orientation, int role) const {
@@ -232,6 +274,12 @@ void TaskFilterProxy::SetDateTo(const QDate& date) {
     endFilterChange();
 }
 
+void TaskFilterProxy::SetTextFilter(const QString& text) {
+    text_filter_ = text.trimmed();
+    beginFilterChange();
+    endFilterChange();
+}
+
 bool TaskFilterProxy::filterAcceptsRow(int sourceRow, const QModelIndex& sourceParent) const {
     auto* model = qobject_cast<TaskTableModel*>(sourceModel());
     if (!model) return true;
@@ -248,6 +296,20 @@ bool TaskFilterProxy::filterAcceptsRow(int sourceRow, const QModelIndex& sourceP
 
     if (!status_filter_.isEmpty()) {
         if (QString::fromStdString(t.status) != status_filter_)
+            return false;
+    }
+
+    if (!text_filter_.isEmpty()) {
+        QString name = QString::fromStdString(t.name);
+        QString backend = QString::fromStdString(t.backend);
+        QString desc = QString::fromStdString(t.description);
+        QString notes = QString::fromStdString(t.notes);
+        if (!name.contains(text_filter_, Qt::CaseInsensitive) &&
+            !backend.contains(text_filter_, Qt::CaseInsensitive) &&
+            !desc.contains(text_filter_, Qt::CaseInsensitive) &&
+            !notes.contains(text_filter_, Qt::CaseInsensitive) &&
+            !info->video_name.contains(text_filter_, Qt::CaseInsensitive) &&
+            !info->image_name.contains(text_filter_, Qt::CaseInsensitive))
             return false;
     }
 
@@ -322,6 +384,19 @@ void TaskHistoryPage::SetupUI() {
                 tm.SurfaceBg(), tm.Border(), tm.TextPrimary(), tm.Primary(), tm.SelectedBg()));
         return combo;
     };
+
+    search_box_ = new QLineEdit(this);
+    search_box_->setPlaceholderText(QStringLiteral("搜索任务..."));
+    search_box_->setClearButtonEnabled(true);
+    search_box_->setFixedWidth(200);
+    search_box_->setStyleSheet(QString(
+        "QLineEdit {"
+        "  background: %1; border: 1px solid %2;"
+        "  border-radius: 4px; padding: 5px 8px; color: %3;"
+        "}"
+        "QLineEdit:focus { border-color: %4; }").arg(tm.SurfaceBg(), tm.Border(), tm.TextPrimary(), tm.Primary()));
+    connect(search_box_, &QLineEdit::textChanged, this, &TaskHistoryPage::OnSearchTextChanged);
+    top_bar->addWidget(search_box_);
 
     top_bar->addWidget(makeLabel(QStringLiteral("后端:")));
     backend_combo_ = makeCombo();
@@ -415,7 +490,7 @@ void TaskHistoryPage::SetupUI() {
     auto* hdr = table_view_->horizontalHeader();
     hdr->setStretchLastSection(true);
     hdr->setSectionResizeMode(QHeaderView::Interactive);
-    hdr->setDefaultAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+    hdr->setDefaultAlignment(Qt::AlignCenter);
     hdr->setMinimumSectionSize(50);
     hdr->resizeSection(TaskTableModel::ColCheck,       36);
     hdr->resizeSection(TaskTableModel::ColName,        130);
@@ -568,6 +643,13 @@ void TaskHistoryPage::ReapplyTheme() {
     backend_combo_->setStyleSheet(comboStyle());
     status_combo_->setStyleSheet(comboStyle());
 
+    search_box_->setStyleSheet(QString(
+        "QLineEdit {"
+        "  background: %1; border: 1px solid %2;"
+        "  border-radius: 4px; padding: 5px 8px; color: %3;"
+        "}"
+        "QLineEdit:focus { border-color: %4; }").arg(tm.SurfaceBg(), tm.Border(), tm.TextPrimary(), tm.Primary()));
+
     reset_btn_->setStyleSheet(QString(
         "QPushButton {"
         "  background: transparent; color: %1; border: 1px solid %2;"
@@ -630,7 +712,13 @@ void TaskHistoryPage::OnDateToChanged(const QDate& date) {
     UpdateCountLabel();
 }
 
+void TaskHistoryPage::OnSearchTextChanged(const QString& text) {
+    proxy_->SetTextFilter(text);
+    UpdateCountLabel();
+}
+
 void TaskHistoryPage::OnResetFilters() {
+    search_box_->clear();
     backend_combo_->setCurrentIndex(0);
     status_combo_->setCurrentIndex(0);
 

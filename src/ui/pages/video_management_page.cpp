@@ -2,6 +2,7 @@
 #include "omniface/ui/pages/processing_page.h"
 
 #include <QDate>
+#include <QDateTime>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -82,12 +83,15 @@ QVariant VideoTableModel::data(const QModelIndex& index, int role) const {
     }
 
     if (role == Qt::TextAlignmentRole) {
-        if (index.column() == ColCheck) return static_cast<int>(Qt::AlignCenter);
         switch (index.column()) {
-        case ColDuration:   return Qt::AlignCenter;
-        case ColResolution: return Qt::AlignCenter;
-        case ColFrameRate:  return Qt::AlignCenter;
-        case ColFileSize:   return static_cast<int>(Qt::AlignRight | Qt::AlignVCenter);
+        case ColName:
+        case ColDescription:
+        case ColNotes:
+        case ColSavedPath:
+        case ColRecordLocation:
+            return static_cast<int>(Qt::AlignLeft | Qt::AlignVCenter);
+        default:
+            return Qt::AlignCenter;
         }
     }
 
@@ -183,8 +187,11 @@ QString VideoTableModel::FormatFileSize(int64_t bytes) {
 
 QString VideoTableModel::FormatTimestamp(const std::string& iso) {
     if (iso.empty()) return QStringLiteral("—");
+    QDateTime dt = QDateTime::fromString(QString::fromStdString(iso), Qt::ISODateWithMs);
+    if (dt.isValid())
+        return dt.toLocalTime().toString(QStringLiteral("yyyy-MM-dd HH:mm:ss"));
+    // Fallback
     QString s = QString::fromStdString(iso);
-    // Convert "2024-01-15T14:30:25.123" → "2024-01-15 14:30:25"
     s.replace(QStringLiteral("T"), QStringLiteral(" "));
     int dot = s.lastIndexOf(QStringLiteral("."));
     if (dot > 0) s = s.left(dot);
@@ -377,7 +384,7 @@ void VideoManagementPage::SetupUI() {
     auto* hdr = table_view_->horizontalHeader();
     hdr->setStretchLastSection(true);
     hdr->setSectionResizeMode(QHeaderView::Interactive);
-    hdr->setDefaultAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+    hdr->setDefaultAlignment(Qt::AlignCenter);
     hdr->setMinimumSectionSize(60);
     hdr->resizeSection(VideoTableModel::ColCheck,   30);
     hdr->resizeSection(VideoTableModel::ColName,           140);
