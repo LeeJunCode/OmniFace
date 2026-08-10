@@ -10,7 +10,7 @@
 #include <RecorderOpenFace.h>
 #include <RecorderOpenFaceParameters.h>
 
-namespace omniface {
+namespace omniface::analysis::openface {
 
 OpenFaceWriter::OpenFaceWriter() = default;
 
@@ -128,4 +128,4 @@ void OpenFaceWriter::Close() {
     initialized_ = false;
 }
 
-}  // namespace omniface
+}  // namespace omniface::analysis::openface

@@ -7,8 +7,8 @@
 #include <opencv2/core/mat.hpp>
 #include <opencv2/core/types.hpp>
 
-#include "omniface/core/analysis/analyzer_interface.h"
-#include "omniface/core/detail/onnx_session.h"
+#include "omniface/core/analysis/interface/analyzer_interface.h"
+#include "omniface/core/inference/onnx_session.h"
 #include "omniface/types.h"
 
 namespace omniface::analysis::l2cs {

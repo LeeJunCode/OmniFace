@@ -1,6 +1,6 @@
 #pragma once
 
-#include "omniface/core/quality/base_quality_evaluator.h"
+#include "omniface/core/quality/interface/base_quality_evaluator.h"
 #include "omniface/core/quality/l2cs/l2cs_quality_types.h"
 
 #include <QObject>

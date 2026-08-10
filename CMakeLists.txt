@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.22)
+cmake_minimum_required(VERSION 3.22...4.4)
 
 # Default vcpkg toolchain — override via -D if needed
 if(NOT DEFINED CMAKE_TOOLCHAIN_FILE)

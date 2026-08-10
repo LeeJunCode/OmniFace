@@ -8,7 +8,7 @@
 #include <QSpinBox>
 #include <QStackedWidget>
 
-#include "omniface/pipeline/config.h"
+#include "omniface/pipeline/framework/config.h"
 
 namespace omniface {
 namespace ui {

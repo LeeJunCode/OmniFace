@@ -1,0 +1,41 @@
+#pragma once
+
+#include <memory>
+
+#include "omniface/core/analysis/openface/openface_analyzer.h"
+#include "omniface/core/analysis/l2cs/l2cs_estimator.h"
+#include "omniface/core/analysis/mefarg_au/mefarg_au_estimator.h"
+#include "omniface/core/analysis/mediapipe/mediapipe_analyzer.h"
+#include "omniface/core/detection/face_detector.h"
+#include "omniface/core/recognition/face_matcher.h"
+#include "omniface/core/recognition/face_recognizer.h"
+#include "omniface/core/tracking/face_tracker.h"
+#include "omniface/pipeline/framework/config.h"
+
+namespace omniface {
+
+struct PipelineModules {
+    std::unique_ptr<detection::FaceDetector> detector;
+    std::unique_ptr<tracking::FaceTracker> tracker;
+    std::unique_ptr<recognition::FaceRecognizer> recognizer;
+    std::unique_ptr<recognition::FaceMatcher> matcher;
+    std::unique_ptr<analysis::openface::OpenFaceAnalyzer> face_analyzer;
+    std::unique_ptr<analysis::mediapipe::MediaPipeAnalyzer> onnx_analyzer;
+    std::unique_ptr<analysis::l2cs::L2csEstimator> l2cs_estimator;
+    std::unique_ptr<analysis::mefarg_au::MefargAuEstimator> au_estimator;
+};
+
+PipelineModules CreateModules(const PipelineConfig& config);
+
+inline detection::FaceDetector::Config MakeDetectorConfig(const PipelineConfig& config) {
+    detection::FaceDetector::Config det_cfg;
+    det_cfg.intra_threads = config.model.detection_threads;
+    det_cfg.input_width = config.model.detection_input_width;
+    det_cfg.input_height = config.model.detection_input_height;
+    det_cfg.confidence_threshold = config.thresholds.detection_confidence;
+    det_cfg.nms_threshold = config.thresholds.detection_nms;
+    det_cfg.device = config.model.device;
+    return det_cfg;
+}
+
+}  // namespace omniface

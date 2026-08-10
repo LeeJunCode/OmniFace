@@ -1,5 +1,5 @@
 #include "omniface/core/analysis/openface/openface_analyzer.h"
-#include "omniface/pipeline/config.h"
+#include "omniface/pipeline/framework/config.h"
 
 #include <algorithm>
 #include <filesystem>

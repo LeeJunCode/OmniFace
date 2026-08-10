@@ -6,7 +6,7 @@
 
 #include <opencv2/core/mat.hpp>
 
-#include "omniface/core/analysis/analyzer_interface.h"
+#include "omniface/core/analysis/interface/analyzer_interface.h"
 #include "omniface/core/analysis/openface/openface_writer.h"
 #include "omniface/types.h"
 

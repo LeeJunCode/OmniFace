@@ -10,7 +10,7 @@
 #include <opencv2/dnn.hpp>
 #include <opencv2/imgproc.hpp>
 
-#include "omniface/core/detail/onnx_session.h"
+#include "omniface/core/inference/onnx_session.h"
 
 namespace omniface::detection {
 

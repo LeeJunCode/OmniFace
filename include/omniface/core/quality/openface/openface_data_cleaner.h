@@ -2,9 +2,9 @@
 
 #include <QObject>
 
-#include "omniface/core/quality/base_data_cleaner.h"
+#include "omniface/core/quality/interface/base_data_cleaner.h"
 #include "omniface/core/quality/openface/openface_quality_types.h"
-#include "omniface/core/quality/quality_types.h"
+#include "omniface/core/quality/interface/quality_types.h"
 
 namespace omniface::clean {
 

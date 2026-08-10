@@ -12,7 +12,7 @@ namespace Utilities {
 class RecorderOpenFace;
 }
 
-namespace omniface {
+namespace omniface::analysis::openface {
 
 class OpenFaceWriter {
 public:
@@ -35,4 +35,4 @@ private:
     bool eigenvalues_written_ = false;
 };
 
-}  // namespace omniface
+}  // namespace omniface::analysis::openface

@@ -5,7 +5,7 @@
 
 #include <opencv2/core/mat.hpp>
 
-#include "omniface/core/detail/onnx_session.h"
+#include "omniface/core/inference/onnx_session.h"
 #include "omniface/types.h"
 
 namespace omniface::recognition {

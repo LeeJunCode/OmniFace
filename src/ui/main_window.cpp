@@ -30,7 +30,7 @@
 #include "omniface/ui/pages/task_history_page.h"
 #include "omniface/ui/pages/video_detail_page.h"
 #include "omniface/ui/pages/video_management_page.h"
-#include "omniface/pipeline/config.h"
+#include "omniface/pipeline/framework/config.h"
 #include "omniface/types.h"
 #include "omniface/ui/dialogs/about_dialog.h"
 #include "omniface/ui/dialogs/csv_reference_dialog.h"

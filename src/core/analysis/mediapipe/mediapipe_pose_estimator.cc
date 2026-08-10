@@ -10,8 +10,8 @@
 
 #include <spdlog/spdlog.h>
 
-#include "omniface/core/detail/onnx_session.h"
-#include "omniface/core/detail/preprocess.h"
+#include "omniface/core/inference/onnx_session.h"
+#include "omniface/core/inference/preprocess.h"
 
 namespace omniface::analysis::mediapipe {
 
@@ -105,6 +105,82 @@ public:
         }
         face_size_ = max_y - min_y;
     }
+
+    PoseEstimationResult PostProcessOutputs(const std::vector<Ort::Value>& outputs,
+                                             int img_w, int img_h) {
+        PoseEstimationResult result;
+
+        float score = 0.0f;
+        const int32_t* landmarks_data = nullptr;
+
+        for (size_t i = 0; i < session_.OutputCount(); ++i) {
+            const auto& name = session_.OutputNameStrs()[i];
+            if (name == "score" || name.find("score") != std::string::npos) {
+                score = outputs[i].GetTensorData<float>()[0];
+            } else if (name == "final_landmarks" ||
+                       name.find("landmarks") != std::string::npos) {
+                landmarks_data = outputs[i].GetTensorData<int32_t>();
+            }
+        }
+
+        if (!landmarks_data || score < config_.score_threshold) return result;
+
+        std::vector<cv::Point2f> image_pts;
+        std::vector<cv::Point3f> object_pts;
+        image_pts.reserve(468);
+        object_pts.reserve(468);
+
+        for (int i = 0; i < 468; ++i) {
+            const int32_t* lm = &landmarks_data[i * 3];
+            image_pts.emplace_back(static_cast<float>(lm[0]),
+                                   static_cast<float>(lm[1]));
+            object_pts.push_back(canonical_model_[i]);
+        }
+
+        cv::Mat K = EstimateCameraMatrix(img_w, img_h);
+        static const cv::Mat dist = cv::Mat::zeros(4, 1, CV_64F);
+        cv::Mat rvec, tvec;
+
+        if (!cv::solvePnP(object_pts, image_pts, K, dist, rvec, tvec,
+                          false, cv::SOLVEPNP_EPNP))
+            return result;
+
+        cv::Mat R;
+        cv::Rodrigues(rvec, R);
+
+        cv::Mat canonical_to_headpose = (cv::Mat_<double>(3, 3) <<
+            1.0,  0.0,  0.0,
+            0.0, -1.0,  0.0,
+            0.0,  0.0, -1.0);
+        cv::Mat R_headpose = R * canonical_to_headpose;
+        result.pose = RotationToEuler(R_headpose);
+
+        cv::Point3f nose_3d = canonical_model_[1];
+        std::vector<cv::Point3f> nose_pts{nose_3d};
+        std::vector<cv::Point2f> nose_proj;
+        cv::projectPoints(nose_pts, rvec, tvec, K, dist, nose_proj);
+        result.nose_tip = nose_proj[0];
+        result.nose_proj_err = static_cast<float>(cv::norm(nose_proj[0] - image_pts[1]));
+
+        std::vector<cv::Point2f> all_proj;
+        cv::projectPoints(object_pts, rvec, tvec, K, dist, all_proj);
+        float rms = 0;
+        for (int i = 0; i < 468; ++i) {
+            float dx = all_proj[i].x - image_pts[i].x;
+            float dy = all_proj[i].y - image_pts[i].y;
+            rms += dx * dx + dy * dy;
+        }
+        result.reproj_rms = std::sqrt(rms / 468.0f);
+        result.valid = true;
+
+        result.score = score;
+        result.landmarks = std::move(image_pts);
+        result.rvec = rvec.clone();
+        result.tvec = tvec.clone();
+        result.camera_matrix = K.clone();
+
+        return result;
+    }
 };
 
 MediaPipePoseEstimator::MediaPipePoseEstimator(const std::string& landmark_model_path, Config config) {
@@ -178,79 +254,7 @@ PoseEstimationResult MediaPipePoseEstimator::EstimatePose(const cv::Mat& bgr_ima
         return result;
     }
 
-    float score = 0.0f;
-    const int32_t* landmarks_data = nullptr;
-
-    for (size_t i = 0; i < impl_->session_.OutputCount(); ++i) {
-        const auto& name = impl_->session_.OutputNameStrs()[i];
-
-        if (name == "score" || name.find("score") != std::string::npos) {
-            score = outputs[i].GetTensorData<float>()[0];
-        } else if (name == "final_landmarks" ||
-                   name.find("landmarks") != std::string::npos) {
-            landmarks_data = outputs[i].GetTensorData<int32_t>();
-        }
-    }
-
-    if (!landmarks_data) return result;
-    if (score < impl_->config_.score_threshold) return result;
-
-    std::vector<cv::Point2f> image_pts;
-    std::vector<cv::Point3f> object_pts;
-    image_pts.reserve(468);
-    object_pts.reserve(468);
-
-    for (int i = 0; i < 468; ++i) {
-        const int32_t* lm = &landmarks_data[i * 3];
-        image_pts.emplace_back(static_cast<float>(lm[0]),
-                               static_cast<float>(lm[1]));
-        object_pts.push_back(impl_->canonical_model_[i]);
-    }
-
-    cv::Mat K = EstimateCameraMatrix(img_w, img_h);
-    static const cv::Mat dist = cv::Mat::zeros(4, 1, CV_64F);
-    cv::Mat rvec, tvec;
-
-    bool pnp_ok = cv::solvePnP(object_pts, image_pts, K, dist, rvec, tvec,
-                                false, cv::SOLVEPNP_EPNP);
-    if (!pnp_ok) return result;
-
-    cv::Mat R;
-    cv::Rodrigues(rvec, R);
-
-    cv::Mat canonical_to_headpose = (cv::Mat_<double>(3, 3) <<
-        1.0,  0.0,  0.0,
-        0.0, -1.0,  0.0,
-        0.0,  0.0, -1.0);
-    cv::Mat R_headpose = R * canonical_to_headpose;
-    result.pose = RotationToEuler(R_headpose);
-
-    cv::Point3f nose_3d = impl_->canonical_model_[1];
-    std::vector<cv::Point3f> nose_pts{nose_3d};
-    std::vector<cv::Point2f> nose_proj;
-    cv::projectPoints(nose_pts, rvec, tvec, K, dist, nose_proj);
-    result.nose_tip = nose_proj[0];
-    result.nose_proj_err = static_cast<float>(cv::norm(nose_proj[0] - image_pts[1]));
-
-    // PnP reprojection RMS: project all 468 canonical points and compare
-    std::vector<cv::Point2f> all_proj;
-    cv::projectPoints(object_pts, rvec, tvec, K, dist, all_proj);
-    float rms = 0;
-    for (int i = 0; i < 468; ++i) {
-        float dx = all_proj[i].x - image_pts[i].x;
-        float dy = all_proj[i].y - image_pts[i].y;
-        rms += dx * dx + dy * dy;
-    }
-    result.reproj_rms = std::sqrt(rms / 468.0f);
-    result.valid = true;
-
-    result.score = score;
-    result.landmarks = std::move(image_pts);
-    result.rvec = rvec.clone();
-    result.tvec = tvec.clone();
-    result.camera_matrix = K.clone();
-
-    return result;
+    return impl_->PostProcessOutputs(outputs, img_w, img_h);
 }
 
 PoseEstimationResult MediaPipePoseEstimator::EstimatePoseFromCrop(const cv::Mat& face_roi,
@@ -313,70 +317,7 @@ PoseEstimationResult MediaPipePoseEstimator::EstimatePoseFromCrop(const cv::Mat&
         return result;
     }
 
-    float score = 0.0f;
-    const int32_t* landmarks_data = nullptr;
-    for (size_t i = 0; i < impl_->session_.OutputCount(); ++i) {
-        const auto& name = impl_->session_.OutputNameStrs()[i];
-        if (name == "score" || name.find("score") != std::string::npos) {
-            score = outputs[i].GetTensorData<float>()[0];
-        } else if (name == "final_landmarks" ||
-                   name.find("landmarks") != std::string::npos) {
-            landmarks_data = outputs[i].GetTensorData<int32_t>();
-        }
-    }
-    if (!landmarks_data || score < impl_->config_.score_threshold) return result;
-
-    std::vector<cv::Point2f> image_pts;
-    std::vector<cv::Point3f> object_pts;
-    image_pts.reserve(468);
-    object_pts.reserve(468);
-    for (int i = 0; i < 468; ++i) {
-        const int32_t* lm = &landmarks_data[i * 3];
-        image_pts.emplace_back(static_cast<float>(lm[0]),
-                               static_cast<float>(lm[1]));
-        object_pts.push_back(impl_->canonical_model_[i]);
-    }
-
-    cv::Mat K = EstimateCameraMatrix(img_w, img_h);
-    static const cv::Mat dist = cv::Mat::zeros(4, 1, CV_64F);
-    cv::Mat rvec, tvec;
-    bool pnp_ok = cv::solvePnP(object_pts, image_pts, K, dist, rvec, tvec,
-                                false, cv::SOLVEPNP_EPNP);
-    if (!pnp_ok) return result;
-
-    cv::Mat R;
-    cv::Rodrigues(rvec, R);
-    cv::Mat canonical_to_headpose = (cv::Mat_<double>(3, 3) <<
-        1.0,  0.0,  0.0,
-        0.0, -1.0,  0.0,
-        0.0,  0.0, -1.0);
-    cv::Mat R_headpose = R * canonical_to_headpose;
-    result.pose = RotationToEuler(R_headpose);
-
-    cv::Point3f nose_3d = impl_->canonical_model_[1];
-    std::vector<cv::Point3f> nose_pts{nose_3d};
-    std::vector<cv::Point2f> nose_proj;
-    cv::projectPoints(nose_pts, rvec, tvec, K, dist, nose_proj);
-    result.nose_tip = nose_proj[0];
-    result.nose_proj_err = static_cast<float>(cv::norm(nose_proj[0] - image_pts[1]));
-
-    std::vector<cv::Point2f> all_proj;
-    cv::projectPoints(object_pts, rvec, tvec, K, dist, all_proj);
-    float rms = 0;
-    for (int i = 0; i < 468; ++i) {
-        float dx = all_proj[i].x - image_pts[i].x;
-        float dy = all_proj[i].y - image_pts[i].y;
-        rms += dx * dx + dy * dy;
-    }
-    result.reproj_rms = std::sqrt(rms / 468.0f);
-    result.valid = true;
-
-    result.score = score;
-    result.landmarks = std::move(image_pts);
-    result.rvec = rvec.clone();
-    result.tvec = tvec.clone();
-    result.camera_matrix = K.clone();
-    return result;
+    return impl_->PostProcessOutputs(outputs, img_w, img_h);
 }
 
 const std::vector<cv::Point3f>& MediaPipePoseEstimator::canonical_model() const {

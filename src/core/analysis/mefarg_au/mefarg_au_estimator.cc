@@ -10,7 +10,7 @@
 
 #include <spdlog/spdlog.h>
 
-#include "omniface/core/detail/onnx_session.h"
+#include "omniface/core/inference/onnx_session.h"
 
 namespace omniface::analysis::mefarg_au {
 

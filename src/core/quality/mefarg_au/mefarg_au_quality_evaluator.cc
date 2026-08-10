@@ -4,24 +4,16 @@
 #include <QTextStream>
 
 #include <algorithm>
-#include <array>
 #include <cmath>
+
+#include "omniface/core/analysis/mefarg_au/mefarg_au_constants.h"
 
 namespace omniface::quality {
 
-namespace {
+using analysis::mefarg_au::kNumAuOutputs;
+using analysis::mefarg_au::kAuNames;
 
-inline constexpr int kNumAu = 41;
-inline constexpr std::array<const char*, kNumAu> kAuNames = {
-    "AU1", "AU2", "AU4", "AU5", "AU6", "AU7", "AU9", "AU10",
-    "AU11", "AU12", "AU13", "AU14", "AU15", "AU16", "AU17", "AU18",
-    "AU19", "AU20", "AU22", "AU23", "AU24", "AU25", "AU26", "AU27",
-    "AU32", "AU38", "AU39",
-    "AUL1", "AUR1", "AUL2", "AUR2", "AUL4", "AUR4", "AUL6", "AUR6",
-    "AUL10", "AUR10", "AUL12", "AUR12", "AUL14", "AUR14"
-};
-
-}  // namespace
+inline constexpr int kNumAu = kNumAuOutputs;
 
 MefargAuQualityEvaluator::MefargAuQualityEvaluator(QObject* parent)
     : BaseQualityEvaluator() {
@@ -128,54 +120,6 @@ void MefargAuQualityEvaluator::Evaluate() {
     float sum_margin = 0;
     int total_flips = 0;
     int spike_frames = 0;
-
-    // Track per-AU active states for spike detection
-    // We'll use a sliding window: for each frame and each AU, mark if it's a spike
-    // Spike: AU is active but not active in prev-1 or prev-2 AND not active in next+1 or next+2
-    // (i.e., isolated activation ≤ 2 consecutive frames)
-    std::vector<std::array<bool, kNumAu>> au_active_timeline(raw_frames_.size());
-    for (size_t i = 0; i < raw_frames_.size(); ++i) {
-        // We need to re-parse to get per-AU active... Actually, let me change approach.
-        // Store per-AU active in a separate step.
-    }
-    // Actually let me just do it during the main loop below by storing per-AU data
-    // But we need per-AU active for spike detection... Let me restructure.
-    // I'll store au_active bits in MefargAuQualityFrame temporarily.
-    // No wait, the types are already defined. Let me add per-AU parsing in Evaluate().
-    // Hmm, I need to re-read the CSV to get per-AU data. Let me refactor to store per-AU data in RawFrame.
-
-    // Actually, let me change RawFrame to store per-AU active states as a bitset.
-    // But I already defined it without that. Let me re-read the CSV columns during Evaluate.
-    // No, that's bad. Let me just track the AU activation timeline in the main Evaluate.
-
-    // Let me take a different, simpler approach for spike detection:
-    // Rather than detecting per-AU spikes, I'll use active_au_count frame-to-frame
-    // and detect when an AU count spike occurs (count goes 0→N→0 for N≥1 within 3 frames)
-    // This is approximate but simpler.
-
-    // Actually, let me reconsider the approach entirely. For a simple MEFARG evaluator,
-    // I should store per-AU active info. Let me change RawFrame to include it.
-    // But RawFrame is in the .h file...
-
-    // OK, the simplest approach: track AU active counts per frame. Use frame-to-frame
-    // active count change as a proxy for flips. And for spikes, detect frames where
-    // active_count is high but both adjacent frames have low counts.
-
-    // Actually wait, I should just do it properly. Let me save the per-AU data in the Evaluate
-    // function by reading the CSV again during Evaluate(). No, that's wasteful.
-
-    // Let me just use active_au_count change as a proxy. It won't detect individual AU flips
-    // that cancel out, but it's simple and reasonable.
-
-    // Actually... let me just store the per-AU data. I'll add arrays to RawFrame.
-    // I need to update the header file. Let me do that.
-
-    // OK actually, for the simplicity the user requested, let me just use:
-    // 1. mean_decision_margin (already computed per frame)
-    // 2. AU count change between frames as stability metric
-    // 3. Spike = active_count 0→N→0 pattern within a window
-
-    // Let me proceed with a simpler approach.
 
     for (size_t i = 0; i < raw_frames_.size(); ++i) {
         const auto& src = raw_frames_[i];

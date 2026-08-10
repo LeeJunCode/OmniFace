@@ -15,7 +15,7 @@
 #include <opencv2/core/mat.hpp>
 #include <opencv2/videoio.hpp>
 
-#include "omniface/pipeline/config.h"
+#include "omniface/pipeline/framework/config.h"
 #include "omniface/types.h"
 
 class QLabel;

@@ -2,9 +2,9 @@
 
 #include <unordered_set>
 
-#include "omniface/core/tracking/detail/kalman_filter.h"
-#include "omniface/core/tracking/detail/lapjv.h"
-#include "omniface/core/tracking/detail/strack.h"
+#include "omniface/core/tracking/internal/kalman_filter.h"
+#include "omniface/core/tracking/internal/lapjv.h"
+#include "omniface/core/tracking/internal/strack.h"
 
 namespace omniface::tracking {
 

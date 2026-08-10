@@ -7,7 +7,7 @@
 #include <spdlog/spdlog.h>
 #include <stdexcept>
 
-#include "omniface/core/detail/onnx_session.h"
+#include "omniface/core/inference/onnx_session.h"
 
 namespace omniface::recognition {
 
@@ -109,36 +109,13 @@ std::vector<FaceEmbedding> FaceRecognizer::ExtractBatch(
 
     std::vector<float> batch_blob(batch_size * single_face_size);
 
-    constexpr float kScale = 1.0f / 127.5f;
-    constexpr float kOffset = -1.0f;
-
     for (size_t b = 0; b < batch_size; ++b) {
-        float* base = batch_blob.data() + b * single_face_size;
         if (aligned_faces[b].empty()) {
-            std::fill_n(base, single_face_size, 0.0f);
+            std::fill_n(batch_blob.data() + b * single_face_size, single_face_size, 0.0f);
             continue;
         }
-
-        cv::Mat resized;
-        cv::resize(aligned_faces[b], resized, cv::Size(W, H), 0, 0, cv::INTER_LINEAR);
-
-        float* R_plane = base;
-        float* G_plane = base + static_cast<size_t>(H) * W;
-        float* B_plane = base + static_cast<size_t>(H) * W * 2;
-
-        for (int h = 0; h < H; ++h) {
-            const uint8_t* row = resized.ptr<uint8_t>(h);
-            size_t row_base = static_cast<size_t>(h) * W;
-            for (int w = 0; w < W; ++w) {
-                float b_val = static_cast<float>(row[w * 3 + 0]) * kScale + kOffset;
-                float g_val = static_cast<float>(row[w * 3 + 1]) * kScale + kOffset;
-                float r_val = static_cast<float>(row[w * 3 + 2]) * kScale + kOffset;
-                size_t idx = row_base + w;
-                R_plane[idx] = r_val;
-                G_plane[idx] = g_val;
-                B_plane[idx] = b_val;
-            }
-        }
+        auto blob = Preprocess(aligned_faces[b], cfg);
+        std::copy(blob.begin(), blob.end(), batch_blob.data() + b * single_face_size);
     }
 
     std::vector<FaceEmbedding> results(aligned_faces.size());

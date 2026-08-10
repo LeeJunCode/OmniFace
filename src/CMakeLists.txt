@@ -1,16 +1,16 @@
 # ============================================================
-# Detail layer — ONNX Runtime session wrapper + preprocessing
+# Inference layer — ONNX Runtime session wrapper + preprocessing
 # ============================================================
-add_library(omniface_detail STATIC
-    core/detail/onnx_session.cc
-    core/detail/preprocess.cc
+add_library(omniface_inference STATIC
+    core/inference/onnx_session.cc
+    core/inference/preprocess.cc
 )
 
-target_include_directories(omniface_detail PUBLIC
+target_include_directories(omniface_inference PUBLIC
     ${PROJECT_SOURCE_DIR}/include
 )
 
-target_link_libraries(omniface_detail PUBLIC
+target_link_libraries(omniface_inference PUBLIC
     onnxruntime::onnxruntime
     spdlog::spdlog
     opencv_core
@@ -18,7 +18,7 @@ target_link_libraries(omniface_detail PUBLIC
     opencv_dnn
 )
 
-target_compile_features(omniface_detail PUBLIC cxx_std_20)
+target_compile_features(omniface_inference PUBLIC cxx_std_20)
 
 # ============================================================
 # Detection module — SCRFD face detector
@@ -32,7 +32,7 @@ target_include_directories(omniface_detection PUBLIC
 )
 
 target_link_libraries(omniface_detection PUBLIC
-    omniface_detail
+    omniface_inference
     opencv_core
 )
 
@@ -49,9 +49,9 @@ target_compile_features(omniface_detection PUBLIC cxx_std_20)
 add_library(omniface_tracking STATIC
     core/tracking/bytetrack_engine.cc
     core/tracking/face_tracker.cc
-    core/tracking/detail/kalman_filter.cc
-    core/tracking/detail/strack.cc
-    core/tracking/detail/lapjv.cc
+    core/tracking/internal/kalman_filter.cc
+    core/tracking/internal/strack.cc
+    core/tracking/internal/lapjv.cc
 )
 
 target_include_directories(omniface_tracking PUBLIC
@@ -59,7 +59,7 @@ target_include_directories(omniface_tracking PUBLIC
 )
 
 target_link_libraries(omniface_tracking PUBLIC
-    omniface_detail
+    omniface_inference
     opencv_core
     Eigen3::Eigen
 )
@@ -79,7 +79,7 @@ target_include_directories(omniface_recognition PUBLIC
 )
 
 target_link_libraries(omniface_recognition PUBLIC
-    omniface_detail
+    omniface_inference
     opencv_core
     opencv_calib3d
 )
@@ -105,7 +105,7 @@ target_include_directories(omniface_analysis PUBLIC
 )
 
 target_link_libraries(omniface_analysis PUBLIC
-    omniface_detail
+    omniface_inference
     opencv_core
     opencv_imgproc
     OpenFace::LandmarkDetector
@@ -130,7 +130,7 @@ target_include_directories(omniface_analysis_mediapipe PUBLIC
 )
 
 target_link_libraries(omniface_analysis_mediapipe PUBLIC
-    omniface_detail
+    omniface_inference
     spdlog::spdlog
     opencv_core
     opencv_imgproc
@@ -151,7 +151,7 @@ target_include_directories(omniface_analysis_l2cs PUBLIC
 )
 
 target_link_libraries(omniface_analysis_l2cs PUBLIC
-    omniface_detail
+    omniface_inference
     spdlog::spdlog
     opencv_core
     opencv_imgproc
@@ -171,7 +171,7 @@ target_include_directories(omniface_analysis_mefarg PUBLIC
 )
 
 target_link_libraries(omniface_analysis_mefarg PUBLIC
-    omniface_detail
+    omniface_inference
     spdlog::spdlog
     opencv_core
     opencv_imgproc
@@ -191,9 +191,9 @@ add_library(omniface_quality STATIC
     core/quality/l2cs/l2cs_data_cleaner.cc
     core/quality/mefarg_au/mefarg_au_quality_evaluator.cc
     core/quality/mefarg_au/mefarg_au_data_cleaner.cc
-    ${PROJECT_SOURCE_DIR}/include/omniface/core/quality/base_quality_evaluator.h
-    ${PROJECT_SOURCE_DIR}/include/omniface/core/quality/quality_types.h
-    ${PROJECT_SOURCE_DIR}/include/omniface/core/quality/base_data_cleaner.h
+    ${PROJECT_SOURCE_DIR}/include/omniface/core/quality/interface/base_quality_evaluator.h
+    ${PROJECT_SOURCE_DIR}/include/omniface/core/quality/interface/quality_types.h
+    ${PROJECT_SOURCE_DIR}/include/omniface/core/quality/interface/base_data_cleaner.h
     ${PROJECT_SOURCE_DIR}/include/omniface/core/quality/openface/openface_quality_types.h
     ${PROJECT_SOURCE_DIR}/include/omniface/core/quality/openface/openface_quality_evaluator.h
     ${PROJECT_SOURCE_DIR}/include/omniface/core/quality/openface/openface_data_cleaner.h
@@ -215,6 +215,8 @@ target_include_directories(omniface_quality PUBLIC
 target_link_libraries(omniface_quality PUBLIC
     Qt6::Core
     spdlog::spdlog
+    opencv_core
+    opencv_imgproc
 )
 
 set_target_properties(omniface_quality PROPERTIES AUTOMOC ON)
@@ -225,19 +227,18 @@ target_compile_features(omniface_quality PUBLIC cxx_std_20)
 # Pipeline module — config + orchestration
 # ============================================================
 add_library(omniface_pipeline STATIC
-    pipeline/config.cc
-    pipeline/decode_worker.cc
-    pipeline/module_factory.cc
-    pipeline/output_manager.cc
-    pipeline/target_tracker.cc
-    pipeline/pipeline.cc
-    pipeline/base_pipeline.cc
-    pipeline/openface_pipeline.cc
-    pipeline/mediapipe_pipeline.cc
-    pipeline/l2cs_pipeline.cc
-    pipeline/mefarg_au_pipeline.cc
-    pipeline/recognition_pipeline.cc
-    pipeline/pipeline_factory.cc
+    pipeline/framework/config.cc
+    pipeline/workers/decode_worker.cc
+    pipeline/framework/module_factory.cc
+    pipeline/workers/output_manager.cc
+    pipeline/workers/target_tracker.cc
+    pipeline/framework/base_pipeline.cc
+    pipeline/openface/openface_pipeline.cc
+    pipeline/mediapipe/mediapipe_pipeline.cc
+    pipeline/l2cs/l2cs_pipeline.cc
+    pipeline/mefarg_au/mefarg_au_pipeline.cc
+    pipeline/recognition/recognition_pipeline.cc
+    pipeline/framework/pipeline_factory.cc
 )
 
 target_include_directories(omniface_pipeline PUBLIC
@@ -386,10 +387,18 @@ set_target_properties(OmniFace PROPERTIES
     VS_DEBUGGER_ENVIRONMENT "QT_MEDIA_BACKEND=${OMNIFACE_MEDIA_BACKEND};PATH=C:\\Qt\\6.11.1\\msvc2022_64\\bin;${CMAKE_SOURCE_DIR}/third_party/OpenFace/build/bin/$<CONFIG>;%PATH%"
 )
 
+# Derive VCINSTALLDIR from the MSVC compiler path for windeployqt
+# cl.exe lives at <VS>/VC/Tools/MSVC/<ver>/bin/Hostx64/x64/cl.exe
+set(_vc_dir "${CMAKE_CXX_COMPILER}")
+foreach(_i RANGE 1 7)
+    cmake_path(GET _vc_dir PARENT_PATH _vc_dir)
+endforeach()
+
 # Post-build: deploy Qt DLLs alongside the executable
 add_custom_command(TARGET OmniFace POST_BUILD
     COMMAND "${CMAKE_COMMAND}" -E echo "Running windeployqt..."
-    COMMAND "C:/Qt/6.11.1/msvc2022_64/bin/windeployqt.exe" --no-translations "$<TARGET_FILE:OmniFace>"
+    COMMAND "${CMAKE_COMMAND}" -E env "VCINSTALLDIR=${_vc_dir}"
+        "C:/Qt/6.11.1/msvc2022_64/bin/windeployqt.exe" --no-translations "$<TARGET_FILE:OmniFace>"
     COMMENT "Deploying Qt runtime dependencies"
 )
 
