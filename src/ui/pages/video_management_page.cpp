@@ -667,9 +667,15 @@ void VideoManagementPage::OnDeleteVideo() {
             QStringLiteral("无法删除：该视频有关联的处理任务，请先删除对应任务。"));
         return;
     }
+
+    if (process_page_)
+        process_page_->ClearVideoSelection();
+    emit VideoDeleted(vid);
+
     if (!rec->saved_path.empty()) {
         QFile::remove(QString::fromStdString(rec->saved_path));
     }
+
     Refresh();
     QMessageBox::information(this, QStringLiteral("删除成功"),
         QStringLiteral("视频 \"%1\" 已成功删除。").arg(name));
@@ -679,19 +685,40 @@ void VideoManagementPage::OnBatchDelete() {
     QSet<int64_t> ids = model_->CheckedIds();
     if (ids.isEmpty()) return;
 
-    int count = ids.size();
-    auto result = QMessageBox::question(this,
-        QStringLiteral("批量删除"),
-        QStringLiteral("确定要删除选中的 %1 个视频吗？\n\n将同时删除记录和文件，此操作不可撤销。").arg(count),
-        QMessageBox::Yes | QMessageBox::No,
-        QMessageBox::No);
-
-    if (result != QMessageBox::Yes) return;
+    int locked = 0;
+    for (int64_t id : ids) {
+        if (process_page_ && process_page_->IsVideoLocked(id))
+            locked++;
+    }
+    if (locked > 0) {
+        auto result = QMessageBox::question(this,
+            QStringLiteral("批量删除"),
+            QStringLiteral("选中的 %1 个视频中有 %2 个正在处理中，将被跳过。\n\n确定删除其余 %3 个视频吗？\n将同时删除记录和文件，此操作不可撤销。")
+                .arg(ids.size()).arg(locked).arg(ids.size() - locked),
+            QMessageBox::Yes | QMessageBox::No,
+            QMessageBox::No);
+        if (result != QMessageBox::Yes) return;
+    } else {
+        auto result = QMessageBox::question(this,
+            QStringLiteral("批量删除"),
+            QStringLiteral("确定要删除选中的 %1 个视频吗？\n\n将同时删除记录和文件，此操作不可撤销。").arg(ids.size()),
+            QMessageBox::Yes | QMessageBox::No,
+            QMessageBox::No);
+        if (result != QMessageBox::Yes) return;
+    }
 
     int deleted = 0;
+    int skipped = 0;
     for (int64_t id : ids) {
+        if (process_page_ && process_page_->IsVideoLocked(id)) {
+            skipped++;
+            continue;
+        }
         auto rec = repo_->FindById(id);
         if (repo_->Delete(id)) {
+            if (process_page_)
+                process_page_->ClearVideoSelection();
+            emit VideoDeleted(id);
             if (rec && !rec->saved_path.empty()) {
                 QFile::remove(QString::fromStdString(rec->saved_path));
             }
@@ -700,7 +727,9 @@ void VideoManagementPage::OnBatchDelete() {
     }
     Refresh();
     QMessageBox::information(this, QStringLiteral("删除完成"),
-        QStringLiteral("成功删除 %1/%2 个视频。").arg(deleted).arg(count));
+        QStringLiteral("成功删除 %1/%2 个视频%3。")
+            .arg(deleted).arg(ids.size())
+            .arg(skipped > 0 ? QStringLiteral("（跳过 %1 个处理中）").arg(skipped) : QString()));
 }
 
 void VideoManagementPage::OnEditVideo() {

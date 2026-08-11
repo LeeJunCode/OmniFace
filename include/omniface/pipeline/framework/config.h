@@ -46,6 +46,15 @@ inline AnalysisBackend AnalysisBackendFromString(const std::string& s) {
     return AnalysisBackend::kOpenFace;
 }
 
+inline const char* AnalysisBackendDisplayName(const std::string& backend_str) {
+    if (backend_str == "openface")  return "面部综合分析 (OpenFace)";
+    if (backend_str == "mediapipe") return "人脸关键点 (MediaPipe)";
+    if (backend_str == "l2cs")      return "视线追踪 (L2CS-Net)";
+    if (backend_str == "mefarg_au") return "表情识别 (MEFARG-AU)";
+    if (backend_str == "none")      return "仅检测跟踪";
+    return backend_str.c_str();
+}
+
 struct ModelConfig {
     std::string detector_model = "models/buffalo_sc/det_500m.onnx";
     std::string recognizer_model = "models/buffalo_sc/w600k_mbf.onnx";

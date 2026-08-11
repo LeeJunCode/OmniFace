@@ -21,6 +21,7 @@
 #include "omniface/db/image_repo.h"
 #include "omniface/db/task_repo.h"
 #include "omniface/db/video_repo.h"
+#include "omniface/pipeline/framework/config.h"
 #include "omniface/ui/theme.h"
 
 namespace omniface {
@@ -76,7 +77,7 @@ QVariant TaskTableModel::data(const QModelIndex& index, int role) const {
         case ColDate:        return FormatDate(t.start_time);
         case ColVideoName:   return info.video_name.isEmpty() ? QStringLiteral("—") : info.video_name;
         case ColImageName:   return info.image_name.isEmpty() ? QStringLiteral("—") : info.image_name;
-        case ColBackend:     return QString::fromStdString(t.backend);
+        case ColBackend:     return QString::fromUtf8(AnalysisBackendDisplayName(t.backend));
         case ColOutputTypes: return FormatOutputTypes(t.output_types);
         case ColStatus:      return StatusText(t.status);
         case ColFrames:      return FormatFrameCount(t.total_frames);
@@ -401,11 +402,11 @@ void TaskHistoryPage::SetupUI() {
     top_bar->addWidget(makeLabel(QStringLiteral("后端:")));
     backend_combo_ = makeCombo();
     backend_combo_->addItem(QStringLiteral("全部"), QString());
-    backend_combo_->addItem(QStringLiteral("OpenFace"), QStringLiteral("openface"));
-    backend_combo_->addItem(QStringLiteral("MediaPipe"), QStringLiteral("mediapipe"));
-    backend_combo_->addItem(QStringLiteral("L2CS-Net"), QStringLiteral("l2cs"));
-    backend_combo_->addItem(QStringLiteral("MEFARG-AU"), QStringLiteral("mefarg_au"));
-    backend_combo_->addItem(QStringLiteral("None"), QStringLiteral("none"));
+    backend_combo_->addItem(QStringLiteral("面部综合分析 (OpenFace)"), QStringLiteral("openface"));
+    backend_combo_->addItem(QStringLiteral("人脸关键点 (MediaPipe)"), QStringLiteral("mediapipe"));
+    backend_combo_->addItem(QStringLiteral("视线追踪 (L2CS-Net)"), QStringLiteral("l2cs"));
+    backend_combo_->addItem(QStringLiteral("表情识别 (MEFARG-AU)"), QStringLiteral("mefarg_au"));
+    backend_combo_->addItem(QStringLiteral("仅检测跟踪"), QStringLiteral("none"));
     connect(backend_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged),
             this, &TaskHistoryPage::OnBackendFilterChanged);
     top_bar->addWidget(backend_combo_);
@@ -803,6 +804,12 @@ void TaskHistoryPage::OnDeleteTask() {
     auto rec = task_repo_->FindById(task_id);
     if (!rec) return;
 
+    if (rec->status == "running") {
+        QMessageBox::warning(this, QStringLiteral("无法删除"),
+            QStringLiteral("该任务正在运行中，请先停止处理后再删除。"));
+        return;
+    }
+
     auto result = QMessageBox::question(this,
         QStringLiteral("删除任务"),
         QStringLiteral("确定要删除此任务吗？\n\n将同时删除记录和输出文件，此操作不可撤销。"),
@@ -812,6 +819,7 @@ void TaskHistoryPage::OnDeleteTask() {
     if (result != QMessageBox::Yes) return;
 
     task_repo_->Delete(task_id, true);
+    emit TaskDeleted(task_id);
     Refresh();
 }
 
@@ -819,23 +827,47 @@ void TaskHistoryPage::OnBatchDelete() {
     QSet<int64_t> ids = model_->CheckedIds();
     if (ids.isEmpty()) return;
 
-    int count = ids.size();
-    auto result = QMessageBox::question(this,
-        QStringLiteral("批量删除"),
-        QStringLiteral("确定要删除选中的 %1 条任务记录吗？\n\n将同时删除记录和输出文件，此操作不可撤销。").arg(count),
-        QMessageBox::Yes | QMessageBox::No,
-        QMessageBox::No);
-
-    if (result != QMessageBox::Yes) return;
+    int running = 0;
+    for (int64_t id : ids) {
+        auto rec = task_repo_->FindById(id);
+        if (rec && rec->status == "running")
+            running++;
+    }
+    if (running > 0) {
+        auto result = QMessageBox::question(this,
+            QStringLiteral("批量删除"),
+            QStringLiteral("选中的 %1 条任务中有 %2 条正在运行中，将被跳过。\n\n确定删除其余 %3 条任务吗？\n将同时删除记录和输出文件，此操作不可撤销。")
+                .arg(ids.size()).arg(running).arg(ids.size() - running),
+            QMessageBox::Yes | QMessageBox::No,
+            QMessageBox::No);
+        if (result != QMessageBox::Yes) return;
+    } else {
+        auto result = QMessageBox::question(this,
+            QStringLiteral("批量删除"),
+            QStringLiteral("确定要删除选中的 %1 条任务记录吗？\n\n将同时删除记录和输出文件，此操作不可撤销。").arg(ids.size()),
+            QMessageBox::Yes | QMessageBox::No,
+            QMessageBox::No);
+        if (result != QMessageBox::Yes) return;
+    }
 
     int deleted = 0;
+    int skipped = 0;
     for (int64_t id : ids) {
-        if (task_repo_->Delete(id, true))
+        auto rec = task_repo_->FindById(id);
+        if (rec && rec->status == "running") {
+            skipped++;
+            continue;
+        }
+        if (task_repo_->Delete(id, true)) {
+            emit TaskDeleted(id);
             deleted++;
+        }
     }
     Refresh();
     QMessageBox::information(this, QStringLiteral("删除完成"),
-        QStringLiteral("成功删除 %1/%2 条任务。").arg(deleted).arg(count));
+        QStringLiteral("成功删除 %1/%2 条任务%3。")
+            .arg(deleted).arg(ids.size())
+            .arg(skipped > 0 ? QStringLiteral("（跳过 %1 条运行中）").arg(skipped) : QString()));
 }
 
 }  // namespace ui

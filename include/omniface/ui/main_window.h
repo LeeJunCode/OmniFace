@@ -47,9 +47,6 @@ protected:
 private slots:
     void OnPageChanged(int index);
     void OnBackFromDetail();
-    void OnProcessingCompleted(int64_t video_id, int64_t image_id,
-                               QString backend, double avg_fps, int total_frames,
-                               QString output_dir, QString status);
     void OnViewCsv(int64_t task_id);
     void OnViewCleanCsv(int64_t task_id);
 
@@ -90,6 +87,9 @@ private:
 
     int previous_page_index_ = 0;
     int64_t last_completed_task_id_ = 0;
+    int64_t detail_video_id_ = 0;
+    int64_t detail_image_id_ = 0;
+    int64_t detail_task_id_ = 0;
 
     // Status bar
     QLabel* status_label_;

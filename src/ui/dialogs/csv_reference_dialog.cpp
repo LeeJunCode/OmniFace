@@ -13,8 +13,8 @@ CsvReferenceDialog::CsvReferenceDialog(QWidget* parent)
     : QDialog(parent) {
     auto& tm = ThemeManager::Instance();
     setWindowTitle(QStringLiteral("CSV 数据参考 — 全量字段说明与映射关系"));
-    resize(960, 680);
-    setMinimumSize(860, 560);
+    resize(1040, 680);
+    setMinimumSize(900, 560);
     setWindowFlags(windowFlags() | Qt::WindowMaximizeButtonHint | Qt::WindowMinimizeButtonHint);
     setStyleSheet(QStringLiteral(
         "QDialog { background: %1; color: %2; }"
@@ -87,11 +87,12 @@ void CsvReferenceDialog::SetupUI() {
     body->setSpacing(8);
 
     backend_list_ = new QListWidget(this);
-    backend_list_->setFixedWidth(140);
-    backend_list_->addItem(QStringLiteral("OpenFace"));
-    backend_list_->addItem(QStringLiteral("MediaPipe"));
-    backend_list_->addItem(QStringLiteral("L2CS-Net"));
-    backend_list_->addItem(QStringLiteral("MEFARG-AU"));
+    backend_list_->setFixedWidth(200);
+    backend_list_->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Expanding);
+    backend_list_->addItem(QStringLiteral("面部综合分析 (OpenFace)"));
+    backend_list_->addItem(QStringLiteral("人脸关键点 (MediaPipe)"));
+    backend_list_->addItem(QStringLiteral("视线追踪 (L2CS-Net)"));
+    backend_list_->addItem(QStringLiteral("表情识别 (MEFARG-AU)"));
     connect(backend_list_, &QListWidget::currentRowChanged,
             this, &CsvReferenceDialog::OnBackendChanged);
     body->addWidget(backend_list_);

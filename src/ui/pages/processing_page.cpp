@@ -29,6 +29,7 @@
 #include "omniface/core/recognition/face_recognizer.h"
 #include "omniface/db/image_repo.h"
 #include "omniface/db/snowflake.h"
+#include "omniface/db/task_repo.h"
 #include "omniface/db/video_repo.h"
 #include "omniface/pipeline/framework/base_pipeline.h"
 #include "omniface/pipeline/framework/pipeline_factory.h"
@@ -158,6 +159,14 @@ void FrameDisplayWidget::ReapplyTheme() {
     auto& tm = ThemeManager::Instance();
     setStyleSheet(QStringLiteral("QWidget { background: %1; border: 1px solid %2; }")
         .arg(tm.DeepBg(), tm.Border()));
+    update();
+}
+
+void FrameDisplayWidget::ClearFrame() {
+    {
+        QMutexLocker lock(&frame_mutex_);
+        current_frame_ = QPixmap();
+    }
     update();
 }
 
@@ -374,8 +383,10 @@ void ProcessWorker::ProcessLoop() {
 
 ProcessingPage::ProcessingPage(std::shared_ptr<db::VideoRepo> video_repo,
                                std::shared_ptr<db::ImageRepo> image_repo,
+                               std::shared_ptr<db::TaskRepo> task_repo,
                                QWidget* parent)
-    : QWidget(parent), video_repo_(std::move(video_repo)), image_repo_(std::move(image_repo)) {
+    : QWidget(parent), video_repo_(std::move(video_repo)), image_repo_(std::move(image_repo)),
+      task_repo_(std::move(task_repo)) {
     ResolveConfigPaths(config_);
     SetupUI();
     connect(&ThemeManager::Instance(), &ThemeManager::ThemeChanged,
@@ -392,14 +403,8 @@ ProcessingPage::~ProcessingPage() {
 // ─── Helper: analysis backend display name ────────────────────
 
 QString ProcessingPage::AnalysisBackendDisplayName() const {
-    switch (config_.analysis_backend) {
-    case AnalysisBackend::kOpenFace:  return QStringLiteral("OpenFace");
-    case AnalysisBackend::kMediaPipe: return QStringLiteral("MediaPipe");
-    case AnalysisBackend::kL2cs:      return QStringLiteral("L2CS-Net");
-    case AnalysisBackend::kMefargAu:  return QStringLiteral("MEFARG-AU");
-    case AnalysisBackend::kNone:      return QStringLiteral("—");
-    }
-    return QStringLiteral("—");
+    return QString::fromUtf8(
+        omniface::AnalysisBackendDisplayName(AnalysisBackendToString(config_.analysis_backend)));
 }
 
 void ProcessingPage::UpdateAnalysisFpsLabel() {
@@ -732,11 +737,11 @@ void ProcessingPage::SetupUI() {
         auto* menu = new QMenu(this);
         menu->setStyleSheet(MenuStyle());
         const struct { QString label; AnalysisBackend be; } backends[] = {
-            {QStringLiteral("OpenFace"),  AnalysisBackend::kOpenFace},
-            {QStringLiteral("MediaPipe"), AnalysisBackend::kMediaPipe},
-            {QStringLiteral("L2CS-Net"),  AnalysisBackend::kL2cs},
-            {QStringLiteral("MEFARG-AU"), AnalysisBackend::kMefargAu},
-            {QStringLiteral("None"),      AnalysisBackend::kNone},
+            {QStringLiteral("面部综合分析 (OpenFace)"),  AnalysisBackend::kOpenFace},
+            {QStringLiteral("人脸关键点 (MediaPipe)"), AnalysisBackend::kMediaPipe},
+            {QStringLiteral("视线追踪 (L2CS-Net)"),  AnalysisBackend::kL2cs},
+            {QStringLiteral("表情识别 (MEFARG-AU)"), AnalysisBackend::kMefargAu},
+            {QStringLiteral("仅检测跟踪"),      AnalysisBackend::kNone},
         };
         for (const auto& b : backends) {
             auto* action = menu->addAction(b.label);
@@ -1016,6 +1021,9 @@ void ProcessingPage::UpdateButtonStates() {
     bool ready = CheckReady();
     switch (state_) {
     case State::Idle:
+        video_btn_->setEnabled(true);
+        image_btn_->setEnabled(true);
+        backend_btn_->setEnabled(true);
         start_btn_->setEnabled(ready);
         pause_btn_->setEnabled(false);
         resume_btn_->setEnabled(false);
@@ -1027,6 +1035,9 @@ void ProcessingPage::UpdateButtonStates() {
         }
         break;
     case State::Running:
+        video_btn_->setEnabled(false);
+        image_btn_->setEnabled(false);
+        backend_btn_->setEnabled(false);
         start_btn_->setEnabled(false);
         pause_btn_->setEnabled(true);
         resume_btn_->setEnabled(false);
@@ -1038,6 +1049,9 @@ void ProcessingPage::UpdateButtonStates() {
         }
         break;
     case State::Paused:
+        video_btn_->setEnabled(false);
+        image_btn_->setEnabled(false);
+        backend_btn_->setEnabled(false);
         start_btn_->setEnabled(false);
         pause_btn_->setEnabled(false);
         resume_btn_->setEnabled(true);
@@ -1049,6 +1063,9 @@ void ProcessingPage::UpdateButtonStates() {
         }
         break;
     case State::Finished:
+        video_btn_->setEnabled(true);
+        image_btn_->setEnabled(true);
+        backend_btn_->setEnabled(true);
         start_btn_->setEnabled(ready);
         pause_btn_->setEnabled(false);
         resume_btn_->setEnabled(false);
@@ -1395,9 +1412,12 @@ void ProcessingPage::OnStart() {
     total_frame_count_ = 0;
     last_processed_frame_ = 0;
     was_processing_ = true;
+    stop_requested_ = false;
     UpdateButtonStates();
     elapsed_seconds_ = 0;
     elapsed_timer_->start();
+
+    SaveRunningTask();
 
     progress_bar_->setValue(0);
     progress_bar_->setFormat(QStringLiteral("处理中... %p%"));
@@ -1427,13 +1447,107 @@ void ProcessingPage::OnStep() {
 }
 
 void ProcessingPage::OnStop() {
-    state_ = State::Idle;
-    UpdateButtonStates();
+    stop_requested_ = true;
+    stop_btn_->setEnabled(false);
+    pause_btn_->setEnabled(false);
+    resume_btn_->setEnabled(false);
+    step_btn_->setEnabled(false);
     elapsed_timer_->stop();
     progress_bar_->setValue(0);
-    progress_bar_->setFormat(QStringLiteral("已停止"));
+    progress_bar_->setFormat(QStringLiteral("正在停止..."));
     worker_->Stop();
-    ReleaseMediaResources();
+}
+
+// ─── Task persistence ──────────────────────────────────────────
+
+void ProcessingPage::SaveRunningTask() {
+    if (!task_repo_) return;
+
+    db::TaskRecord task;
+    task.video_id = selected_video_id_;
+    task.image_id = selected_image_id_;
+    task.backend = AnalysisBackendToString(config_.analysis_backend);
+    task.status = "running";
+    task.total_frames = 0;
+    task.avg_fps = 0.0;
+
+    // Build task name
+    QString video_name = selected_video_name_;
+    QString image_name = selected_image_name_;
+    task.name = (video_name + QStringLiteral(" - ") + image_name).toStdString();
+
+    try {
+        current_task_id_ = task_repo_->Insert(task);
+        spdlog::info("Task {} started (running)", current_task_id_);
+    } catch (const std::exception& e) {
+        spdlog::error("SaveRunningTask failed: {}", e.what());
+        current_task_id_ = 0;
+    }
+}
+
+void ProcessingPage::FinalizeTask(const QString& status) {
+    if (!task_repo_ || current_task_id_ == 0) return;
+
+    auto task_opt = task_repo_->FindById(current_task_id_);
+    if (!task_opt) {
+        spdlog::warn("FinalizeTask: task {} not found", current_task_id_);
+        return;
+    }
+
+    auto task = *task_opt;
+    task.status = status.toStdString();
+    task.end_time = QDateTime::currentDateTimeUtc().toString(Qt::ISODateWithMs).toStdString();
+    task.total_frames = last_processed_frame_;
+    task.avg_fps = pipeline_fps_label_ ? pipeline_fps_label_->text().toDouble() : 0.0;
+    task.output_dir = QString::fromStdString(worker_->GetOutputDir()).toStdString();
+
+    std::string video_path = worker_->GetOutputVideoPath();
+    if (!video_path.empty())
+        task.output_video_path = video_path;
+
+    // CSV path
+    QString output_dir = QString::fromStdString(task.output_dir);
+    std::string backend_str = AnalysisBackendToString(config_.analysis_backend);
+    QString backend = QString::fromStdString(backend_str);
+    QString csv_name;
+    if (backend == QStringLiteral("openface")) {
+        QFileInfo dir_info(output_dir);
+        QString dir_basename = dir_info.fileName();
+        if (dir_basename.length() > 16)
+            csv_name = dir_basename.left(dir_basename.length() - 16) + QStringLiteral(".csv");
+    } else if (backend == QStringLiteral("mediapipe")) {
+        csv_name = QStringLiteral("mediapipe_analysis.csv");
+    } else if (backend == QStringLiteral("l2cs")) {
+        csv_name = QStringLiteral("l2cs_analysis.csv");
+    } else if (backend == QStringLiteral("mefarg_au")) {
+        csv_name = QStringLiteral("mefarg_au_analysis.csv");
+    }
+    if (!csv_name.isEmpty())
+        task.csv_path = (output_dir + QStringLiteral("/") + csv_name).toStdString();
+
+    // Output types per backend
+    if (backend == QStringLiteral("openface"))
+        task.output_types = R"(["openface_native","aligned_faces","landmarks_68","head_pose","gaze","au"])";
+    else if (backend == QStringLiteral("mediapipe"))
+        task.output_types = R"(["landmarks_468","head_pose"])";
+    else if (backend == QStringLiteral("l2cs"))
+        task.output_types = R"(["gaze_yaw_pitch","gaze_3d_vector"])";
+    else if (backend == QStringLiteral("mefarg_au"))
+        task.output_types = R"(["au_41"])";
+    else
+        task.output_types = R"(["face_detection","tracking","recognition"])";
+
+    task.params_yaml = "{}";
+
+    try {
+        task_repo_->Update(current_task_id_, task);
+        spdlog::info("Task {} finalized ({})", current_task_id_, task.status);
+    } catch (const std::exception& e) {
+        spdlog::error("FinalizeTask update failed: {}", e.what());
+    }
+
+    emit ProcessingCompleted(current_task_id_);
+    current_task_id_ = 0;
 }
 
 // ─── Worker callbacks ─────────────────────────────────────────
@@ -1489,19 +1603,16 @@ void ProcessingPage::OnWorkerPaused() {
 
 void ProcessingPage::OnWorkerStopped() {
     emit ProcessingActive(false);
+
+    bool was_stop_requested = stop_requested_;
+    stop_requested_ = false;
+
     if (was_processing_) {
         was_processing_ = false;
-        QString backend = QString::fromStdString(
-            AnalysisBackendToString(config_.analysis_backend));
-        QString output_dir = QString::fromStdString(worker_->GetOutputDir());
-        int processed = last_processed_frame_;
-        double avg_fps = pipeline_fps_label_->text().toDouble();
-
-        emit ProcessingCompleted(selected_video_id_, selected_image_id_,
-                                 backend, avg_fps, processed,
-                                 output_dir, QStringLiteral("aborted"));
+        FinalizeTask(QStringLiteral("aborted"));
     }
-    state_ = State::Finished;
+
+    state_ = was_stop_requested ? State::Idle : State::Finished;
     UpdateButtonStates();
     elapsed_timer_->stop();
     progress_bar_->setValue(0);
@@ -1527,25 +1638,27 @@ void ProcessingPage::OnWorkerStopped() {
 }
 
 void ProcessingPage::OnWorkerFinished() {
-    state_ = State::Finished;
     was_processing_ = false;
+
+    bool was_stop_requested = stop_requested_;
+    stop_requested_ = false;
+
+    state_ = State::Finished;
     UpdateButtonStates();
     elapsed_timer_->stop();
 
-    progress_bar_->setValue(100);
-    progress_bar_->setFormat(QStringLiteral("完成"));
+    if (was_stop_requested) {
+        progress_bar_->setValue(0);
+        progress_bar_->setFormat(QStringLiteral("已停止"));
+    } else {
+        progress_bar_->setValue(100);
+        progress_bar_->setFormat(QStringLiteral("完成"));
+    }
 
-    QString backend = QString::fromStdString(
-        AnalysisBackendToString(config_.analysis_backend));
-    QString output_dir = QString::fromStdString(worker_->GetOutputDir());
-
-    int total_frames = last_processed_frame_;
-    double avg_fps = pipeline_fps_label_->text().toDouble();
+    QString status = was_stop_requested ? QStringLiteral("aborted") : QStringLiteral("completed");
+    FinalizeTask(status);
 
     emit ProcessingActive(false);
-    emit ProcessingCompleted(selected_video_id_, selected_image_id_,
-                             backend, avg_fps, total_frames,
-                             output_dir, QStringLiteral("completed"));
     ReleaseMediaResources();
 
     // Destroy old worker to release pipeline resources (CSV file handles, etc.)
@@ -1569,7 +1682,7 @@ void ProcessingPage::OnWorkerFinished() {
 void ProcessingPage::ReleaseMediaResources() {
     if (IsProcessing()) return;
     if (media_video_player_)
-        media_video_player_->Stop();
+        media_video_player_->Reset();
 }
 
 bool ProcessingPage::IsVideoLocked(int64_t video_id) const {
@@ -1578,6 +1691,57 @@ bool ProcessingPage::IsVideoLocked(int64_t video_id) const {
 
 bool ProcessingPage::IsImageLocked(int64_t image_id) const {
     return IsProcessing() && selected_image_id_ == image_id && image_id > 0;
+}
+
+bool ProcessingPage::IsVideoSelected(int64_t video_id) const {
+    return selected_video_id_ == video_id && video_id > 0;
+}
+
+bool ProcessingPage::IsImageSelected(int64_t image_id) const {
+    return selected_image_id_ == image_id && image_id > 0;
+}
+
+int64_t ProcessingPage::ActiveTaskId() const {
+    return current_task_id_;
+}
+
+void ProcessingPage::ClearVideoSelection() {
+    if (selected_video_id_ == 0) return;
+    selected_video_id_ = 0;
+    selected_video_name_.clear();
+    selected_video_path_.clear();
+    if (media_video_player_)
+        media_video_player_->Reset();
+    video_btn_->setText(QStringLiteral("视频：未选择"));
+    video_btn_->setStyleSheet(DefaultBtnStyle());
+    if (worker_)
+        worker_->SetVideoPath(QString());
+    UpdateMediaPanel();
+    UpdateButtonStates();
+}
+
+void ProcessingPage::ClearImageSelection() {
+    if (selected_image_id_ == 0) return;
+    selected_image_id_ = 0;
+    selected_image_name_.clear();
+    selected_image_path_.clear();
+    selected_embedding_ = FaceEmbedding{};
+    image_btn_->setText(QStringLiteral("图片：未选择"));
+    image_btn_->setStyleSheet(DefaultBtnStyle());
+    if (worker_)
+        worker_->SetReference(FaceEmbedding{});
+    UpdateMediaPanel();
+    UpdateButtonStates();
+}
+
+void ProcessingPage::ClearCompletedState() {
+    if (state_ != State::Finished) return;
+    state_ = State::Idle;
+    if (display_)
+        display_->ClearFrame();
+    UpdateButtonStates();
+    progress_bar_->setValue(0);
+    progress_bar_->setFormat(QStringLiteral("就绪"));
 }
 
 std::string ProcessingPage::GetWorkerOutputDir() const {

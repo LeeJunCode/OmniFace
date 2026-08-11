@@ -108,6 +108,7 @@ public:
 
     void Refresh();
     void ReapplyTheme();
+    void SetProcessingPage(class ProcessingPage* pp) { process_page_ = pp; }
 
 protected:
     void showEvent(QShowEvent* event) override { Refresh(); QWidget::showEvent(event); }
@@ -116,6 +117,7 @@ signals:
     void ViewTaskDetailRequested(int64_t task_id);
     void ViewCsvRequested(int64_t task_id);
     void EditRequested(int64_t task_id);
+    void TaskDeleted(int64_t task_id);
 
 private slots:
     void OnBackendFilterChanged(int index);
@@ -139,6 +141,7 @@ private:
     std::shared_ptr<db::TaskRepo> task_repo_;
     std::shared_ptr<db::VideoRepo> video_repo_;
     std::shared_ptr<db::ImageRepo> image_repo_;
+    class ProcessingPage* process_page_ = nullptr;
 
     TaskTableModel* model_ = nullptr;
     TaskFilterProxy* proxy_ = nullptr;

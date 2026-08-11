@@ -32,6 +32,7 @@
 #include "omniface/db/image_repo.h"
 #include "omniface/db/task_repo.h"
 #include "omniface/db/video_repo.h"
+#include "omniface/pipeline/framework/config.h"
 #include "omniface/ui/theme.h"
 #include "omniface/ui/widgets/detail/l2cs_detail_widget.h"
 #include "omniface/ui/widgets/detail/mediapipe_detail_widget.h"
@@ -633,9 +634,9 @@ void TaskDetailPage::LoadTask(int64_t task_id) {
 
 void TaskDetailPage::ReleaseResources() {
     if (output_player_)
-        output_player_->Stop();
+        output_player_->Reset();
     if (source_player_)
-        source_player_->Stop();
+        source_player_->Reset();
 }
 
 void TaskDetailPage::PopulateRawInfo(const db::TaskRecord& task) {
@@ -661,7 +662,7 @@ void TaskDetailPage::PopulateRawInfo(const db::TaskRecord& task) {
             .arg(image->bbox_x2, 0, 'f', 0).arg(image->bbox_y2, 0, 'f', 0));
     }
 
-    raw_task_backend_->setText(QString::fromStdString(task.backend));
+    raw_task_backend_->setText(QString::fromUtf8(AnalysisBackendDisplayName(task.backend)));
     raw_task_frames_->setText(QString::number(task.total_frames));
     raw_task_fps_->setText(QStringLiteral("%1").arg(task.avg_fps, 0, 'f', 1));
 

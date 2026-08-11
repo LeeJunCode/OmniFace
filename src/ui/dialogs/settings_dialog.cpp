@@ -233,9 +233,9 @@ QWidget* SettingsDialog::CreateBackendPanel() {
     form->setContentsMargins(16, 16, 16, 16);
     form->setSpacing(10);
 
-    backend_combo_ = MakeCombo(this, {QStringLiteral("OpenFace"), QStringLiteral("MediaPipe"),
-                                      QStringLiteral("L2CS-Net"), QStringLiteral("MEFARG-AU"),
-                                      QStringLiteral("None")});
+    backend_combo_ = MakeCombo(this, {QStringLiteral("面部综合分析 (OpenFace)"), QStringLiteral("人脸关键点 (MediaPipe)"),
+                                      QStringLiteral("视线追踪 (L2CS-Net)"), QStringLiteral("表情识别 (MEFARG-AU)"),
+                                      QStringLiteral("仅检测跟踪")});
     connect(backend_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged),
             this, &SettingsDialog::OnBackendChanged);
     form->addRow(QStringLiteral("分析后端:"), backend_combo_);

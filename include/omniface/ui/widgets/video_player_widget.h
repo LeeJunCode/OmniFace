@@ -26,6 +26,7 @@ public:
     void LoadVideo(const QString& path);
     void SetPendingPath(const QString& path);
     void Stop();
+    void Reset();
     qint64 Position() const;
     qint64 Duration() const;
     void SetControlsAlwaysVisible(bool visible);

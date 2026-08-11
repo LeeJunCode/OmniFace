@@ -370,10 +370,10 @@ bool TargetTracker::UpdateTargetState(const std::vector<TrackedFace>& tracked_fa
         const auto& box = match_results[best_match_idx].box;
         if (new_id != target_track_id_) {
             target_track_id_ = new_id;
-            last_target_verify_frame_ = frame_index_;
-            target_verify_fails_ = 0;
-            target_demote_ = false;
         }
+        last_target_verify_frame_ = frame_index_;
+        target_verify_fails_ = 0;
+        target_demote_ = false;
         last_target_bbox_ = cv::Rect_<float>(box.x1, box.y1,
                                               box.x2 - box.x1, box.y2 - box.y1);
         return true;

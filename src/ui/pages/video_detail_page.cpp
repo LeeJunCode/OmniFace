@@ -132,7 +132,7 @@ void VideoDetailPage::LoadVideo(int64_t video_id) {
 
 void VideoDetailPage::ReleaseResources() {
     if (player_)
-        player_->Stop();
+        player_->Reset();
 }
 
 void VideoDetailPage::Populate(const db::VideoRecord& rec) {

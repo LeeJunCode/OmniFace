@@ -284,6 +284,13 @@ void VideoPlayerWidget::Stop() {
     UpdatePlayPauseIcon();
 }
 
+void VideoPlayerWidget::Reset() {
+    player_->stop();
+    player_->setSource(QUrl());
+    pending_path_.clear();
+    UpdatePlayPauseIcon();
+}
+
 qint64 VideoPlayerWidget::Position() const {
     return player_->position();
 }

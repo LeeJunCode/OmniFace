@@ -392,12 +392,13 @@ void MainWindow::SetupContentArea() {
     auto task_repo  = std::make_shared<db::TaskRepo>(database_->Get());
 
     home_page_    = new HomePage(video_repo, image_repo, task_repo, this);
-    process_page_ = new ProcessingPage(video_repo, image_repo, this);
+    process_page_ = new ProcessingPage(video_repo, image_repo, task_repo, this);
     video_page_   = new VideoManagementPage(video_repo, this);
     image_page_   = new ImageManagementPage(image_repo, this);
     video_page_->SetProcessingPage(process_page_);
     image_page_->SetProcessingPage(process_page_);
     history_page_ = new TaskHistoryPage(task_repo, video_repo, image_repo, this);
+    history_page_->SetProcessingPage(process_page_);
 
     // Load persisted config if available
     {
@@ -478,16 +479,19 @@ void MainWindow::SetupContentArea() {
     connect(video_page_, &VideoManagementPage::ViewDetailsRequested,
             this, [this](int64_t video_id) {
         video_detail_page_->LoadVideo(video_id);
+        detail_video_id_ = video_id;
         ShowDetailPage(video_detail_page_);
     });
     connect(image_page_, &ImageManagementPage::ViewDetailsRequested,
             this, [this](int64_t image_id) {
         image_detail_page_->LoadImage(image_id);
+        detail_image_id_ = image_id;
         ShowDetailPage(image_detail_page_);
     });
     connect(history_page_, &TaskHistoryPage::ViewTaskDetailRequested,
             this, [this](int64_t task_id) {
         task_detail_page_->LoadTask(task_id);
+        detail_task_id_ = task_id;
         ShowDetailPage(task_detail_page_);
     });
 
@@ -516,11 +520,49 @@ void MainWindow::SetupContentArea() {
     // ── Processing → task record ─────────────────────────────
 
     connect(process_page_, &ProcessingPage::ProcessingCompleted,
-            this, [this, task_repo](int64_t video_id, int64_t image_id,
-                 QString backend, double avg_fps, int total_frames,
-                 QString output_dir, QString status) {
-        OnProcessingCompleted(video_id, image_id, backend, avg_fps,
-                              total_frames, output_dir, status);
+            this, [this](int64_t task_id) {
+        last_completed_task_id_ = task_id;
+        history_page_->Refresh();
+    });
+
+    // ── Resource deletion cleanup ───────────────────────────────
+
+    connect(video_page_, &VideoManagementPage::VideoDeleted,
+            this, [this](int64_t video_id) {
+        if (detail_video_id_ == video_id) {
+            detail_video_id_ = 0;
+            int idx = content_stack_->currentIndex();
+            if (idx == 5)  // VideoDetailPage
+                OnBackFromDetail();
+        }
+        if (process_page_->IsVideoSelected(video_id))
+            process_page_->ClearVideoSelection();
+    });
+
+    connect(image_page_, &ImageManagementPage::ImageDeleted,
+            this, [this](int64_t image_id) {
+        if (detail_image_id_ == image_id) {
+            detail_image_id_ = 0;
+            int idx = content_stack_->currentIndex();
+            if (idx == 6)  // ImageDetailPage
+                OnBackFromDetail();
+        }
+        if (process_page_->IsImageSelected(image_id))
+            process_page_->ClearImageSelection();
+    });
+
+    connect(history_page_, &TaskHistoryPage::TaskDeleted,
+            this, [this](int64_t task_id) {
+        if (detail_task_id_ == task_id) {
+            detail_task_id_ = 0;
+            int idx = content_stack_->currentIndex();
+            if (idx == 7)  // TaskDetailPage
+                OnBackFromDetail();
+        }
+        if (last_completed_task_id_ == task_id) {
+            last_completed_task_id_ = 0;
+            process_page_->ClearCompletedState();
+        }
     });
 
     // ── View task result from processing page ──────────────────
@@ -529,6 +571,7 @@ void MainWindow::SetupContentArea() {
             this, [this]() {
         if (last_completed_task_id_ > 0) {
             task_detail_page_->LoadTask(last_completed_task_id_);
+            detail_task_id_ = last_completed_task_id_;
             ShowDetailPage(task_detail_page_);
         }
     });
@@ -605,6 +648,9 @@ void MainWindow::OnBackFromDetail() {
         task_detail_page_->ReleaseResources();
     else if (detailIndex == 5)
         video_detail_page_->ReleaseResources();
+    detail_video_id_ = 0;
+    detail_image_id_ = 0;
+    detail_task_id_ = 0;
     content_stack_->setCurrentIndex(previous_page_index_);
 }
 
@@ -612,6 +658,15 @@ void MainWindow::OnPageChanged(int index) {
     int prev = content_stack_->currentIndex();
     if (prev == 1)  // Leaving processing page
         process_page_->ReleaseMediaResources();
+    if (prev == 5)  // Leaving video detail page
+        video_detail_page_->ReleaseResources();
+    if (prev == 7)  // Leaving task detail page
+        task_detail_page_->ReleaseResources();
+    if (prev >= 5 && prev <= 7) {  // Leaving any detail page via sidebar
+        detail_video_id_ = 0;
+        detail_image_id_ = 0;
+        detail_task_id_ = 0;
+    }
     content_stack_->setCurrentIndex(index);
 }
 
@@ -644,78 +699,6 @@ void MainWindow::closeEvent(QCloseEvent* event) {
         process_page_->OnStop();
     }
     event->accept();
-}
-
-void MainWindow::OnProcessingCompleted(int64_t video_id, int64_t image_id,
-                                       QString backend, double avg_fps,
-                                       int total_frames, QString output_dir,
-                                       QString status) {
-    if (video_id <= 0 || image_id <= 0) return;
-
-    auto task_repo = std::make_shared<db::TaskRepo>(database_->Get());
-
-    db::TaskRecord task;
-    task.video_id = video_id;
-    task.image_id = image_id;
-    task.backend = backend.toStdString();
-    task.status = status.toStdString();
-    task.total_frames = total_frames;
-    task.avg_fps = avg_fps;
-    task.output_dir = output_dir.toStdString();
-
-    // Build task name: "<video_name> - <backend>"
-    auto video_repo = std::make_shared<db::VideoRepo>(database_->Get());
-    auto image_repo = std::make_shared<db::ImageRepo>(database_->Get());
-    QString video_name;
-    QString image_name;
-    if (auto v = video_repo->FindById(video_id))
-        video_name = QString::fromStdString(v->name);
-    if (auto img = image_repo->FindById(image_id))
-        image_name = QString::fromStdString(img->name);
-    task.name = (video_name + QStringLiteral(" - ") + image_name).toStdString();
-
-    if (!output_dir.isEmpty()) {
-        std::string video_path = process_page_->GetWorkerOutputVideoPath();
-        if (!video_path.empty())
-            task.output_video_path = video_path;
-
-        QString csv_name;
-        if (backend == QStringLiteral("openface")) {
-            QFileInfo dir_info(output_dir);
-            QString dir_basename = dir_info.fileName();
-            if (dir_basename.length() > 16)
-                csv_name = dir_basename.left(dir_basename.length() - 16) + QStringLiteral(".csv");
-        } else if (backend == QStringLiteral("mediapipe"))
-            csv_name = QStringLiteral("mediapipe_analysis.csv");
-        else if (backend == QStringLiteral("l2cs"))
-            csv_name = QStringLiteral("l2cs_analysis.csv");
-        else if (backend == QStringLiteral("mefarg_au"))
-            csv_name = QStringLiteral("mefarg_au_analysis.csv");
-        if (!csv_name.isEmpty())
-            task.csv_path = (output_dir + QStringLiteral("/") + csv_name).toStdString();
-    }
-
-    // Output types per backend
-    if (backend == QStringLiteral("openface"))
-        task.output_types = R"(["openface_native","aligned_faces","landmarks_68","head_pose","gaze","au"])";
-    else if (backend == QStringLiteral("mediapipe"))
-        task.output_types = R"(["landmarks_468","head_pose"])";
-    else if (backend == QStringLiteral("l2cs"))
-        task.output_types = R"(["gaze_yaw_pitch","gaze_3d_vector"])";
-    else if (backend == QStringLiteral("mefarg_au"))
-        task.output_types = R"(["au_41"])";
-    else
-        task.output_types = R"(["face_detection","tracking","recognition"])";
-
-    task.params_yaml = "{}";  // placeholder — full YAML serialization TBD
-
-    try {
-        last_completed_task_id_ = task_repo->Insert(task);
-        history_page_->Refresh();
-    } catch (const std::exception& e) {
-        QMessageBox::warning(this, QStringLiteral("保存任务记录失败"),
-            QStringLiteral("无法写入任务历史:\n%1").arg(QString::fromStdString(e.what())));
-    }
 }
 
 void MainWindow::OnViewCsv(int64_t task_id) {

@@ -105,6 +105,7 @@ signals:
     void VideoSelectedForProcessing(int64_t video_id, const QString& name, const QString& path);
     void ViewDetailsRequested(int64_t video_id);
     void EditRequested(int64_t video_id);
+    void VideoDeleted(int64_t video_id);
 
 private slots:
     void OnSearchTextChanged(const QString& text);

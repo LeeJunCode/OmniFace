@@ -31,6 +31,7 @@ class BasePipeline;
 namespace db {
 class VideoRepo;
 class ImageRepo;
+class TaskRepo;
 }
 
 namespace ui {
@@ -42,6 +43,7 @@ class FrameDisplayWidget : public QWidget {
 public:
     explicit FrameDisplayWidget(QWidget* parent = nullptr);
     void ReapplyTheme();
+    void ClearFrame();
 
 public slots:
     void SetFrame(const cv::Mat& bgr);
@@ -113,6 +115,7 @@ class ProcessingPage : public QWidget {
 public:
     explicit ProcessingPage(std::shared_ptr<db::VideoRepo> video_repo,
                             std::shared_ptr<db::ImageRepo> image_repo,
+                            std::shared_ptr<db::TaskRepo> task_repo,
                             QWidget* parent = nullptr);
     ~ProcessingPage() override;
 
@@ -129,6 +132,12 @@ public slots:
     void ReleaseMediaResources();
     bool IsVideoLocked(int64_t video_id) const;
     bool IsImageLocked(int64_t image_id) const;
+    bool IsVideoSelected(int64_t video_id) const;
+    bool IsImageSelected(int64_t image_id) const;
+    int64_t ActiveTaskId() const;
+    void ClearVideoSelection();
+    void ClearImageSelection();
+    void ClearCompletedState();
 
 public slots:
     void OnStop();
@@ -136,9 +145,7 @@ public slots:
 
 signals:
     void ProcessingActive(bool active);
-    void ProcessingCompleted(int64_t video_id, int64_t image_id,
-                             QString backend, double avg_fps, int total_frames,
-                             QString output_dir, QString status);
+    void ProcessingCompleted(int64_t task_id);
     void ViewTaskResultRequested();
 
 private slots:
@@ -175,6 +182,9 @@ private:
     int64_t AutoImportVideo(const QString& sourcePath);
     int64_t AutoImportImage(const QString& sourcePath);
 
+    void SaveRunningTask();
+    void FinalizeTask(const QString& status);
+
     // Selection state
     int64_t selected_video_id_ = 0;
     int64_t selected_image_id_ = 0;
@@ -188,6 +198,7 @@ private:
     // Repos
     std::shared_ptr<db::VideoRepo> video_repo_;
     std::shared_ptr<db::ImageRepo> image_repo_;
+    std::shared_ptr<db::TaskRepo> task_repo_;
 
     // Worker
     ProcessWorker* worker_ = nullptr;
@@ -256,6 +267,8 @@ private:
     int total_frame_count_ = 0;
     int last_processed_frame_ = 0;
     bool was_processing_ = false;
+    bool stop_requested_ = false;
+    int64_t current_task_id_ = 0;
 };
 
 }  // namespace ui

@@ -86,6 +86,7 @@ signals:
     void ImageSelectedForProcessing(int64_t image_id, const QString& name);
     void ViewDetailsRequested(int64_t image_id);
     void EditRequested(int64_t image_id);
+    void ImageDeleted(int64_t image_id);
 
 private slots:
     void OnSearchTextChanged(const QString& text);
