@@ -83,6 +83,7 @@ VideoPlayerWidget::VideoPlayerWidget(QWidget* parent) : QWidget(parent) {
     view_->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     view_->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     view_->setRenderHint(QPainter::SmoothPixmapTransform);
+    view_->setBackgroundBrush(QColor(tm.DeepBg()));
     view_->setStyleSheet(QStringLiteral("QGraphicsView { background: %1; border: none; }")
         .arg(tm.DeepBg()));
 
@@ -247,6 +248,13 @@ VideoPlayerWidget::VideoPlayerWidget(QWidget* parent) : QWidget(parent) {
 
     control_bar_->setFixedHeight(38);
     control_bar_->hide();
+    control_bar_->installEventFilter(this);
+
+    // ── Event filters for mouse tracking on video area ────
+
+    view_->installEventFilter(this);
+    view_->viewport()->installEventFilter(this);
+    view_->viewport()->setMouseTracking(true);
 
     // ── Timers ─────────────────────────────────────────────
 
@@ -397,21 +405,47 @@ void VideoPlayerWidget::OnHideTimer() {
 }
 
 void VideoPlayerWidget::OnFullscreen() {
-    // Fullscreen using QGraphicsView — toggle the view between normal and fullscreen
     if (fullscreen_) {
+        // ── Exit fullscreen ──────────────────────────────
         view_->setWindowFlags(Qt::Widget);
+
+        // Move control bar back to this
+        control_bar_->setParent(this);
+        RepositionControlBar();
+        control_bar_->raise();
+        if (!controls_always_visible_) {
+            control_bar_->hide();
+        }
+
+        // Reinsert view into this layout
         if (auto* lay = qobject_cast<QVBoxLayout*>(layout())) {
             lay->insertWidget(0, view_);
         }
         view_->show();
+        view_->fitInView(scene_->sceneRect(), Qt::KeepAspectRatio);
+
         fullscreen_ = false;
         fullscreen_btn_->setText(QStringLiteral("\u26F6"));
     } else {
+        // ── Enter fullscreen ─────────────────────────────
         if (auto* lay = qobject_cast<QVBoxLayout*>(layout())) {
             lay->removeWidget(view_);
         }
+
         view_->setWindowFlags(Qt::Window | Qt::FramelessWindowHint);
         view_->showFullScreen();
+
+        // Move control bar to fullscreen view
+        control_bar_->setParent(view_);
+        QTimer::singleShot(100, this, [this]() {
+            view_->fitInView(scene_->sceneRect(), Qt::KeepAspectRatio);
+            RepositionControlBar();
+            control_bar_->raise();
+            control_bar_->show();
+        });
+
+        view_->activateWindow();
+
         fullscreen_ = true;
         fullscreen_btn_->setText(QStringLiteral("\u2716"));
     }
@@ -437,8 +471,9 @@ void VideoPlayerWidget::UpdateVolumeIcon() {
 void VideoPlayerWidget::RepositionControlBar() {
     if (!control_bar_)
         return;
-    int w = this->width();
-    int h = this->height();
+    QWidget* p = control_bar_->parentWidget();
+    int w = p ? p->width() : width();
+    int h = p ? p->height() : height();
     int bw = std::min(w - 24, 720);
     int bh = control_bar_->height();
     control_bar_->setGeometry((w - bw) / 2, h - bh - 10, bw, bh);
@@ -491,6 +526,51 @@ void VideoPlayerWidget::keyPressEvent(QKeyEvent* event) {
         return;
     }
     QWidget::keyPressEvent(event);
+}
+
+bool VideoPlayerWidget::eventFilter(QObject* obj, QEvent* event) {
+    if (obj == view_) {
+        if (event->type() == QEvent::Resize) {
+            // Defer so viewport has been resized before fitInView runs
+            QTimer::singleShot(0, this, [this]() {
+                if (scene_->sceneRect().isValid() && !scene_->sceneRect().isEmpty())
+                    view_->fitInView(scene_->sceneRect(), Qt::KeepAspectRatio);
+                if (fullscreen_)
+                    RepositionControlBar();
+            });
+        }
+    } else if (obj == view_->viewport()) {
+        switch (event->type()) {
+        case QEvent::MouseMove:
+        case QEvent::Enter:
+            ShowControls();
+            break;
+        case QEvent::Leave:
+            if (!controls_always_visible_) {
+                hide_timer_.start();
+            }
+            break;
+        case QEvent::KeyPress: {
+            auto* ke = static_cast<QKeyEvent*>(event);
+            if (ke->key() == Qt::Key_Escape && fullscreen_) {
+                OnFullscreen();
+                return true;
+            }
+            if (ke->key() == Qt::Key_Space) {
+                OnPlayPause();
+                return true;
+            }
+            break;
+        }
+        default:
+            break;
+        }
+    } else if (obj == control_bar_) {
+        if (event->type() == QEvent::Enter) {
+            ShowControls();
+        }
+    }
+    return QWidget::eventFilter(obj, event);
 }
 
 // ─── Formatting ──────────────────────────────────────────────
