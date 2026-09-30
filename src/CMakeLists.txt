@@ -93,6 +93,29 @@ target_link_libraries(omniface_recognition PRIVATE
 target_compile_features(omniface_recognition PUBLIC cxx_std_20)
 
 # ============================================================
+# Decision layer — TargetTracker (TLAIV sequential identity judgment)
+# Split out from omniface_pipeline so headless tools can exercise the
+# decision layer without linking the analysis backends.
+# ============================================================
+add_library(omniface_targettracker STATIC
+    pipeline/workers/target_tracker.cc
+)
+
+target_include_directories(omniface_targettracker PUBLIC
+    ${PROJECT_SOURCE_DIR}/include
+)
+
+target_link_libraries(omniface_targettracker PUBLIC
+    omniface_config
+    omniface_recognition
+    opencv_core
+    opencv_imgproc
+    opencv_calib3d
+)
+
+target_compile_features(omniface_targettracker PUBLIC cxx_std_20)
+
+# ============================================================
 # Analysis module — OpenFace wrapper (landmarks, gaze, AUs)
 # ============================================================
 add_library(omniface_analysis STATIC
@@ -224,14 +247,33 @@ set_target_properties(omniface_quality PROPERTIES AUTOMOC ON)
 target_compile_features(omniface_quality PUBLIC cxx_std_20)
 
 # ============================================================
+# Config module — YAML load/save only (no Qt, no analysis backends)
+# Kept separate so headless tools can read config without pulling in
+# OpenFace / MediaPipe / Qt runtime dependencies.
+# ============================================================
+add_library(omniface_config STATIC
+    pipeline/framework/config.cc
+)
+
+target_include_directories(omniface_config PUBLIC
+    ${PROJECT_SOURCE_DIR}/include
+)
+
+target_link_libraries(omniface_config PUBLIC
+    omniface_inference
+    yaml-cpp::yaml-cpp
+    spdlog::spdlog
+)
+
+target_compile_features(omniface_config PUBLIC cxx_std_20)
+
+# ============================================================
 # Pipeline module — config + orchestration
 # ============================================================
 add_library(omniface_pipeline STATIC
-    pipeline/framework/config.cc
     pipeline/workers/decode_worker.cc
     pipeline/framework/module_factory.cc
     pipeline/workers/output_manager.cc
-    pipeline/workers/target_tracker.cc
     pipeline/framework/base_pipeline.cc
     pipeline/openface/openface_pipeline.cc
     pipeline/mediapipe/mediapipe_pipeline.cc
@@ -246,6 +288,8 @@ target_include_directories(omniface_pipeline PUBLIC
 )
 
 target_link_libraries(omniface_pipeline PUBLIC
+    omniface_config
+    omniface_targettracker
     omniface_detection
     omniface_tracking
     omniface_recognition
@@ -430,5 +474,35 @@ add_custom_command(TARGET OmniFace POST_BUILD
         "${OFACE_SRC}/lib/3rdParty/OpenCV/classifiers"
         "$<TARGET_FILE_DIR:OmniFace>/openface_model/classifiers"
     COMMENT "Deploying OpenFace model files"
+)
+
+# ============================================================
+# Baseline benchmark CLI — headless, no Qt
+# Measures per-stage FPS and recognition forward-pass counts
+# for the per-frame baseline vs the TLAIV decision layer.
+# ============================================================
+add_executable(omniface_baseline
+    ${PROJECT_SOURCE_DIR}/tools/baseline_bench.cpp
+)
+
+target_link_libraries(omniface_baseline PRIVATE
+    omniface_config
+    omniface_targettracker
+    omniface_detection
+    omniface_tracking
+    omniface_recognition
+    spdlog::spdlog
+    opencv_core
+    opencv_imgproc
+    opencv_imgcodecs
+    opencv_videoio
+)
+
+target_compile_features(omniface_baseline PRIVATE cxx_std_20)
+
+# Land next to OmniFace.exe so config.yaml, models/ and the ONNX Runtime
+# DLLs resolve from the same directory.
+set_target_properties(omniface_baseline PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "$<TARGET_FILE_DIR:OmniFace>"
 )
 
