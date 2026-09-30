@@ -280,9 +280,12 @@ void ProcessWorker::ProcessLoop() {
     face_count_total_ = 0;
     match_count_total_ = 0;
     analysis_success_count_ = 0;
+    recognition_calls_total_ = 0;
     latest_similarity_ = 0.0f;
     peak_similarity_ = 0.0f;
-    avg_det_rec_latency_ = 0.0;
+    avg_detect_latency_ = 0.0;
+    avg_track_latency_ = 0.0;
+    avg_match_latency_ = 0.0;
     avg_analysis_latency_ = 0.0;
     elapsed_.start();
 
@@ -325,12 +328,14 @@ void ProcessWorker::ProcessLoop() {
             }
 
             constexpr double kAlpha = 0.05;
-            if (avg_det_rec_latency_ == 0.0) {
-                avg_det_rec_latency_ = result.recognition_latency_ms;
-            } else {
-                avg_det_rec_latency_ = kAlpha * result.recognition_latency_ms
-                    + (1.0 - kAlpha) * avg_det_rec_latency_;
-            }
+            auto update_ema = [kAlpha](double& avg, double sample) {
+                if (avg == 0.0) avg = sample;
+                else            avg = kAlpha * sample + (1.0 - kAlpha) * avg;
+            };
+            update_ema(avg_detect_latency_, result.detect_latency_ms);
+            update_ema(avg_track_latency_, result.track_latency_ms);
+            update_ema(avg_match_latency_, result.match_latency_ms);
+            recognition_calls_total_ += result.recognition_calls;
             if (result.analysis_latency_ms > 0.5) {
                 if (avg_analysis_latency_ == 0.0) {
                     avg_analysis_latency_ = result.analysis_latency_ms;
@@ -348,8 +353,13 @@ void ProcessWorker::ProcessLoop() {
 
         double elapsed = elapsed_.elapsed() / 1000.0;
         double avgFps = (elapsed > 0) ? processed_frames_ / elapsed : 0.0;
-        double detRecFps = (processed_frames_ >= 10 && avg_det_rec_latency_ > 0.0)
-            ? 1000.0 / avg_det_rec_latency_ : 0.0;
+        auto stage_fps = [](double avg_ms) {
+            return (avg_ms > 0.0) ? 1000.0 / avg_ms : 0.0;
+        };
+        bool warmed_up = processed_frames_ >= 10;
+        double detFps   = warmed_up ? stage_fps(avg_detect_latency_) : 0.0;
+        double trackFps = warmed_up ? stage_fps(avg_track_latency_)  : 0.0;
+        double recogFps = warmed_up ? stage_fps(avg_match_latency_)  : 0.0;
         double analysisFps = 0.0;
         if (cur_analysis_ms > 0.5 && avg_analysis_latency_ > 0.0)
             analysisFps = 1000.0 / avg_analysis_latency_;
@@ -359,8 +369,9 @@ void ProcessWorker::ProcessLoop() {
             bgr = frame.clone();
 
         emit FrameProcessed(bgr, processed_frames_, total_frames_,
-                            avgFps, detRecFps, analysisFps,
+                            avgFps, detFps, trackFps, recogFps, analysisFps,
                             face_count_total_, match_count_total_, analysis_success_count_,
+                            recognition_calls_total_,
                             latest_similarity_, peak_similarity_);
     }
 
@@ -555,7 +566,10 @@ QGroupBox* ProcessingPage::CreateStatsPanel() {
     // ── 性能 ─────────────────────────────────────────────────
     addSection(QStringLiteral("性能"));
     addRow(QStringLiteral("流水线 FPS:"), pipeline_fps_label_);
-    addRow(QStringLiteral("检测识别 FPS:"), det_rec_fps_label_);
+    addRow(QStringLiteral("检测 FPS:"), det_fps_label_);
+    addRow(QStringLiteral("跟踪 FPS:"), track_fps_label_);
+    addRow(QStringLiteral("识别 FPS:"), recog_fps_label_);
+    addRow(QStringLiteral("识别次数:"), recog_calls_label_);
 
     {
         auto* row = new QHBoxLayout();
@@ -1553,14 +1567,19 @@ void ProcessingPage::FinalizeTask(const QString& status) {
 // ─── Worker callbacks ─────────────────────────────────────────
 
 void ProcessingPage::OnFrameProcessed(cv::Mat bgr, int frameIndex, int totalFrames,
-                                       double pipelineFps, double detRecFps, double analysisFps,
+                                       double pipelineFps, double detFps, double trackFps,
+                                       double recogFps, double analysisFps,
                                        int faceCount, int matchCount, int analysisSuccessCount,
+                                       int recognitionCalls,
                                        float currentSimilarity, float peakSimilarity) {
     display_->SetFrame(bgr);
 
     // Performance
     pipeline_fps_label_->setText(QStringLiteral("%1").arg(pipelineFps, 0, 'f', 1));
-    det_rec_fps_label_->setText(QStringLiteral("%1").arg(detRecFps, 0, 'f', 1));
+    det_fps_label_->setText(QStringLiteral("%1").arg(detFps, 0, 'f', 1));
+    track_fps_label_->setText(QStringLiteral("%1").arg(trackFps, 0, 'f', 1));
+    recog_fps_label_->setText(QStringLiteral("%1").arg(recogFps, 0, 'f', 1));
+    recog_calls_label_->setText(QStringLiteral("%1").arg(recognitionCalls));
     analysis_fps_label_->setText(
         config_.analysis_backend == AnalysisBackend::kNone
             ? QStringLiteral("—")

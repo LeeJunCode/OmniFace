@@ -121,16 +121,22 @@ FrameResult BasePipeline::ProcessFrame(cv::Mat& frame, int frame_index) {
         }
     }
 
+    auto t_detect_done = std::chrono::steady_clock::now();
+
     auto tracked_faces = modules_.tracker->Update(detections);
+
+    auto t_track_done = std::chrono::steady_clock::now();
 
     std::vector<MatchResult> matches;
     int best_match_idx = -1;
     float best_match_sim = config_.thresholds.match_threshold;
+    int recognition_calls = 0;
     if (modules_.matcher && modules_.recognizer && !tracked_faces.empty()) {
         target_tracker_.ProcessMatches(frame, detections, tracked_faces,
                                        modules_.recognizer.get(),
                                        modules_.matcher.get(),
-                                       matches, best_match_idx, best_match_sim);
+                                       matches, best_match_idx, best_match_sim,
+                                       recognition_calls);
     }
 
     target_changed_ = target_tracker_.UpdateTargetState(
@@ -154,6 +160,13 @@ FrameResult BasePipeline::ProcessFrame(cv::Mat& frame, int frame_index) {
         std::chrono::duration<double, std::milli>(t_recognition_done - t_start).count();
     result.analysis_latency_ms =
         std::chrono::duration<double, std::milli>(t_analysis_done - t_recognition_done).count();
+    result.detect_latency_ms =
+        std::chrono::duration<double, std::milli>(t_detect_done - t_start).count();
+    result.track_latency_ms =
+        std::chrono::duration<double, std::milli>(t_track_done - t_detect_done).count();
+    result.match_latency_ms =
+        std::chrono::duration<double, std::milli>(t_recognition_done - t_track_done).count();
+    result.recognition_calls = recognition_calls;
     result.face_count = static_cast<int>(tracked_faces.size());
     result.tracked_faces = std::move(tracked_faces);
     result.match_results = std::move(matches);

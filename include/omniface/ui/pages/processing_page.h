@@ -76,9 +76,11 @@ public:
 
 signals:
     void FrameProcessed(cv::Mat bgr, int frameIndex, int totalFrames,
-                        double pipelineFps, double detRecFps, double analysisFps,
+                        double pipelineFps, double detFps, double trackFps,
+                        double recogFps, double analysisFps,
                         int faceCount, int matchCount, int analysisSuccessCount,
-                        float currentSimilarity, float peakSimilarity);
+                        int recognitionCalls, float currentSimilarity,
+                        float peakSimilarity);
     void ProcessingStarted();
     void ProcessingPaused();
     void ProcessingStopped();
@@ -104,9 +106,12 @@ private:
     int face_count_total_ = 0;
     int match_count_total_ = 0;
     int analysis_success_count_ = 0;
+    int recognition_calls_total_ = 0;
     float latest_similarity_ = 0.0f;
     float peak_similarity_ = 0.0f;
-    double avg_det_rec_latency_ = 0.0;
+    double avg_detect_latency_ = 0.0;
+    double avg_track_latency_ = 0.0;
+    double avg_match_latency_ = 0.0;
     double avg_analysis_latency_ = 0.0;
 };
 
@@ -154,9 +159,11 @@ private slots:
     void OnResume();
     void OnStep();
     void OnFrameProcessed(cv::Mat bgr, int frameIndex, int totalFrames,
-                          double pipelineFps, double detRecFps, double analysisFps,
+                          double pipelineFps, double detFps, double trackFps,
+                          double recogFps, double analysisFps,
                           int faceCount, int matchCount, int analysisSuccessCount,
-                          float currentSimilarity, float peakSimilarity);
+                          int recognitionCalls, float currentSimilarity,
+                          float peakSimilarity);
     void OnWorkerStarted();
     void OnWorkerPaused();
     void OnWorkerStopped();
@@ -236,7 +243,10 @@ private:
 
     // UI - stats (right)
     QLabel* pipeline_fps_label_ = nullptr;
-    QLabel* det_rec_fps_label_ = nullptr;
+    QLabel* det_fps_label_ = nullptr;
+    QLabel* track_fps_label_ = nullptr;
+    QLabel* recog_fps_label_ = nullptr;
+    QLabel* recog_calls_label_ = nullptr;
     QLabel* analysis_fps_title_label_ = nullptr;
     QLabel* analysis_fps_label_ = nullptr;
     QLabel* processed_frames_label_ = nullptr;

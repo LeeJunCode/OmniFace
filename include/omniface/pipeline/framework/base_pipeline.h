@@ -22,8 +22,15 @@ struct FrameResult {
     cv::Mat annotated_frame;
     int frame_index = 0;
     double total_latency_ms = 0;
+    // 检测 + 跟踪 + 识别三段之和（既有含义，保持不变）
     double recognition_latency_ms = 0;
     double analysis_latency_ms = 0;
+    // 分阶段耗时：检测（含下采样回映射）/ 跟踪 / 识别（对齐 + 批量前向 + 匹配）
+    double detect_latency_ms = 0;
+    double track_latency_ms = 0;
+    double match_latency_ms = 0;
+    // 本帧送进识别网络前向的样本数
+    int recognition_calls = 0;
     int face_count = 0;
     std::vector<TrackedFace> tracked_faces;
     std::vector<MatchResult> match_results;
