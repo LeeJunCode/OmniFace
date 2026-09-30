@@ -35,11 +35,13 @@ void TargetTracker::ProcessMatches(const cv::Mat& frame,
                                     recognition::FaceMatcher* matcher,
                                     std::vector<MatchResult>& out_matches,
                                     int& out_best_match_idx,
-                                    float& out_best_match_sim) {
+                                    float& out_best_match_sim,
+                                    int& out_recognition_calls) {
     out_matches.clear();
     out_matches.reserve(tracked_faces.size());
     out_best_match_idx = -1;
     out_best_match_sim = config_.thresholds.match_threshold;
+    out_recognition_calls = 0;
 
     if (!matcher || !recognizer || tracked_faces.empty()) return;
 
@@ -243,6 +245,7 @@ void TargetTracker::ProcessMatches(const cv::Mat& frame,
             new_batch.push_back(std::move(p.aligned));
 
         auto embeddings = recognizer->ExtractBatch(new_batch);
+        out_recognition_calls += static_cast<int>(new_batch.size());
 
         for (size_t j = 0; j < pending_new.size(); ++j) {
             auto& p = pending_new[j];
@@ -281,6 +284,7 @@ void TargetTracker::ProcessMatches(const cv::Mat& frame,
             recheck_batch.push_back(p.aligned);
 
         auto embeddings = recognizer->ExtractBatch(recheck_batch);
+        out_recognition_calls += static_cast<int>(recheck_batch.size());
 
         for (size_t j = 0; j < pending_recheck.size(); ++j) {
             auto& p = pending_recheck[j];

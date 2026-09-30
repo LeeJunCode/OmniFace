@@ -23,7 +23,8 @@ public:
                         recognition::FaceMatcher* matcher,
                         std::vector<MatchResult>& out_matches,
                         int& out_best_match_idx,
-                        float& out_best_match_sim);
+                        float& out_best_match_sim,
+                        int& out_recognition_calls);
 
     bool UpdateTargetState(const std::vector<TrackedFace>& tracked_faces,
                            const std::vector<MatchResult>& match_results,
